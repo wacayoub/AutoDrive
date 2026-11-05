@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Démarrer INCAR LINK</string>
+    <string name="opening">Ouverture d’INCAR LINK…</string>
+    <string name="instructions">Après un essai réussi, sélectionne « Démarrer INCAR LINK » dans AppBoot. Active ensuite Wireless Auto Connect dans l’application de connexion du boîtier.</string>
+    <string name="missing">L’application de connexion compatible n’a pas été trouvée sur ce boîtier.</string>
+    <string name="denied">Le système refuse l’ouverture de l’application de connexion depuis ce raccourci.</string>
+    <string name="unavailable">L’application de connexion est désactivée ou son écran ne peut pas être ouvert.</string>
+    <string name="retry">Réessayer</string>
+    <string name="close">Fermer</string>
+</resources>

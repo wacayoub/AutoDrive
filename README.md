@@ -1,0 +1,42 @@
+# AutoDrive
+
+Lanceur Android 13 natif Kotlin pour Incarlink Max X15-SLM927-72, adapté au paysage 800 × 480 et au portrait sur téléphone. Carte Google et page d’accueil YouTube dans deux panneaux web officiels ; quatre raccourcis : Phone, Media, Apps, Settings.
+
+**[Télécharger la dernière version](https://github.com/wacayoub/AutoDrive/releases/latest/download/AutoDrive.apk)** · [Versions et contrôles SHA-256](https://github.com/wacayoub/AutoDrive/releases) · [Tests](docs/TEST-RESULTS.md)
+
+## Installation et mises à jour
+
+1. Installe une première fois la version **1.4.0 ou ultérieure** depuis GitHub, en mise à jour de ton APK existant. Garde les données de l’application.
+2. Ensuite ouvre **Settings → Mises à jour** dans AutoDrive : **Rechercher**, **Télécharger**, puis **Installer**. Tu n’as plus à chercher ni transférer chaque APK manuellement.
+3. Android peut demander d’autoriser AutoDrive comme source d’installation et de confirmer la mise à jour. L’application ne contourne pas ces confirmations et n’installe rien silencieusement.
+
+La même identité de signature est conservée pour permettre les mises à jour et garder les préférences. Le fichier téléchargé est contrôlé : SHA-256, taille, nom de package, version croissante et certificat Android. [Fonctionnement et publication](docs/ONLINE-UPDATES.md).
+
+## Tableau de bord
+
+- Maps et YouTube s’ouvrent directement sur leurs sites officiels. Recherche de lieux, déplacement et zoom de carte, recherche YouTube et lecture vidéo ont été observés sur émulateur.
+- Portrait : panneaux superposés et libellés complets. Paysage : deux panneaux côte à côte. La saisie au clavier donne la place nécessaire à la page utilisée.
+- **Settings → Application YouTube** permet de choisir l’application installée pour une ouverture externe explicite. Le panneau YouTube garde sa page web. Radio et IPTV lancent également les applications choisies dans Settings.
+- Le compteur utilise la localisation Android, avec `--` lorsque la vitesse n’est pas disponible. Aucune vitesse, instruction de navigation ou ETA n’est inventée.
+
+![Capture réelle du tableau de bord](deliverables/dashboard-1.3.1-800x480.png)
+
+Les panneaux ne sont pas des activités natives Google Maps/YouTube intégrées, ni Android Auto. Le guidage vocal complet peut demander l’application Maps. Les recommandations et la connexion au compte YouTube dépendent du service ; le navigateur intégré ne copie pas les comptes des applications installées. Voir [l’audit web](docs/WEB-DASHBOARD-AUDIT.md) et [l’audit navigation](docs/NAVIGATION-AUDIT.md).
+
+## Compiler
+
+JDK 17, SDK Android Platform 35, Build Tools 35, Gradle Wrapper fourni. Configure `JAVA_HOME` et `ANDROID_HOME`, ou laisse Android Studio créer `local.properties`.
+
+```sh
+./gradlew :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
+```
+
+Les APK de test ont une signature locale et ne remplacent pas les releases officielles si la clé locale diffère. Pour une release compatible, configure les variables `AUTODRIVE_KEYSTORE_FILE`, `AUTODRIVE_KEYSTORE_PASSWORD`, `AUTODRIVE_KEY_ALIAS`, `AUTODRIVE_KEY_PASSWORD`, puis utilise `:app:assembleRelease`. La clé privée n’est jamais publiée dans Git.
+
+## Publier une version
+
+Augmente `versionCode` et `versionName` dans `app/build.gradle`, pousse sur `main`, puis lance **Actions → Signed Android release**. Le workflow teste, compile, signe, contrôle le certificat et publie les fichiers de mise à jour. [Guide de publication](docs/ONLINE-UPDATES.md).
+
+Le dépôt contient le projet Android Studio et les tests. Les photos fournies par le propriétaire, les sauvegardes de firmware, les pièces jointes privées et les anciennes archives APK ne sont pas publiées dans Git.
+
+L’application ne flashe aucun firmware, ne modifie aucun ECU et ne remplace pas les applications Toyota. L’installation sur le boîtier reste une action du propriétaire. Les validations sur émulateur et les limites matérielles sont consignées dans [les résultats de tests](docs/TEST-RESULTS.md).

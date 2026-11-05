@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <queries>
+        <package android:name="com.suding.speedplay" />
+    </queries>
+    <application
+        android:label="@string/app_name"
+        android:icon="@drawable/ic_start"
+        android:theme="@style/StarterTheme"
+        android:allowBackup="false"
+        android:supportsRtl="true">
+        <activity android:name=".StartActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTop">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

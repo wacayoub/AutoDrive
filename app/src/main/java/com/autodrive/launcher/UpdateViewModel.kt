@@ -1,0 +1,88 @@
+package com.autodrive.launcher
+
+import android.app.Application
+import android.os.Build
+import androidx.lifecycle.AndroidViewModel
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.File
+
+internal enum class UpdatePhase { IDLE, CHECKING, AVAILABLE, DOWNLOADING, READY, CURRENT, ERROR }
+internal data class UpdateState(val phase: UpdatePhase = UpdatePhase.IDLE, val release: UpdateRelease? = null,
+    val progress: Int = 0, val message: String = "Rechercher une nouvelle version sur GitHub")
+
+internal class UpdateViewModel(application: Application) : AndroidViewModel(application) {
+    val source = GitHubUpdates(application)
+    private val mutable = MutableStateFlow(UpdateState())
+    val state = mutable.asStateFlow()
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private var job: Job? = null
+    private var readyFile: File? = null
+    private val prefs = application.getSharedPreferences("online_updates", 0)
+
+    fun autoCheck() {
+        if (state.value.phase != UpdatePhase.IDLE) return
+        val due = System.currentTimeMillis() - prefs.getLong("checked_at", 0) > 24 * 60 * 60 * 1000L ||
+            prefs.getLong("checked_version", -1) != source.versionCode
+        if (due) check()
+    }
+
+    fun check() {
+        if (job?.isActive == true) return
+        readyFile = null
+        job = scope.launch {
+            mutable.value = UpdateState(UpdatePhase.CHECKING, message = "Recherche sur GitHub…")
+            prefs.edit().putLong("checked_at", System.currentTimeMillis()).putLong("checked_version", source.versionCode).apply()
+            try {
+                val release = withContext(Dispatchers.IO) { source.latest() }
+                require(release.minSdk <= Build.VERSION.SDK_INT) { "Cette version nécessite un Android plus récent" }
+                mutable.value = if (release.versionCode > source.versionCode)
+                    UpdateState(UpdatePhase.AVAILABLE, release, message = "Version ${release.versionName} disponible")
+                else UpdateState(UpdatePhase.CURRENT, message = "AutoDrive est à jour")
+            } catch (error: Exception) {
+                if (error is CancellationException) throw error
+                mutable.value = UpdateState(UpdatePhase.ERROR, message = friendly(error))
+            }
+        }
+    }
+
+    fun download() {
+        if (job?.isActive == true) return
+        val release = state.value.release ?: return
+        job = scope.launch {
+            mutable.value = UpdateState(UpdatePhase.DOWNLOADING, release, message = "Téléchargement de ${release.versionName}…")
+            try {
+                readyFile = withContext(Dispatchers.IO) {
+                    source.download(release) { value -> mutable.value = mutable.value.copy(progress = value) }
+                }
+                mutable.value = UpdateState(UpdatePhase.READY, release, 100, "Téléchargement vérifié. La mise à jour est prête.")
+            } catch (error: Exception) {
+                if (error is CancellationException) throw error
+                mutable.value = UpdateState(UpdatePhase.ERROR, release, message = friendly(error))
+            }
+        }
+    }
+
+    suspend fun verifiedFile(): File {
+        val release = state.value.release ?: error("Aucune mise à jour préparée")
+        val file = readyFile ?: error("Télécharge d’abord la mise à jour")
+        return withContext(Dispatchers.IO) { source.verify(file, release) }
+    }
+
+    private fun friendly(error: Exception) = when (error) {
+        is java.net.SocketTimeoutException -> "Connexion trop lente. Réessaie."
+        is java.net.UnknownHostException -> "Internet indisponible. Réessaie après reconnexion."
+        is IllegalArgumentException -> error.message ?: "Mise à jour non valide"
+        else -> "Impossible de récupérer la mise à jour. Vérifie Internet et réessaie."
+    }
+
+    override fun onCleared() { scope.cancel(); super.onCleared() }
+}

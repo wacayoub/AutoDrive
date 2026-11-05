@@ -1,0 +1,57 @@
+name: Signed Android release
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: signed-release
+  cancel-in-progress: false
+jobs:
+  release:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5
+      - name: Android SDK
+        run: '"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "build-tools;35.0.0"'
+      - name: Restore protected signing key
+        env:
+          SIGNING_DATA: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          python - <<'PY'
+          import base64, os
+          from pathlib import Path
+          data = os.environ['SIGNING_DATA']
+          if not data:
+              raise SystemExit('Signing secret is not configured')
+          folder = Path('.release-signing')
+          folder.mkdir(mode=0o700)
+          key = folder / 'AutoDrive.keystore'
+          key.write_bytes(base64.b64decode(data))
+          key.chmod(0o600)
+          PY
+      - name: Check and build signed APK
+        env:
+          AUTODRIVE_KEYSTORE_FILE: ${{ github.workspace }}/.release-signing/AutoDrive.keystore
+          AUTODRIVE_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          AUTODRIVE_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          AUTODRIVE_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: bash gradlew :app:testDebugUnitTest :app:lintDebug :app:assembleRelease
+      - name: Verify stable update certificate
+        run: |
+          mkdir -p build
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs app/build/outputs/apk/release/app-release.apk > build/signature.txt
+          grep -q '1ef249ecb8d4af1bbd730a15aea2248acf5d578dffde2d637fd01b7e5f637efb' build/signature.txt
+      - name: Publish APK and updater metadata
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python tools/github_release.py --repository '${{ github.repository }}' --apk app/build/outputs/apk/release/app-release.apk --commit "$GITHUB_SHA"
+      - name: Remove runner signing material
+        if: always()
+        run: rm -f .release-signing/AutoDrive.keystore
