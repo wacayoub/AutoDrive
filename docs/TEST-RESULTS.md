@@ -11,6 +11,9 @@ Validated 5 November 2026. Package `com.autodrive.launcher`, version code 17. Th
 - Real captures: [Maps installed](../deliverables/dashboard-1.5.0-800x480.png), [Maps missing](../deliverables/dashboard-1.5.0-maps-missing-800x480.png). They show native application entry states, not a simulated or embedded map.
 - An emulator Home-role smoke check temporarily selected AutoDrive as Home, launched native Maps, pressed Android Home and verified AutoDrive was resumed. The original Home component was restored. The temporary Maps test installation was removed after testing; the emulator resolution/density were restored.
 - Google Maps owns its native theme, navigation, permissions and account preferences. AutoDrive supplies no Android Auto surface or split-screen embedding. The Media Hub is not visible while Google Maps occupies the screen. Native Back behavior beyond the observed onboarding screen, actual Incarlink firmware, native navigation and the owner's media applications remain untested. No software was installed on the owner's hardware.
+- The released code passed both GitHub workflows: [Android checks](https://github.com/wacayoub/AutoDrive/actions/runs/42117938640), [signed release](https://github.com/wacayoub/AutoDrive/actions/runs/42117939620). The actual public APK was downloaded anonymously; its metadata, size, SHA-256, package/version/minimum Android API and original signing certificate were verified.
+
+Published APK SHA-256: `adabfad0619aab0cf2ce13d823e4726b52d1175b4a0cc231e6b40e9d7ca3ca42`. [Release 1.5.0](https://github.com/wacayoub/AutoDrive/releases/tag/v1.5.0).
 
 ## Version 1.4.2 — stronger navy theme, compact colored icons and day/night Maps display
 
