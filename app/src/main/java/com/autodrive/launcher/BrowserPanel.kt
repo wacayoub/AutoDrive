@@ -1,15 +1,11 @@
 package com.autodrive.launcher
 
-import android.Manifest
 import android.app.Activity
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.graphics.Color
 import android.net.Uri
 import android.os.Bundle
 import android.view.View
-import android.view.ContextThemeWrapper
-import android.webkit.GeolocationPermissions
 import android.webkit.RenderProcessGoneDetail
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
@@ -20,12 +16,10 @@ import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.ProgressBar
 
-/** Top-level provider pages; no SDK, tile extraction or user-agent spoofing. */
+/** YouTube's top-level website; Google Maps is launched as a native application. */
 internal class BrowserPanel(
     private val activity: Activity,
     val home: String,
-    private val maps: Boolean,
-    private val requestLocation: () -> Unit,
     private val external: (Uri) -> Unit,
     private val nativeYouTube: ((Uri?) -> Boolean)? = null,
     private val focused: () -> Unit
@@ -59,9 +53,7 @@ internal class BrowserPanel(
         if (browser != null) { browser?.onResume(); return }
         if (!hasNetwork()) { showError(); return }
         try {
-            // Keep a stable light provider rendering, then adapt the complete map display at night.
-            val web = WebView(if (maps) ContextThemeWrapper(activity, R.style.AutoDriveMapWebTheme) else activity)
-            if (maps) MapDisplayTheme.apply(web)
+            val web = WebView(activity)
             browser = web
             web.settings.apply {
                 javaScriptEnabled = true
@@ -69,7 +61,7 @@ internal class BrowserPanel(
                 allowFileAccess = false
                 allowContentAccess = false
                 mediaPlaybackRequiresUserGesture = true
-                setGeolocationEnabled(maps)
+                setGeolocationEnabled(false)
                 setSupportMultipleWindows(false)
             }
             web.setOnTouchListener { _, event ->
@@ -84,7 +76,7 @@ internal class BrowserPanel(
                     if (uri.scheme == "intent") {
                         val parsed = runCatching { Intent.parseUri(uri.toString(), Intent.URI_INTENT_SCHEME) }.getOrNull()
                         val fallback = parsed?.getStringExtra("browser_fallback_url")?.let(Uri::parse)
-                        if (!maps && request.hasGesture() && parsed?.`package` == AppLinks.YOUTUBE) {
+                        if (request.hasGesture() && parsed?.`package` == AppLinks.YOUTUBE) {
                             val link = listOfNotNull(parsed.data, fallback).firstOrNull(::inside)
                             if (nativeYouTube?.invoke(link) == true) return true
                         }
@@ -94,7 +86,7 @@ internal class BrowserPanel(
                         } else if (request.hasGesture()) parsed?.data?.takeIf {
                             it.scheme in setOf("https", "geo", "google.navigation")
                         }?.let(external)
-                    } else if (!maps && request.hasGesture() && uri.scheme in setOf("vnd.youtube", "vnd.youtube.launch")) {
+                    } else if (request.hasGesture() && uri.scheme in setOf("vnd.youtube", "vnd.youtube.launch")) {
                         nativeYouTube?.invoke(null)
                     } else if (request.hasGesture() && uri.scheme in setOf("https", "geo", "google.navigation")) {
                         external(uri)
@@ -107,14 +99,8 @@ internal class BrowserPanel(
                     progress.visibility = VISIBLE
                 }
 
-                override fun onPageCommitVisible(view: WebView, url: String?) {
-                    if (maps) view.evaluateJavascript(MapWebPreference.script, null)
-                }
-
                 override fun onPageFinished(view: WebView, url: String?) {
                     progress.visibility = GONE
-                    // Apply the owner's Maps web preference without changing attribution or map data.
-                    if (maps) view.evaluateJavascript(MapWebPreference.script, null)
                 }
 
                 override fun onReceivedError(view: WebView, request: WebResourceRequest, failure: WebResourceError) {
@@ -137,14 +123,6 @@ internal class BrowserPanel(
             web.webChromeClient = object : WebChromeClient() {
                 override fun onProgressChanged(view: WebView, value: Int) { progress.progress = value }
 
-                override fun onGeolocationPermissionsShowPrompt(origin: String, callback: GeolocationPermissions.Callback) {
-                    val uri = Uri.parse(origin)
-                    val trusted = maps && uri.scheme == "https" && uri.host in setOf("www.google.com", "maps.google.com", "google.com")
-                    val permitted = activity.checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
-                    if (trusted && !permitted) requestLocation()
-                    callback.invoke(origin, trusted && permitted, false)
-                }
-
                 override fun onShowCustomView(view: View, callback: CustomViewCallback) {
                     if (fullscreen != null) { callback.onCustomViewHidden(); return }
                     fullscreen = view
@@ -166,9 +144,7 @@ internal class BrowserPanel(
 
     private fun inside(uri: Uri): Boolean {
         if (uri.scheme != "https" || uri.userInfo != null || uri.port !in setOf(-1, 443)) return false
-        return if (maps) uri.host in setOf("www.google.com", "google.com", "maps.google.com", "consent.google.com", "maps.app.goo.gl") ||
-            (uri.host == "goo.gl" && uri.path?.startsWith("/maps/") == true)
-        else uri.host in setOf("www.youtube.com", "m.youtube.com", "youtube.com", "youtu.be", "consent.youtube.com")
+        return uri.host in setOf("www.youtube.com", "m.youtube.com", "youtube.com", "youtu.be", "consent.youtube.com")
     }
 
     private fun showError() { progress.visibility = GONE; error.visibility = VISIBLE }

@@ -1,5 +1,7 @@
 # AutoDrive 1.3.0 web preview
 
+**Current status, 1.5.0:** at the owner's request Maps now launches the installed Android application in its own window. Its WebView, styling filter and page script have been removed. Only YouTube remains a web panel. The following sections are the historical web-preview audit; see [the current native handoff](NAVIGATION-AUDIT.md#current-integration-150-native-google-maps-handoff).
+
 Reviewed 5 November 2026 after the owner rejected a traffic widget and a YouTube link-entry player. The revised target is a manipulable Google map and the actual YouTube home/browse page in the dashboard.
 
 The **1.3.1** update adds responsive portrait layout and a bounded, origin-scoped action for Maps' existing English/French **Stay on web** choice. It uses the documented map-view URL at startup. See the [display/startup audit and tests](DISPLAY-FIXES-1.3.1.md). Website changes can affect this preference action.

@@ -26,14 +26,14 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
-/** Browser-based dashboard; no native app embedding is claimed. */
+/** Native Maps handoff and YouTube web dashboard; no cross-app embedding is claimed. */
 class WebDashboardActivity : ComponentActivity() {
     private lateinit var ui: DriveViews
     private lateinit var links: AppLinks
     private lateinit var gps: GpsMonitor
     private lateinit var root: FrameLayout
     private lateinit var homeView: LinearLayout
-    private lateinit var maps: BrowserPanel
+    private lateinit var maps: NativeMapsPanel
     private var youtube: BrowserPanel? = null
     private lateinit var mediaContent: FrameLayout
     private lateinit var mediaPane: LinearLayout
@@ -47,8 +47,6 @@ class WebDashboardActivity : ComponentActivity() {
     private val keyboardChrome = mutableListOf<android.view.View>()
     private var homeVisible = true
     private var resumed = false
-    private var mapFocused = true
-    private var mapState: Bundle? = null
     private var youtubeState: Bundle? = null
     private lateinit var updates: UpdateViewModel
     private var updatePanel: UpdatePanelView? = null
@@ -85,7 +83,6 @@ class WebDashboardActivity : ComponentActivity() {
         links = AppLinks(this)
         updates = ViewModelProvider(this)[UpdateViewModel::class.java]
         gps = GpsMonitor(this, ::updateStatus)
-        mapState = state?.getBundle("maps")
         youtubeState = state?.getBundle("youtube")
         root = FrameLayout(this).apply {
             setBackgroundColor(Palette.background)
@@ -96,20 +93,19 @@ class WebDashboardActivity : ComponentActivity() {
                 val typing = insets.isVisible(WindowInsets.Type.ime())
                 keyboardChrome.forEach { it.visibility = if (typing) View.GONE else View.VISIBLE }
                 if (::mediaPane.isInitialized && portrait) {
-                    mapPane.visibility = if (typing && !mapFocused) View.GONE else View.VISIBLE
-                    mediaPane.visibility = if (typing && mapFocused) View.GONE else View.VISIBLE
+                    mapPane.visibility = if (typing) View.GONE else View.VISIBLE
                     panelGap.visibility = if (typing) View.GONE else View.VISIBLE
                 }
                 insets
             }
         }
-        maps = BrowserPanel(this, "https://www.google.com/maps/@?api=1&map_action=map", true, ::requestGps, ::openExternal) { mapFocused = true }
+        maps = NativeMapsPanel(this, links)
         homeView = dashboard()
         setContentView(root)
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 if (!homeVisible) { (pageBack ?: ::showHome).invoke(); return }
-                val consumed = if (mapFocused) maps.back() else youtube?.back() == true
+                val consumed = youtube?.back() == true
                 if (!consumed && !getSystemService(RoleManager::class.java).isRoleHeld(RoleManager.ROLE_HOME)) finish()
             }
         })
@@ -170,8 +166,6 @@ class WebDashboardActivity : ComponentActivity() {
             mapPane = FrameLayout(this@WebDashboardActivity).apply {
                 background = ui.shape(Palette.surface, 18, Palette.border)
                 setPadding(ui.dp(2), ui.dp(2), ui.dp(2), ui.dp(2))
-                maps.background = ui.shape(android.graphics.Color.BLACK, 16)
-                maps.clipToOutline = true
                 addView(maps, FrameLayout.LayoutParams(-1, -1))
             }
             addView(mapPane, panelParams(if (portrait) .46f else .52f))
@@ -277,10 +271,9 @@ class WebDashboardActivity : ComponentActivity() {
         super.onPause()
     }
 
-    override fun onDestroy() { installJob?.cancel(); maps.release(); youtube?.release(); super.onDestroy() }
+    override fun onDestroy() { installJob?.cancel(); youtube?.release(); super.onDestroy() }
 
     override fun onSaveInstanceState(outState: Bundle) {
-        outState.putBundle("maps", maps.save() ?: mapState)
         outState.putBundle("youtube", youtube?.save() ?: youtubeState)
         super.onSaveInstanceState(outState)
     }
@@ -312,14 +305,11 @@ class WebDashboardActivity : ComponentActivity() {
     }
 
     private fun startPanels() {
-        maps.start(mapState)
-        mapState = null
+        maps.refresh()
         select(links.tab)
     }
 
     private fun stopPanels() {
-        mapState = maps.save() ?: mapState
-        maps.release()
         youtubeState = youtube?.save() ?: youtubeState
         youtube?.release()
     }
@@ -340,8 +330,8 @@ class WebDashboardActivity : ComponentActivity() {
             ui.touch(button, android.graphics.Color.TRANSPARENT, 12) { select(value) }
         }
         if (tab == MediaTab.YOUTUBE) {
-            val panel = BrowserPanel(this, "https://m.youtube.com/", false, {}, ::openExternal,
-                nativeYouTube = { uri -> links.openYouTube(uri) }) { mapFocused = false }
+            val panel = BrowserPanel(this, "https://m.youtube.com/", ::openExternal,
+                nativeYouTube = { uri -> links.openYouTube(uri) }) {}
             youtube = panel
             mediaContent.addView(panel, FrameLayout.LayoutParams(-1, -1))
             if (resumed && homeVisible) panel.start(youtubeState)
@@ -395,7 +385,9 @@ class WebDashboardActivity : ComponentActivity() {
         }
         row("GPS · autorisations", ::requestGps)
         row("Mises à jour · ${updates.source.versionName}", ::showUpdates)
-        row("Revenir à l’accueil Google Maps") { mapState = null; maps.loadHome(); showHome() }
+        row("Ouvrir Google Maps Android") {
+            if (!links.openMaps()) message("Google Maps absent ou désactivé · installe ou réactive l’application")
+        }
         row("Revenir à l’accueil YouTube") { youtubeState = null; links.tab = MediaTab.YOUTUBE; showHome() }
         val youtubeApp = links.forTab(MediaTab.YOUTUBE, links.apps())
         val youtubeLabel = youtubeApp?.label ?: if (links.association(MediaTab.YOUTUBE.name) == null)
@@ -422,7 +414,7 @@ class WebDashboardActivity : ComponentActivity() {
             } catch (_: android.content.ActivityNotFoundException) { message("Sélection du lanceur indisponible") }
         }
         row("Paramètres Android") { links.start(Intent(Settings.ACTION_SETTINGS)) }
-        addView(ui.label("Version web : les sites Google restent intacts. Le guidage vocal peut demander l’application Maps. La connexion Google peut nécessiter le navigateur externe.", 14, Palette.muted).apply {
+        addView(ui.label("Maps utilise l’application Google Maps Android, en plein écran. Retour revient normalement à AutoDrive ; Accueil y revient si AutoDrive est le lanceur choisi. YouTube conserve sa page web.", 14, Palette.muted).apply {
             maxLines = 6
             setPadding(ui.dp(8), ui.dp(12), ui.dp(8), ui.dp(8))
         })

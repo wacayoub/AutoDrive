@@ -1,5 +1,17 @@
 # AutoDrive validation
 
+## Version 1.5.0 — replace Maps website with Google Maps Android
+
+Validated 5 November 2026. Package `com.autodrive.launcher`, version code 17. The owner explicitly requested switching from browser Maps to the installed Google Maps Android application.
+
+- Debug and Android test APK assembly, all **14 JVM tests**, and Android lint passed. Lint: **0 errors, 28 warnings, 1 hint**. The Maps WebView, its page script, color filter and obsolete web-preference tests were removed. YouTube remains a web panel with its installed-app association.
+- Android 13 AOSP / **800 × 480 / 160 dpi**, Google Maps absent: **OK (4 tests)** for dashboard layout/lifecycle, explicit missing Maps state and both YouTube association tests. The dashboard contains one YouTube WebView and no Maps WebView; Radio/IPTV switch without recreating a Maps website. Missing Maps returns unavailable and exposes its installation action. No map website fallback is used.
+- Installed the previously downloaded Google Maps **11.129.0103** APK on the disposable emulator. APK signature verification reported Google Inc. certificate SHA-1 `38918a453d07199354f8b19af05ec6562ced5788`. Native handoff instrumentation returned **OK (1 test)**, and another combined dashboard/handoff run returned **OK (2 tests)**. The actual Maps package reached the foreground. Its first-use sign-in screen was observed; no Google account was entered. This validates launching, **not destination selection, route guidance, GPS or Google Play services compatibility** on this AOSP image.
+- Portrait **600 × 1376 / 240 dpi** dashboard test: **OK (1 test)**. Landscape **800 × 480 / 213 dpi** and **320 dpi**: **OK (1 test)** each. The native Maps action is checked for full visible height and an untruncated label. Dense layouts hide the explanatory paragraph, and very short layouts keep the action only. The icon-surface assertion allows half a dp for fractional-density pixel rounding.
+- Real captures: [Maps installed](../deliverables/dashboard-1.5.0-800x480.png), [Maps missing](../deliverables/dashboard-1.5.0-maps-missing-800x480.png). They show native application entry states, not a simulated or embedded map.
+- An emulator Home-role smoke check temporarily selected AutoDrive as Home, launched native Maps, pressed Android Home and verified AutoDrive was resumed. The original Home component was restored. The temporary Maps test installation was removed after testing; the emulator resolution/density were restored.
+- Google Maps owns its native theme, navigation, permissions and account preferences. AutoDrive supplies no Android Auto surface or split-screen embedding. The Media Hub is not visible while Google Maps occupies the screen. Native Back behavior beyond the observed onboarding screen, actual Incarlink firmware, native navigation and the owner's media applications remain untested. No software was installed on the owner's hardware.
+
 ## Version 1.4.2 — stronger navy theme, compact colored icons and day/night Maps display
 
 Validated 5 November 2026. Package `com.autodrive.launcher`, version code 16. Native navy surfaces are more visible, with centered speed/GPS, actual connectivity indicators and colored shortcuts. Media tabs use centered 40 × 32 dp visual surfaces inside touch targets of at least 48 × 48 dp; the media chrome uses less vertical padding.

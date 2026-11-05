@@ -1,6 +1,6 @@
 # AutoDrive
 
-Lanceur Android 13 natif Kotlin pour Incarlink Max X15-SLM927-72, adapté au paysage 800 × 480 et au portrait sur téléphone. Carte Google et page d’accueil YouTube dans deux panneaux web officiels ; quatre raccourcis : Phone, Media, Apps, Settings.
+Lanceur Android 13 natif Kotlin pour Incarlink Max X15-SLM927-72, adapté au paysage 800 × 480 et au portrait sur téléphone. Google Maps utilise maintenant l’application Android installée ; YouTube conserve sa page d’accueil web. Quatre raccourcis : Phone, Media, Apps, Settings.
 
 **[Télécharger la dernière version](https://github.com/wacayoub/AutoDrive/releases/latest/download/AutoDrive.apk)** · [Versions et contrôles SHA-256](https://github.com/wacayoub/AutoDrive/releases) · [Tests](docs/TEST-RESULTS.md)
 
@@ -16,18 +16,17 @@ La même identité de signature est conservée pour permettre les mises à jour 
 
 ## Tableau de bord
 
-- Version **1.4.2** : thème **Bleu profond** renforcé, compteur centré et icônes colorées (Téléphone vert, YouTube rouge, IPTV cyan). Les onglets média ont une petite surface de 40 × 32 dp, avec une cible tactile d’au moins 48 dp. Leur nom reste accessible aux lecteurs d’écran et par appui long.
-- Maps suit le mode jour/nuit Android. La nuit, un traitement visuel du panneau complet assombrit aussi les tuiles et conserve des libellés contrastés. Il s’agit d’une adaptation d’affichage du navigateur, pas du thème natif Google Maps. L’invitation connue « Ouvrir l’appli » est masquée sur les pages Maps, sans supprimer les mentions Google ni les commandes de carte.
-- Maps et YouTube s’ouvrent directement sur leurs sites officiels. Recherche de lieux, déplacement et zoom de carte, recherche YouTube et lecture vidéo ont été observés sur émulateur.
+- Version **1.5.0** : le panneau Maps web est remplacé par **Ouvrir Google Maps**. Cette action lance explicitement l’application Android `com.google.android.apps.maps`, dans sa propre fenêtre plein écran. La recherche de destination, le zoom, les itinéraires, le guidage et le thème sont gérés par Google Maps. Il ne s’agit pas d’Android Auto ni d’une application intégrée dans un widget.
+- Si Maps manque ou est désactivé, AutoDrive l’indique et propose sa fiche Google Play. Il ne charge plus de carte web en remplacement. Si la boutique manque, seule sa page d’installation peut être ouverte dans un navigateur après une action explicite.
+- Thème **Bleu profond**, compteur centré et icônes colorées. Les onglets média conservent leurs petites surfaces de 40 × 32 dp et leurs cibles tactiles d’au moins 48 dp. Le nom reste accessible aux lecteurs d’écran et par appui long.
+- YouTube conserve son site officiel dans le Media Hub. Les autres onglets et associations d’applications restent disponibles au retour de Maps.
 - Portrait : panneaux superposés et libellés complets. Paysage : deux panneaux côte à côte. La saisie au clavier donne la place nécessaire à la page utilisée.
 - **Settings → Application YouTube** permet de choisir l’application installée pour une ouverture externe explicite. Le panneau YouTube garde sa page web. Radio et IPTV lancent également les applications choisies dans Settings.
 - Le compteur utilise la localisation Android, avec `--` lorsque la vitesse n’est pas disponible. Aucune vitesse, instruction de navigation ou ETA n’est inventée.
 
-![Capture réelle du tableau de bord de jour](deliverables/dashboard-1.4.2-day-800x480.png)
+![Capture réelle avec Google Maps Android installé](deliverables/dashboard-1.5.0-800x480.png)
 
-![Capture réelle en mode nuit Android](deliverables/dashboard-1.4.2-night-800x480.png)
-
-Les panneaux ne sont pas des activités natives Google Maps/YouTube intégrées, ni Android Auto. Le guidage vocal complet peut demander l’application Maps. Les recommandations et la connexion au compte YouTube dépendent du service ; le navigateur intégré ne copie pas les comptes des applications installées. Voir [l’audit web](docs/WEB-DASHBOARD-AUDIT.md) et [l’audit navigation](docs/NAVIGATION-AUDIT.md).
+Google Maps prend l’écran lorsqu’il est ouvert : le Media Hub n’est alors pas visible à côté. Retour revient normalement au lanceur ; Accueil ouvre AutoDrive si tu l’as choisi comme lanceur Android. Le fonctionnement exact de Retour dépend de l’écran courant de Maps. Les préférences et comptes Google Maps appartiennent à l’application Google Maps. L’ancien filtre nuit et les scripts du panneau Maps web ont été retirés. Les recommandations et la connexion au compte YouTube dépendent toujours du site, sans copie des comptes des applications installées. Voir [l’audit navigation](docs/NAVIGATION-AUDIT.md) et [l’historique web](docs/WEB-DASHBOARD-AUDIT.md).
 
 ## Compiler
 

@@ -53,7 +53,7 @@ class YouTubeAppChoiceTest {
                 links.saveAssociation(MediaTab.YOUTUBE.name,
                     links.apps().first { it.component.packageName == "com.android.deskclock" }.component)
                 descendants(activity.window.decorView).filterIsInstance<BrowserPanel>().forEach { it.release() }
-                panel = BrowserPanel(activity, "https://m.youtube.com/", false, {}, {}, nativeYouTube = { uri ->
+                panel = BrowserPanel(activity, "https://m.youtube.com/", {}, nativeYouTube = { uri ->
                     opened = links.openYouTube(uri)
                     requested.countDown()
                     opened

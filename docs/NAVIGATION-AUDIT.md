@@ -2,6 +2,16 @@
 
 Reviewed 4 November 2026 for AutoDrive on an Incarlink Max X15-SLM927-72 Android 13 box that runs the launcher locally and presents its output on a Toyota in-dash display.
 
+## Current integration: 1.5.0 native Google Maps handoff
+
+On 5 November 2026 the owner explicitly requested replacing Maps in the web browser with the Google Maps Android application. The active dashboard now uses `NativeMapsPanel` and `AppLinks.openMaps()`. PackageManager launches the installed `com.google.android.apps.maps` front-door activity; a Maps URL explicitly restricted to that package is the fallback if its launcher intent is unavailable. No unrestricted map URL is sent to a browser. The manifest already declares visibility of the Maps package.
+
+Google Maps runs in its own normal Android task/window. It is not embedded, projected Android Auto, a native SDK map inside AutoDrive or a split-screen request. Search, routes, GPS, offline maps, permissions, account state and visual theme are handled by Google Maps itself. The Media Hub remains in AutoDrive and is released while the launcher is paused. Android Home returns to AutoDrive only when AutoDrive is the selected Home app. Back follows the native Maps back stack.
+
+If Maps is absent, disabled or cannot launch, the dashboard provides an explicit unavailable state. A user may open the Google Play listing to install/reactivate Maps. There is no automatic website substitution. The old Maps WebView, page script and native night color filter have been removed from the active project; the remaining browser panel serves YouTube only. Historical reports below describe earlier versions.
+
+This path uses supported external application launching and requires no Google Maps Platform API key. It does not resolve or claim authorization for a Navigation SDK embedded-vehicle deployment. [Android PackageManager](https://developer.android.com/reference/android/content/pm/PackageManager#getLaunchIntentForPackage(java.lang.String)), [Google Maps Android intents](https://developer.android.com/guide/components/google-maps-intents).
+
 ## Browser preview added on 5 November 2026
 
 The separate 1.3.0 web preview loads the actual Google Maps and YouTube websites in two top-level browser panels. It replaces the traffic-widget/link-entry experience at the launcher entry. Map pan, double-tap zoom, place search and place details were observed inside the browser panel. This is neither an embedded native Google Maps activity nor an authorized Navigation SDK implementation, and it does not resolve full Android Auto style turn-by-turn guidance. See the [web implementation audit](WEB-DASHBOARD-AUDIT.md).

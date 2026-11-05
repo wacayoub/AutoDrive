@@ -88,7 +88,7 @@ class GitHub:
                 raise
             release = self.call(f"/repos/{self.repository}/releases", "POST", dict(tag_name=tag,
                 target_commitish=commit, name="AutoDrive " + metadata["versionName"], draft=True, prerelease=False,
-                body="Mises à jour intégrées depuis Settings → Mises à jour. Téléchargement vérifié, installation Android avec confirmation. Réglages conservés.\n\nMaps et YouTube restent des panneaux web officiels ; la navigation Android Auto complète n’est pas intégrée."))
+                body="Mises à jour intégrées depuis Settings → Mises à jour. Téléchargement vérifié, installation Android avec confirmation. Réglages conservés.\n\nGoogle Maps s’ouvre dans son application Android installée. YouTube conserve son panneau web. Android Auto et l’intégration de Maps dans un widget ne sont pas fournis."))
         assets = {item["name"] for item in self.call(f"/repos/{self.repository}/releases/{release['id']}/assets")}
         upload = release["upload_url"].split("{")[0]
         files = [(Path(apk), "AutoDrive.apk"), (Path(output) / "autodrive-update.json", "autodrive-update.json"),
