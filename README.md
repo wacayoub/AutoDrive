@@ -32,6 +32,8 @@ Les panneaux ne sont pas des activités natives Google Maps/YouTube intégrées,
 
 ## Compiler
 
+Un [APK de diagnostic natif séparé](native-maps-test/README.md) vérifie les préconditions publiques d’intégration de Google Maps Android. L’essai sur émulateur n’a pas obtenu d’intégration native ; cet APK ne remplace pas le tableau de bord et n’est pas distribué par son canal de mise à jour stable.
+
 JDK 17, SDK Android Platform 35, Build Tools 35, Gradle Wrapper fourni. Configure `JAVA_HOME` et `ANDROID_HOME`, ou laisse Android Studio créer `local.properties`.
 
 ```sh

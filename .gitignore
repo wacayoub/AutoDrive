@@ -29,6 +29,7 @@ __pycache__/
 /secrets.properties
 /app/build/
 /incarlink-start/build/
+/native-maps-test/build/
 /build/
 *.iml
 *.jks

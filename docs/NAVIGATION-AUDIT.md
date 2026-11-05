@@ -4,6 +4,12 @@ Reviewed 4 November 2026 for AutoDrive on an Incarlink Max X15-SLM927-72 Android
 
 ## Current integration: 1.5.1 inline Maps website restored
 
+### Separate native embedding experiment
+
+At the owner's explicit request, a separate Android application was built and tested with public AndroidX WindowManager activity embedding. Android 13 reported embedding support, but the tested Maps 11.129.0103 launcher activity did not opt in or accept the host signing certificate. An actual native launch under an embedding rule produced zero reported embedded splits: Maps occupied another fullscreen task and the host became invisible. The protected Android Auto `GhostActivity` requires a permission unavailable to this app. No hidden APIs or privilege bypasses were attempted. [Source, APK and actual evidence](../native-maps-test/README.md).
+
+This experiment is a separate package and prerelease, not a production update. The stable dashboard remains 1.5.1. The installed YouTube selection also does not constitute native embedding: the dashboard loads `m.youtube.com` and uses the chosen app only for explicit external launching. The Incarlink's actual Maps build and window support remain untested.
+
 After testing 1.5.0, the owner clarified that the map must work directly on the home page, as it did in the web version. Version 1.5.1 restores the 1.4.2 two-WebView dashboard, Maps web preference and day/night display adaptation. The native Maps entry card and its full-screen launch action are removed. Package version code increases to 18 so 1.5.0 can update normally with the same signing identity and preferences.
 
 Google Maps search, pan and zoom are provided by the real website in the left panel; YouTube remains in the right panel. This does not supply Android Auto, an embedded Google Maps Android activity or authorized Navigation SDK guidance. The earlier web integration boundaries and licensing limits remain applicable. See [web implementation](WEB-DASHBOARD-AUDIT.md) and [current results](TEST-RESULTS.md).

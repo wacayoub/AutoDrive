@@ -8,3 +8,4 @@ dependencyResolutionManagement {
 rootProject.name = 'AutoDrive'
 include ':app'
 include ':incarlink-start'
+include ':native-maps-test'

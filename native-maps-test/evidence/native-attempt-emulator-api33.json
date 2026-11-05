@@ -1,0 +1,18 @@
+{
+  "androidApi": 33,
+  "hardware": "ranchu",
+  "splitSupport": "SplitSupportStatus: AVAILABLE",
+  "phase": "NATIVE_LAUNCH_REQUESTED",
+  "reportedSplitCount": 0,
+  "mapsComponent": "com.google.android.apps.maps/com.google.android.maps.MapsActivity",
+  "mapsVersion": "11.129.0103",
+  "mapsAllowsUntrustedEmbedding": false,
+  "hostCertificateAccepted": false,
+  "knownHostCertificateCount": 0,
+  "mapsLaunchMode": 2,
+  "projectionRequiredPermission": "com.google.android.projection.gearhead.permission.START_PROJECTED_ACTIVITY",
+  "projectionPermissionGranted": false,
+  "eligible": false,
+  "emulatorForcedAttempt": true,
+  "observedOutcome": "Google Maps occupied a separate fullscreen task; probe host was not visible."
+}
