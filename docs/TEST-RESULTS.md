@@ -10,6 +10,9 @@ Validated 5 November 2026. Package `com.autodrive.launcher`, version code 16. Na
 - **600 × 1376 / 240 dpi portrait**: dashboard instrumentation returned **OK (1 test)**. The emulator was restored to 800 × 480 / 160 dpi and its original day setting afterward.
 - Real website captures show the removed launch invitation and actual Maps rendering: [day](../deliverables/dashboard-1.4.2-day-800x480.png), [night](../deliverables/dashboard-1.4.2-night-800x480.png), [portrait](../deliverables/dashboard-1.4.2-portrait.png). Night adapts the complete map display through a native color matrix, including tiles and labels. It is not Google's native dark map style. Initial algorithmic WebView darkening left light tiles and was replaced before release. [Display integration details](WEB-DASHBOARD-AUDIT.md#142-display-preferences).
 - No software was installed on the owner's Incarlink. Actual hardware rendering/performance, vendor theme signaling, GPS, YouTube Advanced and authorized IPTV playback remain hardware checks. Existing browser navigation and licensing limits remain in effect.
+- Both release-code GitHub workflows succeeded: [Android checks](https://github.com/wacayoub/AutoDrive/actions/runs/42109177833), [signed release](https://github.com/wacayoub/AutoDrive/actions/runs/42109179215). The public release APK was downloaded anonymously and checked against update metadata: size, SHA-256, package, version code 16/name 1.4.2, Android 13 minimum and the original signing certificate.
+
+Published APK SHA-256: `af2d2879fb1088f1a227ea4212acdba955215101effc05ba7466d6bd19e5774a`. [Release 1.4.2](https://github.com/wacayoub/AutoDrive/releases/tag/v1.4.2).
 
 ## Version 1.4.1 — Bleu profond and icon-only media tabs
 
