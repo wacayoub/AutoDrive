@@ -38,9 +38,14 @@ class WebDashboardTest {
                     assertEquals("Clipped shortcut: $label", 0, text.layout.getEllipsisCount(0))
                 }
                 for (label in listOf("Radio", "YouTube", "IPTV")) {
-                    val button = all().first { it.contentDescription == label }
-                    val text = descendants(button).filterIsInstance<android.widget.TextView>().single()
-                    assertEquals("Clipped tab: $label", 0, text.layout.getEllipsisCount(0))
+                    val button = all().single { it.isShown && it.contentDescription == label }
+                    val density = activity.resources.displayMetrics.density
+                    assertTrue("Tab target height: $label", button.height / density >= 48)
+                    assertTrue("Tab target width: $label", button.width / density >= 48)
+                    assertEquals(label, button.tooltipText)
+                    assertTrue("Icon-only tab: $label", descendants(button).none { it is android.widget.TextView })
+                    assertEquals(1, descendants(button).filterIsInstance<DriveIcon>().size)
+                    assertEquals(label == "YouTube", button.isSelected)
                 }
                 val map = web().first { it.url?.contains("google.com/maps") == true }
                 val video = web().first { it.url?.contains("youtube.com") == true }
@@ -52,6 +57,10 @@ class WebDashboardTest {
                 } else assertTrue("Landscape panels must be side by side", videoLocation[0] > mapLocation[0] + map.width)
                 click("Radio")
                 assertEquals(1, web().size)
+                assertTrue(all().single { it.contentDescription == "Radio" }.isSelected)
+                click("IPTV")
+                assertEquals(1, web().size)
+                assertTrue(all().single { it.contentDescription == "IPTV" }.isSelected)
                 click("YouTube")
                 assertEquals(2, web().size)
                 click("Settings")

@@ -22,10 +22,10 @@ import kotlin.math.min
 import kotlin.math.roundToInt
 
 internal object Palette {
-    val background = 0xFF0D1117.toInt()
-    val surface = 0xFF15191F.toInt()
-    val raised = 0xFF202630.toInt()
-    val border = 0xFF2B3541.toInt()
+    val background = 0xFF0B131E.toInt()
+    val surface = 0xFF101C2A.toInt()
+    val raised = 0xFF1B2B3C.toInt()
+    val border = 0xFF2D465D.toInt()
     val blue = 0xFF168BFF.toInt()
     val text = 0xFFF5F7FA.toInt()
     val muted = 0xFFAAB4C0.toInt()
@@ -166,6 +166,10 @@ internal class DriveIcon(context: Context, var name: String, var color: Int, pri
             "tv" -> {
                 line(8f, 3f, 12f, 7f, 17f, 3f)
                 box(3f, 7f, 18f, 13f)
+            }
+            "youtube" -> {
+                box(2f, 5f, 20f, 14f, 4f)
+                line(10f, 9f, 15f, 12f, 10f, 15f, close = true, fill = true)
             }
             "nav" -> line(12f, 2f, 21f, 21f, 12f, 16f, 3f, 21f, close = true, fill = true)
             "play" -> line(7f, 4f, 20f, 12f, 7f, 20f, close = true, fill = true)

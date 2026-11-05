@@ -1,5 +1,14 @@
 # AutoDrive validation
 
+## Version 1.4.1 — Bleu profond and icon-only media tabs
+
+Validated 5 November 2026. Package `com.autodrive.launcher`, version code 15. The owner selected design 3 (Bleu profond). The native interface now uses navy surfaces, rounded map/media frames, blue selection and icon-only Radio/YouTube/IPTV tabs. Provider website content is unchanged.
+
+- Debug assembly and Android test APK assembly passed. All **14 JVM tests** passed. Android lint reported **0 errors, 28 warnings, 1 hint**.
+- Android 13 AOSP emulator, **800 × 480 / 160 dpi**: instrumentation returned **OK (4 tests)** for dashboard layout/lifecycle, Maps web preference and both installed YouTube association tests. The dashboard test checks each icon-only tab has its accessible name and tooltip, a minimum 48 × 48 dp target and the correct selected state. It switches Radio → IPTV → YouTube, checks panel recreation, four unique bottom shortcuts, and no clipped shortcut labels.
+- The same dashboard instrumentation returned **OK (1 test)** at **600 × 1376 / 240 dpi portrait**. This also checks stacked full-width panels and visible shortcut labels. The emulator was restored to 800 × 480 / 160 dpi afterward.
+- Real captures: [800 × 480 landscape](../deliverables/dashboard-1.4.1-800x480.png), [phone portrait](../deliverables/dashboard-1.4.1-portrait.png). These are app captures rather than generated proposals. Hardware-specific WebView behavior, real GPS, the owner's YouTube Advanced app and IPTV subscription remain untested. No software was installed on the owner's Incarlink.
+
 ## Version 1.4.0 — public GitHub releases and in-app updates
 
 Validated 5 November 2026. The public repository is [wacayoub/AutoDrive](https://github.com/wacayoub/AutoDrive), with a published [1.4.0 release](https://github.com/wacayoub/AutoDrive/releases/tag/v1.4.0). Package `com.autodrive.launcher`, version code 14.

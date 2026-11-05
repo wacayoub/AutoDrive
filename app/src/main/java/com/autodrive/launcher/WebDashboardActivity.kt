@@ -37,6 +37,7 @@ class WebDashboardActivity : ComponentActivity() {
     private var youtube: BrowserPanel? = null
     private lateinit var mediaContent: FrameLayout
     private lateinit var mediaPane: LinearLayout
+    private lateinit var mapPane: FrameLayout
     private lateinit var panelGap: View
     private lateinit var speed: android.widget.TextView
     private lateinit var status: android.widget.TextView
@@ -94,7 +95,7 @@ class WebDashboardActivity : ComponentActivity() {
                 val typing = insets.isVisible(WindowInsets.Type.ime())
                 keyboardChrome.forEach { it.visibility = if (typing) View.GONE else View.VISIBLE }
                 if (::mediaPane.isInitialized && portrait) {
-                    maps.visibility = if (typing && !mapFocused) View.GONE else View.VISIBLE
+                    mapPane.visibility = if (typing && !mapFocused) View.GONE else View.VISIBLE
                     mediaPane.visibility = if (typing && mapFocused) View.GONE else View.VISIBLE
                     panelGap.visibility = if (typing) View.GONE else View.VISIBLE
                 }
@@ -135,22 +136,48 @@ class WebDashboardActivity : ComponentActivity() {
         addView(header.also(keyboardChrome::add), LinearLayout.LayoutParams(-1, ui.dp(if (compact) 60 else 50)))
         with(ui) { gap(8) }
         addView(ui.line(portrait).apply {
-            addView(maps, panelParams(if (portrait) .46f else .52f))
+            mapPane = FrameLayout(this@WebDashboardActivity).apply {
+                background = ui.shape(Palette.surface, 18, Palette.border)
+                setPadding(ui.dp(2), ui.dp(2), ui.dp(2), ui.dp(2))
+                maps.background = ui.shape(android.graphics.Color.BLACK, 16)
+                maps.clipToOutline = true
+                addView(maps, FrameLayout.LayoutParams(-1, -1))
+            }
+            addView(mapPane, panelParams(if (portrait) .46f else .52f))
             panelGap = View(this@WebDashboardActivity)
             addView(panelGap, if (portrait) LinearLayout.LayoutParams(1, ui.dp(10)) else LinearLayout.LayoutParams(ui.dp(10), 1))
             mediaPane = ui.line(true).apply {
-                background = ui.shape(Palette.surface, 15, Palette.border)
+                background = ui.shape(Palette.surface, 18, Palette.border)
                 setPadding(ui.dp(6), ui.dp(6), ui.dp(6), ui.dp(6))
                 addView(ui.line().apply {
+                    background = ui.shape(Palette.raised, 14)
                     MediaTab.entries.forEach { tab ->
-                        val button = ui.action(tab.title) { select(tab) }
-                        (button.getChildAt(0) as? android.widget.TextView)?.textSize = if (compact) 14f else 17f
+                        val icon = when (tab) {
+                            MediaTab.RADIO -> "radio"
+                            MediaTab.YOUTUBE -> "youtube"
+                            MediaTab.IPTV -> "tv"
+                        }
+                        val button = FrameLayout(this@WebDashboardActivity).apply {
+                            contentDescription = tab.title
+                            tooltipText = tab.title
+                            minimumWidth = ui.dp(48)
+                            minimumHeight = ui.dp(48)
+                            addView(ui.icon(icon, Palette.muted, 24).apply {
+                                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+                            }, FrameLayout.LayoutParams(ui.dp(26), ui.dp(26), Gravity.CENTER))
+                        }
                         tabs[tab] = button
-                        addView(button, LinearLayout.LayoutParams(0, ui.dp(48), 1f))
+                        addView(button, LinearLayout.LayoutParams(0, ui.dp(48), 1f).apply {
+                            marginStart = ui.dp(2)
+                            marginEnd = ui.dp(2)
+                        })
                     }
                 }.also(keyboardChrome::add))
                 with(ui) { gap(6) }
-                mediaContent = FrameLayout(this@WebDashboardActivity)
+                mediaContent = FrameLayout(this@WebDashboardActivity).apply {
+                    background = ui.shape(android.graphics.Color.BLACK, 12)
+                    clipToOutline = true
+                }
                 addView(mediaContent, LinearLayout.LayoutParams(-1, 0, 1f))
             }
             addView(mediaPane, panelParams(if (portrait) .54f else .48f))
@@ -165,17 +192,20 @@ class WebDashboardActivity : ComponentActivity() {
             )
             items.forEachIndexed { index, (title, icon, action) ->
                 if (index > 0) with(ui) { gap(7) }
-                val button = if (!compact) ui.action(title, icon, icon == "media", run = action)
+                val button = if (!compact) ui.action(title, icon, icon == "media", run = action).apply {
+                    ui.touch(this, if (icon == "media") Palette.blue else Palette.raised, 18, Palette.border,
+                        action = action)
+                }
                 else ui.line(true).apply {
                     gravity = Gravity.CENTER
                     contentDescription = title
-                    addView(ui.icon(icon, if (icon == "media") Palette.blue else Palette.text, 22),
+                    addView(ui.icon(icon, Palette.text, 22),
                         LinearLayout.LayoutParams(ui.dp(24), ui.dp(25)))
                     addView(ui.label(title, 13).apply {
                         gravity = Gravity.CENTER
                         importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
                     })
-                    ui.touch(this, if (icon == "media") 0xFF163C62.toInt() else Palette.raised, 14, Palette.border, action = action)
+                    ui.touch(this, if (icon == "media") Palette.blue else Palette.raised, 18, Palette.border, action = action)
                 }
                 addView(button, LinearLayout.LayoutParams(0, -1, 1f))
             }
@@ -264,7 +294,9 @@ class WebDashboardActivity : ComponentActivity() {
         mediaContent.removeAllViews()
         tabs.forEach { (value, button) ->
             button.isSelected = value == tab
-            ui.touch(button, if (value == tab) Palette.blue else Palette.raised, 10) { select(value) }
+            val icon = (button as FrameLayout).getChildAt(0) as DriveIcon
+            icon.style(color = if (value == tab) Palette.text else Palette.muted)
+            ui.touch(button, if (value == tab) Palette.blue else android.graphics.Color.TRANSPARENT, 12) { select(value) }
         }
         if (tab == MediaTab.YOUTUBE) {
             val panel = BrowserPanel(this, "https://m.youtube.com/", false, {}, ::openExternal,
