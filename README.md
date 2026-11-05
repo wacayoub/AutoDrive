@@ -16,13 +16,16 @@ La même identité de signature est conservée pour permettre les mises à jour 
 
 ## Tableau de bord
 
-- Version **1.4.1** : thème **Bleu profond**, choisi parmi les cinq propositions. Les onglets Radio, YouTube et IPTV utilisent des icônes compactes avec un fond bleu pour la sélection. Le nom reste accessible aux lecteurs d’écran et par appui long ; chaque cible conserve au moins 48 dp.
+- Version **1.4.2** : thème **Bleu profond** renforcé, compteur centré et icônes colorées (Téléphone vert, YouTube rouge, IPTV cyan). Les onglets média ont une petite surface de 40 × 32 dp, avec une cible tactile d’au moins 48 dp. Leur nom reste accessible aux lecteurs d’écran et par appui long.
+- Maps suit le mode jour/nuit Android. La nuit, un traitement visuel du panneau complet assombrit aussi les tuiles et conserve des libellés contrastés. Il s’agit d’une adaptation d’affichage du navigateur, pas du thème natif Google Maps. L’invitation connue « Ouvrir l’appli » est masquée sur les pages Maps, sans supprimer les mentions Google ni les commandes de carte.
 - Maps et YouTube s’ouvrent directement sur leurs sites officiels. Recherche de lieux, déplacement et zoom de carte, recherche YouTube et lecture vidéo ont été observés sur émulateur.
 - Portrait : panneaux superposés et libellés complets. Paysage : deux panneaux côte à côte. La saisie au clavier donne la place nécessaire à la page utilisée.
 - **Settings → Application YouTube** permet de choisir l’application installée pour une ouverture externe explicite. Le panneau YouTube garde sa page web. Radio et IPTV lancent également les applications choisies dans Settings.
 - Le compteur utilise la localisation Android, avec `--` lorsque la vitesse n’est pas disponible. Aucune vitesse, instruction de navigation ou ETA n’est inventée.
 
-![Capture réelle du tableau de bord](deliverables/dashboard-1.4.1-800x480.png)
+![Capture réelle du tableau de bord de jour](deliverables/dashboard-1.4.2-day-800x480.png)
+
+![Capture réelle en mode nuit Android](deliverables/dashboard-1.4.2-night-800x480.png)
 
 Les panneaux ne sont pas des activités natives Google Maps/YouTube intégrées, ni Android Auto. Le guidage vocal complet peut demander l’application Maps. Les recommandations et la connexion au compte YouTube dépendent du service ; le navigateur intégré ne copie pas les comptes des applications installées. Voir [l’audit web](docs/WEB-DASHBOARD-AUDIT.md) et [l’audit navigation](docs/NAVIGATION-AUDIT.md).
 

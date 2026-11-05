@@ -26,7 +26,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
-/** Browser-based dashboard. Websites remain intact; no native app embedding is claimed. */
+/** Browser-based dashboard; no native app embedding is claimed. */
 class WebDashboardActivity : ComponentActivity() {
     private lateinit var ui: DriveViews
     private lateinit var links: AppLinks
@@ -42,6 +42,7 @@ class WebDashboardActivity : ComponentActivity() {
     private lateinit var speed: android.widget.TextView
     private lateinit var status: android.widget.TextView
     private lateinit var clock: android.widget.TextView
+    private val connectivityIcons = mutableMapOf<String, DriveIcon>()
     private val tabs = mutableMapOf<MediaTab, android.view.View>()
     private val keyboardChrome = mutableListOf<android.view.View>()
     private var homeVisible = true
@@ -119,7 +120,7 @@ class WebDashboardActivity : ComponentActivity() {
     private fun dashboard() = ui.line(true).apply {
         setPadding(ui.dp(12), ui.dp(7), ui.dp(12), ui.dp(10))
         val header = ui.line(compact)
-        val headerRow = ui.line().apply {
+        val headerRow = if (compact) ui.line().apply {
             addView(ui.icon("brand", Palette.blue), LinearLayout.LayoutParams(ui.dp(30), ui.dp(30)))
             addView(ui.label("AutoDrive", if (compact) 20 else 22, bold = true), LinearLayout.LayoutParams(0, -1, 1f))
             speed = ui.label("--", if (compact) 28 else 34, bold = true).apply { gravity = Gravity.CENTER }
@@ -129,6 +130,36 @@ class WebDashboardActivity : ComponentActivity() {
             if (!compact) addView(status, LinearLayout.LayoutParams(0, -1, 1.3f))
             clock = ui.label("", if (compact) 17 else 19).apply { gravity = Gravity.END or Gravity.CENTER_VERTICAL }
             addView(clock, if (compact) LinearLayout.LayoutParams(0, -1, .7f) else LinearLayout.LayoutParams(-2, -2))
+        } else ui.line().apply {
+            fun separator() = addView(View(this@WebDashboardActivity).apply { setBackgroundColor(Palette.border) },
+                LinearLayout.LayoutParams(ui.dp(1), ui.dp(26)))
+            addView(ui.line().apply {
+                addView(ui.icon("brand", Palette.blue), LinearLayout.LayoutParams(ui.dp(30), ui.dp(30)))
+                addView(ui.label("AutoDrive", 22, bold = true))
+            }, LinearLayout.LayoutParams(0, -1, 1f))
+            separator()
+            addView(ui.line(true).apply {
+                gravity = Gravity.CENTER
+                addView(ui.line().apply {
+                    gravity = Gravity.CENTER
+                    speed = ui.label("--", 30, bold = true)
+                    addView(speed)
+                    addView(ui.label(" km/h", 12, Palette.muted))
+                }, LinearLayout.LayoutParams(-1, 0, 1f))
+                status = ui.label("GPS indisponible", 10, Palette.muted).apply { gravity = Gravity.CENTER }
+                addView(status, LinearLayout.LayoutParams(-1, ui.dp(13)))
+            }, LinearLayout.LayoutParams(0, -1, 1f))
+            separator()
+            addView(ui.line().apply {
+                gravity = Gravity.END or Gravity.CENTER_VERTICAL
+                for (name in listOf("wifi", "bluetooth", "network")) {
+                    val icon = ui.icon(name, Palette.dim, 17)
+                    connectivityIcons[name] = icon
+                    addView(icon, LinearLayout.LayoutParams(ui.dp(24), ui.dp(24)))
+                }
+                clock = ui.label("", 18).apply { gravity = Gravity.END or Gravity.CENTER_VERTICAL }
+                addView(clock, LinearLayout.LayoutParams(ui.dp(92), -1))
+            }, LinearLayout.LayoutParams(0, -1, 1f))
         }
         header.addView(headerRow, LinearLayout.LayoutParams(if (compact) -1 else 0, if (compact) ui.dp(40) else -1,
             if (compact) 0f else 1f))
@@ -148,9 +179,9 @@ class WebDashboardActivity : ComponentActivity() {
             addView(panelGap, if (portrait) LinearLayout.LayoutParams(1, ui.dp(10)) else LinearLayout.LayoutParams(ui.dp(10), 1))
             mediaPane = ui.line(true).apply {
                 background = ui.shape(Palette.surface, 18, Palette.border)
-                setPadding(ui.dp(6), ui.dp(6), ui.dp(6), ui.dp(6))
+                setPadding(ui.dp(4), ui.dp(2), ui.dp(4), ui.dp(4))
                 addView(ui.line().apply {
-                    background = ui.shape(Palette.raised, 14)
+                    gravity = Gravity.CENTER
                     MediaTab.entries.forEach { tab ->
                         val icon = when (tab) {
                             MediaTab.RADIO -> "radio"
@@ -162,18 +193,21 @@ class WebDashboardActivity : ComponentActivity() {
                             tooltipText = tab.title
                             minimumWidth = ui.dp(48)
                             minimumHeight = ui.dp(48)
-                            addView(ui.icon(icon, Palette.muted, 24).apply {
+                            addView(View(this@WebDashboardActivity).apply {
+                                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+                            }, FrameLayout.LayoutParams(ui.dp(40), ui.dp(32), Gravity.CENTER))
+                            addView(ui.icon(icon, Palette.shortcut(icon), 22).apply {
                                 importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
                             }, FrameLayout.LayoutParams(ui.dp(26), ui.dp(26), Gravity.CENTER))
                         }
                         tabs[tab] = button
-                        addView(button, LinearLayout.LayoutParams(0, ui.dp(48), 1f).apply {
+                        addView(button, LinearLayout.LayoutParams(ui.dp(52), ui.dp(48)).apply {
                             marginStart = ui.dp(2)
                             marginEnd = ui.dp(2)
                         })
                     }
                 }.also(keyboardChrome::add))
-                with(ui) { gap(6) }
+                with(ui) { gap(2) }
                 mediaContent = FrameLayout(this@WebDashboardActivity).apply {
                     background = ui.shape(android.graphics.Color.BLACK, 12)
                     clipToOutline = true
@@ -192,20 +226,21 @@ class WebDashboardActivity : ComponentActivity() {
             )
             items.forEachIndexed { index, (title, icon, action) ->
                 if (index > 0) with(ui) { gap(7) }
-                val button = if (!compact) ui.action(title, icon, icon == "media", run = action).apply {
-                    ui.touch(this, if (icon == "media") Palette.blue else Palette.raised, 18, Palette.border,
+                val buttonColor = if (icon == "media") 0xFF164E80.toInt() else Palette.raised
+                val button = if (!compact) ui.action(title, icon, icon == "media", iconColor = Palette.shortcut(icon), run = action).apply {
+                    ui.touch(this, buttonColor, 18, Palette.border, end = if (icon == "media") 0xFF123B63.toInt() else Palette.surface,
                         action = action)
                 }
                 else ui.line(true).apply {
                     gravity = Gravity.CENTER
                     contentDescription = title
-                    addView(ui.icon(icon, Palette.text, 22),
+                    addView(ui.icon(icon, Palette.shortcut(icon), 22),
                         LinearLayout.LayoutParams(ui.dp(24), ui.dp(25)))
                     addView(ui.label(title, 13).apply {
                         gravity = Gravity.CENTER
                         importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
                     })
-                    ui.touch(this, if (icon == "media") Palette.blue else Palette.raised, 18, Palette.border, action = action)
+                    ui.touch(this, buttonColor, 18, Palette.border, end = Palette.surface, action = action)
                 }
                 addView(button, LinearLayout.LayoutParams(0, -1, 1f))
             }
@@ -264,6 +299,9 @@ class WebDashboardActivity : ComponentActivity() {
         val fix = gps.snapshot()
         speed.text = fix.speed.kmh?.toString() ?: "--"
         val device = deviceStatus(this)
+        connectivityIcons["wifi"]?.style(color = if (device.wifi) Palette.text else Palette.dim)
+        connectivityIcons["bluetooth"]?.style(color = if (device.bluetooth == true) Palette.cyan else Palette.dim)
+        connectivityIcons["network"]?.style(color = if (device.network) Palette.text else Palette.dim)
         status.text = if (device.network) fix.status else "Hors connexion · ${fix.status}"
         clock.text = device.clock
     }
@@ -294,9 +332,12 @@ class WebDashboardActivity : ComponentActivity() {
         mediaContent.removeAllViews()
         tabs.forEach { (value, button) ->
             button.isSelected = value == tab
-            val icon = (button as FrameLayout).getChildAt(0) as DriveIcon
-            icon.style(color = if (value == tab) Palette.text else Palette.muted)
-            ui.touch(button, if (value == tab) Palette.blue else android.graphics.Color.TRANSPARENT, 12) { select(value) }
+            val frame = button as FrameLayout
+            val icon = frame.getChildAt(1) as DriveIcon
+            icon.style(color = Palette.shortcut(icon.name))
+            frame.getChildAt(0).background = ui.shape(if (value == tab) 0xFF244E73.toInt() else Palette.surface,
+                10, if (value == tab) Palette.blue else android.graphics.Color.TRANSPARENT)
+            ui.touch(button, android.graphics.Color.TRANSPARENT, 12) { select(value) }
         }
         if (tab == MediaTab.YOUTUBE) {
             val panel = BrowserPanel(this, "https://m.youtube.com/", false, {}, ::openExternal,

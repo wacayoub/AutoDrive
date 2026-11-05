@@ -1,5 +1,16 @@
 # AutoDrive validation
 
+## Version 1.4.2 — stronger navy theme, compact colored icons and day/night Maps display
+
+Validated 5 November 2026. Package `com.autodrive.launcher`, version code 16. Native navy surfaces are more visible, with centered speed/GPS, actual connectivity indicators and colored shortcuts. Media tabs use centered 40 × 32 dp visual surfaces inside touch targets of at least 48 × 48 dp; the media chrome uses less vertical padding.
+
+- Debug and instrumentation APK assembly, all **14 JVM tests**, and Android lint passed. Lint: **0 errors, 28 warnings, 1 hint**.
+- Android 13 AOSP / 800 × 480 / 160 dpi, device day mode: **OK (5 tests)**. The dashboard verifies colored Phone icon, compact media surfaces, 48 dp touch targets, source selection, layout and lifecycle. Maps tests verify English/French launch invitations are hidden while branding/consent controls remain, that account controls are untouched, and that display contrast follows device mode. The existing two YouTube association tests also passed.
+- The same emulator in device night mode returned **OK (3 tests)** for dashboard and Maps behavior. A controlled test-only contrast pattern verifies bright backgrounds become dark and dark foregrounds become bright in the rendered WebView. The test sets a known initial page scale and waits for a visual frame before sampling pixels; the fixture is not a production map.
+- **600 × 1376 / 240 dpi portrait**: dashboard instrumentation returned **OK (1 test)**. The emulator was restored to 800 × 480 / 160 dpi and its original day setting afterward.
+- Real website captures show the removed launch invitation and actual Maps rendering: [day](../deliverables/dashboard-1.4.2-day-800x480.png), [night](../deliverables/dashboard-1.4.2-night-800x480.png), [portrait](../deliverables/dashboard-1.4.2-portrait.png). Night adapts the complete map display through a native color matrix, including tiles and labels. It is not Google's native dark map style. Initial algorithmic WebView darkening left light tiles and was replaced before release. [Display integration details](WEB-DASHBOARD-AUDIT.md#142-display-preferences).
+- No software was installed on the owner's Incarlink. Actual hardware rendering/performance, vendor theme signaling, GPS, YouTube Advanced and authorized IPTV playback remain hardware checks. Existing browser navigation and licensing limits remain in effect.
+
 ## Version 1.4.1 — Bleu profond and icon-only media tabs
 
 Validated 5 November 2026. Package `com.autodrive.launcher`, version code 15. The owner selected design 3 (Bleu profond). The native interface now uses navy surfaces, rounded map/media frames, blue selection and icon-only Radio/YouTube/IPTV tabs. Provider website content is unchanged.

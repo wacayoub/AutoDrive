@@ -8,6 +8,7 @@ import android.graphics.Color
 import android.net.Uri
 import android.os.Bundle
 import android.view.View
+import android.view.ContextThemeWrapper
 import android.webkit.GeolocationPermissions
 import android.webkit.RenderProcessGoneDetail
 import android.webkit.WebChromeClient
@@ -58,7 +59,9 @@ internal class BrowserPanel(
         if (browser != null) { browser?.onResume(); return }
         if (!hasNetwork()) { showError(); return }
         try {
-            val web = WebView(activity)
+            // Keep a stable light provider rendering, then adapt the complete map display at night.
+            val web = WebView(if (maps) ContextThemeWrapper(activity, R.style.AutoDriveMapWebTheme) else activity)
+            if (maps) MapDisplayTheme.apply(web)
             browser = web
             web.settings.apply {
                 javaScriptEnabled = true
@@ -110,7 +113,7 @@ internal class BrowserPanel(
 
                 override fun onPageFinished(view: WebView, url: String?) {
                     progress.visibility = GONE
-                    // Select only the provider's existing web-choice action; preserve all page content.
+                    // Apply the owner's Maps web preference without changing attribution or map data.
                     if (maps) view.evaluateJavascript(MapWebPreference.script, null)
                 }
 

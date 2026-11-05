@@ -22,15 +22,25 @@ import kotlin.math.min
 import kotlin.math.roundToInt
 
 internal object Palette {
-    val background = 0xFF0B131E.toInt()
-    val surface = 0xFF101C2A.toInt()
-    val raised = 0xFF1B2B3C.toInt()
-    val border = 0xFF2D465D.toInt()
+    val background = 0xFF101F32.toInt()
+    val surface = 0xFF172D45.toInt()
+    val raised = 0xFF223D58.toInt()
+    val border = 0xFF3C5C7B.toInt()
     val blue = 0xFF168BFF.toInt()
     val text = 0xFFF5F7FA.toInt()
     val muted = 0xFFAAB4C0.toInt()
     val dim = 0xFF5B6673.toInt()
     val green = 0xFF34A853.toInt()
+    val amber = 0xFFFFC457.toInt()
+    val cyan = 0xFF52CFFF.toInt()
+    val red = 0xFFFF4545.toInt()
+    fun shortcut(name: String) = when (name) {
+        "phone" -> green
+        "media", "settings", "tv" -> cyan
+        "apps", "radio" -> amber
+        "youtube" -> red
+        else -> text
+    }
 }
 
 internal class DriveViews(val context: Context) {

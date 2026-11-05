@@ -36,6 +36,8 @@ class WebDashboardTest {
                     assertTrue(buttons.single().height / activity.resources.displayMetrics.density >= 48)
                     val text = descendants(buttons.single()).filterIsInstance<android.widget.TextView>().single()
                     assertEquals("Clipped shortcut: $label", 0, text.layout.getEllipsisCount(0))
+                    if (label == "Phone") assertEquals(Palette.green,
+                        descendants(buttons.single()).filterIsInstance<DriveIcon>().single().color)
                 }
                 for (label in listOf("Radio", "YouTube", "IPTV")) {
                     val button = all().single { it.isShown && it.contentDescription == label }
@@ -46,6 +48,7 @@ class WebDashboardTest {
                     assertTrue("Icon-only tab: $label", descendants(button).none { it is android.widget.TextView })
                     assertEquals(1, descendants(button).filterIsInstance<DriveIcon>().size)
                     assertEquals(label == "YouTube", button.isSelected)
+                    assertTrue("Compact tab surface", (button as ViewGroup).getChildAt(0).height / density <= 32)
                 }
                 val map = web().first { it.url?.contains("google.com/maps") == true }
                 val video = web().first { it.url?.contains("youtube.com") == true }
