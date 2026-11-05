@@ -81,14 +81,6 @@ internal class AppLinks(private val activity: Activity) {
 
     fun mapsAvailable() = mapsIntent() != null
 
-    fun openMaps(): Boolean = mapsIntent()?.let {
-        start(it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-    } ?: false
-
-    fun installMaps(): Boolean = start(Intent(Intent.ACTION_VIEW,
-        Uri.parse("market://details?id=$MAPS")).setPackage("com.android.vending")) ||
-        start(Intent(Intent.ACTION_VIEW, Uri.parse("https://play.google.com/store/apps/details?id=$MAPS")))
-
     fun mapsVersion() = runCatching {
         packages.getPackageInfo(MAPS, PackageManager.PackageInfoFlags.of(0)).versionName
     }.getOrNull()

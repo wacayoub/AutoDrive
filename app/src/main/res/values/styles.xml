@@ -11,4 +11,8 @@
         <item name="android:statusBarColor">#101F32</item>
         <item name="android:navigationBarColor">#101F32</item>
     </style>
+    <style name="AutoDriveMapWebTheme" parent="android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:isLightTheme">true</item>
+        <item name="android:forceDarkAllowed">false</item>
+    </style>
 </resources>

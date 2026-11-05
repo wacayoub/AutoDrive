@@ -2,7 +2,13 @@
 
 Reviewed 4 November 2026 for AutoDrive on an Incarlink Max X15-SLM927-72 Android 13 box that runs the launcher locally and presents its output on a Toyota in-dash display.
 
-## Current integration: 1.5.0 native Google Maps handoff
+## Current integration: 1.5.1 inline Maps website restored
+
+After testing 1.5.0, the owner clarified that the map must work directly on the home page, as it did in the web version. Version 1.5.1 restores the 1.4.2 two-WebView dashboard, Maps web preference and day/night display adaptation. The native Maps entry card and its full-screen launch action are removed. Package version code increases to 18 so 1.5.0 can update normally with the same signing identity and preferences.
+
+Google Maps search, pan and zoom are provided by the real website in the left panel; YouTube remains in the right panel. This does not supply Android Auto, an embedded Google Maps Android activity or authorized Navigation SDK guidance. The earlier web integration boundaries and licensing limits remain applicable. See [web implementation](WEB-DASHBOARD-AUDIT.md) and [current results](TEST-RESULTS.md).
+
+## 1.5.0 native Google Maps handoff (superseded)
 
 On 5 November 2026 the owner explicitly requested replacing Maps in the web browser with the Google Maps Android application. The active dashboard now uses `NativeMapsPanel` and `AppLinks.openMaps()`. PackageManager launches the installed `com.google.android.apps.maps` front-door activity; a Maps URL explicitly restricted to that package is the fallback if its launcher intent is unavailable. No unrestricted map URL is sent to a browser. The manifest already declares visibility of the Maps package.
 

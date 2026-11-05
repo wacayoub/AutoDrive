@@ -26,8 +26,8 @@ class WebDashboardTest {
         try {
             SystemClock.sleep(1500)
             instrumentation.runOnMainSync {
-                assertEquals(1, web().size)
-                assertTrue(web().none { it.url?.contains("google.com/maps") == true })
+                assertEquals(2, web().size)
+                assertTrue(web().any { it.url?.startsWith("https://www.google.com/maps") == true })
                 assertTrue(web().any { it.url?.startsWith("https://m.youtube.com/") == true })
                 assertTrue(all().none { it is android.widget.TextView && it.text == "Ajouter une vidéo" })
                 for (label in listOf("Phone", "Media", "Apps", "Settings")) {
@@ -48,16 +48,10 @@ class WebDashboardTest {
                     assertTrue("Icon-only tab: $label", descendants(button).none { it is android.widget.TextView })
                     assertEquals(1, descendants(button).filterIsInstance<DriveIcon>().size)
                     assertEquals(label == "YouTube", button.isSelected)
-                    // Fractional device densities round layout dimensions to whole physical pixels.
+                    // Fractional densities round dimensions to physical pixels.
                     assertTrue("Compact tab surface", (button as ViewGroup).getChildAt(0).height / density <= 32.5f)
                 }
-                val map = all().filterIsInstance<NativeMapsPanel>().single()
-                val mapsAction = descendants(map).single { it.contentDescription in listOf("Ouvrir Google Maps", "Installer Google Maps") }
-                val visibleAction = android.graphics.Rect()
-                assertTrue("Native Maps action must be visible", mapsAction.getGlobalVisibleRect(visibleAction))
-                assertTrue("Native Maps action must not be clipped", visibleAction.height() >= mapsAction.height - 1)
-                val actionText = descendants(mapsAction).filterIsInstance<android.widget.TextView>().single()
-                assertEquals("Native Maps action label", 0, actionText.layout.getEllipsisCount(0))
+                val map = web().first { it.url?.contains("google.com/maps") == true }
                 val video = web().first { it.url?.contains("youtube.com") == true }
                 val mapLocation = IntArray(2).also(map::getLocationOnScreen)
                 val videoLocation = IntArray(2).also(video::getLocationOnScreen)
@@ -66,17 +60,17 @@ class WebDashboardTest {
                     assertTrue("Portrait map must use full width", map.width >= activity.window.decorView.width * .85f)
                 } else assertTrue("Landscape panels must be side by side", videoLocation[0] > mapLocation[0] + map.width)
                 click("Radio")
-                assertEquals(0, web().size)
+                assertEquals(1, web().size)
                 assertTrue(all().single { it.contentDescription == "Radio" }.isSelected)
                 click("IPTV")
-                assertEquals(0, web().size)
+                assertEquals(1, web().size)
                 assertTrue(all().single { it.contentDescription == "IPTV" }.isSelected)
                 click("YouTube")
-                assertEquals(1, web().size)
+                assertEquals(2, web().size)
                 click("Settings")
                 assertEquals(0, web().size)
                 click("Back")
-                assertEquals(1, web().size)
+                assertEquals(2, web().size)
             }
         } finally {
             instrumentation.runOnMainSync { activity.finish() }

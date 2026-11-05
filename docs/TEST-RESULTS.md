@@ -1,5 +1,16 @@
 # AutoDrive validation
 
+## Version 1.5.1 — restore interactive Maps on the home page
+
+Validated 5 November 2026. Package `com.autodrive.launcher`, version code 18. The owner reported that 1.5.0's external application entry did not provide Maps on the home page and requested the former web behavior. The 1.4.2 Maps/YouTube dashboard, browser preferences and night display adaptation are restored. The native launch card and associated helpers/tests are removed. Version code increases so this installs over 1.5.0 without a downgrade or data clearing.
+
+- Debug and Android test APK assembly, all **14 JVM tests**, and Android lint passed: **0 errors, 28 warnings, 1 hint**.
+- Android 13 AOSP / **800 × 480 / 160 dpi**, day mode: **OK (5 tests)** covering two actual provider home URLs, panel layout/lifecycle, media tabs, map web preference, day/night display contrast and installed YouTube association. Night mode: **OK (3 tests)** for dashboard and Maps behavior. **600 × 1376 / 240 dpi portrait**: **OK (1 test)** for dashboard layout and lifecycle. The compact-icon assertion keeps the fractional-density rounding tolerance introduced in 1.5.0.
+- Actual Maps rendering was visually inspected. A drag moved the map and a double tap zoomed it while YouTube remained beside it; Android still reported AutoDrive in the foreground. Real captures: [home](../deliverables/dashboard-1.5.1-800x480.png), [night](../deliverables/dashboard-1.5.1-night-800x480.png). The captures use real provider pages, not generated maps. The GPS header reflects the emulator location feed, not vehicle measurements.
+- After the actual search field received focus and the keyboard appeared, entering **Mosquee Hassan II** and submitting returned Google's real map results and pins inside the left panel, with YouTube still alongside. [Actual search result](../deliverables/maps-search-1.5.1-800x480.png). The initial automated tap had occurred before the page was interactive; the search was repeated after confirming visible input focus. This is a place-search check, not a turn-by-turn guidance claim.
+- An initial test run was obstructed by a system crash dialog from the emulator's **Intent Filter Verification Service** (`com.android.statementservice`). The unrelated service was force-stopped, foreground location permission was granted to the test app and the affected checks were rerun successfully. No app code was changed to suppress system failures. Display geometry and night setting were restored after tests.
+- This restores the former website integration, not Android Auto or embedded native Maps guidance. Full voice guidance, live driving ETA/traffic, exact Incarlink WebView behavior and the owner's native media applications remain untested. No software was installed on the owner's hardware. [Integration boundaries](WEB-DASHBOARD-AUDIT.md).
+
 ## Version 1.5.0 — replace Maps website with Google Maps Android
 
 Validated 5 November 2026. Package `com.autodrive.launcher`, version code 17. The owner explicitly requested switching from browser Maps to the installed Google Maps Android application.
