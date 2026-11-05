@@ -12,6 +12,8 @@ Lanceur Android 13 natif Kotlin pour Incarlink Max X15-SLM927-72, adapté au pay
 
 La même identité de signature est conservée pour permettre les mises à jour et garder les préférences. Le fichier téléchargé est contrôlé : SHA-256, taille, nom de package, version croissante et certificat Android. [Fonctionnement et publication](docs/ONLINE-UPDATES.md).
 
+![Mises à jour dans la version 1.4.0 installée](deliverables/updates-1.4.0-800x480.png)
+
 ## Tableau de bord
 
 - Maps et YouTube s’ouvrent directement sur leurs sites officiels. Recherche de lieux, déplacement et zoom de carte, recherche YouTube et lecture vidéo ont été observés sur émulateur.

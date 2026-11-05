@@ -1,5 +1,17 @@
 # AutoDrive validation
 
+## Version 1.4.0 — public GitHub releases and in-app updates
+
+Validated 5 November 2026. The public repository is [wacayoub/AutoDrive](https://github.com/wacayoub/AutoDrive), with a published [1.4.0 release](https://github.com/wacayoub/AutoDrive/releases/tag/v1.4.0). Package `com.autodrive.launcher`, version code 14.
+
+- Local release assembly, **14 JVM unit tests**, and Android lint passed: **0 errors, 28 warnings, 1 hint**. Both GitHub workflows also succeeded: [Android checks](https://github.com/wacayoub/AutoDrive/actions/runs/42100805260) and [Signed Android release](https://github.com/wacayoub/AutoDrive/actions/runs/42100864446). The latter built, signed and published the actual public APK and update metadata.
+- On the Android 13 / 800 × 480 emulator, instrumentation returned **OK (5 tests)**. These covered the existing dashboard, map web preference and YouTube association behavior, plus APK verification accepting the correctly signed candidate and rejecting a different signing key, an incorrect hash and inconsistent version metadata.
+- For the update journey, a dedicated version-code-13 test build containing the updater was installed first. Its Settings page discovered the live public GitHub release, downloaded the real release APK and verified it. Android requested source authorization and then displayed its normal update confirmation. After confirmation, package inspection reported version code 14. The chosen application association survived the update, and the installed 1.4.0 release reported **AutoDrive est à jour**. [Actual installed-release screenshot](../deliverables/updates-1.4.0-800x480.png)
+- Earlier distributed versions do not contain this updater. Users must install 1.4.0 or later once; subsequent releases can be checked, downloaded and offered to Android from Settings. No silent installation is claimed. The original signing identity was preserved; private signing material is excluded from the public source.
+- The end-to-end installation used only the emulator. The Incarlink's installer policy, network and firmware behavior remain untested. No software was installed on the owner's hardware. This release does not change the documented Maps/YouTube web integration boundaries.
+
+Published APK SHA-256: `20a095a405b1cd9139ef4d20c9c85147b7dbaf8c11f5daeade233c0f20d75dbf`. Signing certificate SHA-256: `1ef249ecb8d4af1bbd730a15aea2248acf5d578dffde2d637fd01b7e5f637efb`.
+
 ## Version 1.3.2-web-preview — choose the installed YouTube app
 
 Debug assembly, all 11 existing unit tests and lint passed: **0 errors, 25 warnings, 1 hint**. The Android 13 / 800 × 480 emulator instrumentation returned **OK (3 tests)**: the existing dashboard layout/lifecycle test plus the two new YouTube selection tests.
