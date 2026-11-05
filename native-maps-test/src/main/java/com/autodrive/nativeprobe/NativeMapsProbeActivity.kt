@@ -28,6 +28,7 @@ import kotlinx.coroutines.launch
 import org.json.JSONObject
 import java.io.File
 import java.security.MessageDigest
+import java.time.Instant
 import java.util.Locale
 
 /** Standalone public-API experiment. No website, HOME role, adjacent-window flag or hidden API. */
@@ -46,7 +47,7 @@ class NativeMapsProbeActivity : ComponentActivity() {
             setPadding(20, 12, 20, 12)
             setBackgroundColor(0xFF101F32.toInt())
         }
-        body.addView(TextView(this).apply { text = "AutoDrive · Test Maps Android"; textSize = 22f })
+        body.addView(TextView(this).apply { text = "AutoDrive · Test Maps Android 0.2"; textSize = 22f })
         status = TextView(this).apply { textSize = 15f; setPadding(0, 10, 0, 10) }
         body.addView(status)
         body.addView(Button(this).apply { text = "Vérifier la compatibilité"; setOnClickListener { inspect() } })
@@ -55,6 +56,8 @@ class NativeMapsProbeActivity : ComponentActivity() {
         body.addView(Button(this).apply {
             text = "Copier le rapport"
             setOnClickListener {
+                report.put("copiedAtUtc", Instant.now().toString())
+                save()
                 getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("AutoDrive Maps test", report.toString(2)))
                 Toast.makeText(this@NativeMapsProbeActivity, "Rapport copié", Toast.LENGTH_SHORT).show()
             }
@@ -81,8 +84,15 @@ class NativeMapsProbeActivity : ComponentActivity() {
     private fun inspect() {
         report = JSONObject()
         val support = SplitController.getInstance(this).splitSupportStatus
-        report.put("androidApi", Build.VERSION.SDK_INT).put("hardware", Build.HARDWARE)
+        report.put("reportSchema", 2)
+            .put("probeVersion", packageManager.getPackageInfo(packageName, PackageManager.PackageInfoFlags.of(0)).versionName)
+            .put("generatedAtUtc", Instant.now().toString())
+            .put("deviceManufacturer", Build.MANUFACTURER).put("deviceModel", Build.MODEL)
+            .put("deviceBrand", Build.BRAND).put("buildDisplay", Build.DISPLAY)
+            .put("androidRelease", Build.VERSION.RELEASE)
+            .put("androidApi", Build.VERSION.SDK_INT).put("hardware", Build.HARDWARE)
             .put("splitSupport", support.toString()).put("phase", "CHECKED").put("reportedSplitCount", 0)
+        val device = "Appareil : ${Build.MANUFACTURER} ${Build.MODEL}\nAndroid ${Build.VERSION.RELEASE} · API ${Build.VERSION.SDK_INT}\n"
         target = packageManager.getLaunchIntentForPackage(MAPS)?.component
         eligible = false
         val component = target
@@ -115,11 +125,11 @@ class NativeMapsProbeActivity : ComponentActivity() {
                 .setDefaultSplitAttributes(SplitAttributes.Builder()
                     .setSplitType(SplitAttributes.SplitType.ratio(.48f))
                     .setLayoutDirection(SplitAttributes.LayoutDirection.RIGHT_TO_LEFT).build()).build()))
-            status.text = "Maps ${report.optString("mapsVersion")}\nSupport Android : $support\nMaps autorise cet hébergement : ${untrusted || trusted}\n" +
+            status.text = device + "Maps ${report.optString("mapsVersion")}\nSupport Android : $support\nMaps autorise cet hébergement : ${untrusted || trusted}\n" +
                 if (eligible) "Prêt pour un essai natif. Le résultat reste à vérifier." else "Essai bloqué : support Android ou autorisation Maps manquants."
         } else {
             report.put("mapsComponent", JSONObject.NULL).put("phase", "MAPS_MISSING")
-            status.text = "Google Maps Android est absent ou désactivé. Aucun remplacement web n’est chargé."
+            status.text = device + "Google Maps Android est absent ou désactivé. Aucun remplacement web n’est chargé."
         }
         launch.isEnabled = eligible
         report.put("eligible", eligible)
