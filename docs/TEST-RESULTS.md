@@ -1,5 +1,22 @@
 # AutoDrive validation
 
+## Version 1.6.0 — Internet radio and phone
+
+Validated 6 November 2026 on the local AOSP Android 13 emulator, 800 × 480. Package `com.autodrive.launcher`, version code 19. Only the explicitly selected emulator was modified; no installation or call was performed on the owner's Incarlink or Samsung.
+
+- Debug assembly, Android test APK assembly, JVM tests and Android lint passed. **16 JVM tests**, **0 lint errors, 33 warnings and 1 hint**. No new contacts, call-log or calling permissions were added; the only manifest change is visibility of `ACTION_DIAL` handlers.
+- Four radio/phone instrumentation checks cover station/favorite persistence and deletion, phone keypad and unavailable selected apps, actual HTTPS radio playback/pause/release and a real DNS error, and country/URL filtering plus a real directory fetch/cache comparison. HIT RADIO reached ExoPlayer's actual playing state; listening hardware/audio quality was not verified because the emulator runs without audio output.
+- Final combined instrumentation run: **9 tests passed** (the four new checks plus five existing dashboard, YouTube and Maps preference checks). Manual catalogue selection of Radio Mars also reached the actual playing state and produced the published radio screenshot.
+- The directory response produced **48 unique compatible Morocco URLs** at this test time after filtering. This is an observed directory snapshot, not a claim of all Moroccan broadcasters or a playback test of all 48 streams. Radio Browser is a community directory; HTTP-only and unusable URLs are not included.
+- With emulator Wi-Fi and mobile data disabled, the Morocco catalogue opened from its local cache. The previous network settings were restored. Force-stopping/restarting AutoDrive preserved Radio Mars as the selected station and did not start playback automatically.
+- Manual real UI check forwarded `123` from the keypad into the installed Android dialer with `ACTION_DIAL`; the number appeared in that dialer. No call was placed. External dialer Back behavior follows that application's stack; this test did not establish a return-to-AutoDrive guarantee for all dialers. AutoDrive's internal Back returned from the Phone page to the dashboard in instrumentation.
+- Initial regression automation encountered the emulator's unrelated Intent Filter Verification Service crash dialog, interfering with injected input and screenshot sampling. The service was force-stopped on this emulator only and the existing five dashboard/YouTube/Maps checks then passed. A later combined run exposed a startup-page/fixture timing failure in the Maps preference test; it passed in isolation. The test now stops the real page before loading its local fixture and permits an eight-second bounded wait. No production Maps or YouTube behavior was changed for that test.
+- The 1.5.1 → 1.6.0 debug package update succeeded with the same signing certificate. Saved media associations retain their existing keys; radio stations, last selection, typed number and phone favorites use private preferences. Startup does not automatically play radio. Backgrounding AutoDrive releases its audio player; internal Phone and Settings pages keep radio available.
+
+Actual screenshots: [radio](../deliverables/radio-1.6.0-800x480.png), [phone](../deliverables/phone-1.6.0-800x480.png). [Integration behavior and limits](RADIO-PHONE.md).
+
+Not verified on the box: Bluetooth calling, microphone/audio routing, incoming calls, steering-wheel controls, tuner access and exact installed phone application support. Native Google Maps embedding remains unresolved and was not changed by this release. HLS remains supported by the existing Media3 dependency, but the new live-radio checks exercised MP3; do not treat every listed codec/stream as tested.
+
 ## Version 1.5.1 — restore interactive Maps on the home page
 
 Validated 5 November 2026. Package `com.autodrive.launcher`, version code 18. The owner reported that 1.5.0's external application entry did not provide Maps on the home page and requested the former web behavior. The 1.4.2 Maps/YouTube dashboard, browser preferences and night display adaptation are restored. The native launch card and associated helpers/tests are removed. Version code increases so this installs over 1.5.0 without a downgrade or data clearing.

@@ -51,7 +51,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          python tools/github_release.py --repository '${{ github.repository }}' --apk app/build/outputs/apk/release/app-release.apk --commit "$GITHUB_SHA"
+          python tools/github_release.py --repository '${{ github.repository }}' --apk app/build/outputs/apk/release/app-release.apk --commit "$GITHUB_SHA" --notes-file docs/RELEASE-NOTES.md
       - name: Remove runner signing material
         if: always()
         run: rm -f .release-signing/AutoDrive.keystore

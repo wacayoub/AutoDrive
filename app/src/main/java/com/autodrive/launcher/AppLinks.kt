@@ -73,7 +73,21 @@ internal class AppLinks(private val activity: Activity) {
     fun open(app: Launchable) = start(Intent.makeMainActivity(app.component)
         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED))
 
-    fun dial() = start(Intent(Intent.ACTION_DIAL, Uri.parse("tel:")))
+    fun dialIntent(number: String = ""): Intent? {
+        val normalized = if (number.isBlank()) "" else DialNumber.normalize(number) ?: return null
+        val intent = Intent(Intent.ACTION_DIAL, Uri.fromParts("tel", normalized, null))
+        // A saved association must never silently fall back to another application's dialer.
+        association(PHONE)?.let { intent.setPackage(it.packageName) }
+        return intent.takeIf { it.resolveActivity(packages) != null }
+    }
+
+    fun dial(number: String = "") = dialIntent(number)?.let(::start) ?: false
+
+    fun openPhone(): Boolean {
+        val selected = association(PHONE) ?: return dial()
+        val app = apps().firstOrNull { it.component == selected } ?: return false
+        return open(app)
+    }
 
     private fun mapsIntent() = packages.getLaunchIntentForPackage(MAPS)
         ?: Intent(Intent.ACTION_VIEW, Uri.parse(MAPS_URL)).setPackage(MAPS)

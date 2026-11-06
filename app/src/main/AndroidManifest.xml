@@ -14,6 +14,10 @@
     <uses-feature android:name="android.hardware.bluetooth" android:required="false" />
     <uses-feature android:name="android.hardware.wifi" android:required="false" />
     <queries>
+        <intent>
+            <action android:name="android.intent.action.DIAL" />
+            <data android:scheme="tel" />
+        </intent>
         <package android:name="com.google.android.apps.maps" />
         <package android:name="com.google.android.gms" />
         <package android:name="com.google.android.youtube" />

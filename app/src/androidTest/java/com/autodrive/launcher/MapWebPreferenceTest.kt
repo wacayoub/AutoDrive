@@ -26,10 +26,12 @@ class MapWebPreferenceTest {
             // Synthetic controls exercise the preference action, not real map rendering.
             for (label in listOf("Stay on web", "Rester sur le site Web")) {
                 instrumentation.runOnMainSync {
+                    // Stop the real startup page before replacing it with this local fixture.
+                    web.stopLoading()
                     web.loadDataWithBaseURL("https://www.google.com/maps/", fixture(label), "text/html", "UTF-8", null)
                 }
                 var value = ""
-                repeat(24) {
+                repeat(80) {
                     if (value != "\"web\"") {
                         SystemClock.sleep(100)
                         val result = CountDownLatch(1)

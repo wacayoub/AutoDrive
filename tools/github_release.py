@@ -76,7 +76,7 @@ class GitHub:
                 print("Stored encrypted signing secret", name)
         return repo
 
-    def publish(self, apk, output, commit, aapt=None):
+    def publish(self, apk, output, commit, aapt=None, notes=None):
         metadata = build(apk, self.repository, output, aapt)
         tag = "v" + metadata["versionName"]
         try:
@@ -88,7 +88,7 @@ class GitHub:
                 raise
             release = self.call(f"/repos/{self.repository}/releases", "POST", dict(tag_name=tag,
                 target_commitish=commit, name="AutoDrive " + metadata["versionName"], draft=True, prerelease=False,
-                body="Mises à jour intégrées depuis Settings → Mises à jour. Téléchargement vérifié, installation Android avec confirmation. Réglages conservés.\n\nGoogle Maps et YouTube utilisent leurs panneaux web dans l’accueil. Le raccourci Maps plein écran de 1.5.0 est retiré. Cette version ne fournit pas Android Auto ni une activité native Google Maps intégrée."))
+                body=notes or "Mises à jour depuis Settings → Mises à jour. Téléchargement vérifié, installation Android avec confirmation et réglages conservés.\n\nGoogle Maps et YouTube utilisent leurs panneaux web dans l’accueil. Cette version ne fournit pas Android Auto ni une activité native Google Maps intégrée."))
         assets = {item["name"] for item in self.call(f"/repos/{self.repository}/releases/{release['id']}/assets")}
         upload = release["upload_url"].split("{")[0]
         files = [(Path(apk), "AutoDrive.apk"), (Path(output) / "autodrive-update.json", "autodrive-update.json"),
@@ -110,13 +110,15 @@ if __name__ == "__main__":
     parser.add_argument("--output", default="build/publish")
     parser.add_argument("--commit", default="main")
     parser.add_argument("--aapt")
+    parser.add_argument("--notes-file", help="UTF-8 release description, with actual newlines")
     args = parser.parse_args()
     try:
         github = GitHub(args.repository)
         if args.setup:
             github.setup(args.signing_keystore)
         if args.apk:
-            github.publish(args.apk, args.output, args.commit, args.aapt)
+            notes = Path(args.notes_file).read_text(encoding="utf-8") if args.notes_file else None
+            github.publish(args.apk, args.output, args.commit, args.aapt, notes)
     except Exception as error:
         print(f"GitHub operation failed: {type(error).__name__}: {error}", file=sys.stderr)
         sys.exit(1)
