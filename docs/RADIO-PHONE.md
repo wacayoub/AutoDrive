@@ -1,10 +1,14 @@
-# Radio Internet et Téléphone — 1.6.0
+# Radio Internet et Téléphone — 1.6.1
 
 ## Radio
 
 Le propriétaire a choisi les stations Internet et demandé les radios du Maroc. L’onglet Radio utilise maintenant un lecteur audio natif Media3. Il ne dépend pas d’une application radio externe ou du tuner Toyota.
 
-**Radio → Maroc** ouvre le catalogue du pays `MA` de Radio Browser. La recherche filtre les noms dans la liste reçue. Choisir une station l’enregistre et commence sa lecture ; l’étoile ajoute ou retire le favori. **Stations** affiche les stations enregistrées, avec les favoris en premier. Précédente/suivante parcourt ces stations enregistrées. Les flux personnels peuvent être ajoutés et gérés depuis Stations ou Réglages. Limite : 200 stations enregistrées.
+L’onglet **Radio** charge le catalogue du pays `MA` de Radio Browser et affiche la liste directement dans son panneau. Chaque ligne montre le logo fourni lorsqu’il est disponible, le nom, l’état réel de sélection/lecture et l’étoile de favori. Choisir une station l’enregistre et commence sa lecture. Le filtre **Maroc** donne accès au catalogue et aux radios personnelles enregistrées ; **Favoris** limite la liste aux favoris. Précédente/suivante utilise cette même source et boucle dans les deux directions. Une recherche filtre l’affichage ; le parcours reste celui du filtre Maroc/Favoris choisi.
+
+La **loupe** ouvre la liste agrandie avec recherche. Les contrôles du lecteur se replient pendant la saisie pour laisser de la place aux résultats. Dans le petit panneau à densité élevée, les commandes et la liste ont priorité ; la loupe donne accès à la recherche et aux filtres. Les flux personnels peuvent être ajoutés et gérés dans **Réglages → Stations radio Internet**. Limite : 200 stations enregistrées. [Constats et corrections de l’audit](RADIO-AUDIT.md).
+
+Les URL de logos sont conservées avec le catalogue et les préférences. Un ancien cache sans ces champs est utilisable puis actualisé. Les doublons d’un flux partagent les métadonnées disponibles. Les images sont chargées uniquement en HTTPS, avec délais, au plus deux tâches IO simultanées, limite de 512 Kio par réponse, décodage sous-échantillonné à 128 pixels maximum, cache mémoire de 2 Mio et cache disque borné à 64 fichiers/12 Mio. Aucun téléchargement ne bloque le thread UI. Images manquantes, refusées, SVG non décodable ou autres erreurs donnent les initiales de la station ; aucun logo de remplacement ressemblant à une marque n’est généré. Les métadonnées de l’annuaire peuvent être erronées ; un lien de logo personnel peut être renseigné dans la modification d’une station.
 
 Le catalogue est communautaire : il ne garantit ni l’exhaustivité des radios marocaines, ni l’authenticité de chaque entrée, ni la disponibilité ou les droits de chaque flux. La requête demande les entrées annoncées fonctionnelles ; AutoDrive conserve les URL résolues HTTPS valides, sans identifiants intégrés. Certains flux HTTPS utilisent un port spécifique, qui est pris en charge. Les flux uniquement HTTP ne sont pas chargés et ne sont pas automatiquement réécrits en HTTPS. La source de l’annuaire apparaît dans l’interface. [API et champs Radio Browser](https://docs.radio-browser.info/).
 
@@ -24,6 +28,8 @@ Le raccourci Phone ouvre un clavier et six favoris locaux. Appui prolongé sur 0
 
 L’utilisateur confirme ensuite l’appel dans le composeur. AutoDrive ne demande pas `CALL_PHONE`, ne devient pas composeur par défaut et n’ajoute pas d’InCallService. Répondre, raccrocher, gérer le micro et router un appel Bluetooth restent les fonctions de l’application Téléphone et du firmware. Ouvrir un composeur sur un téléphone ne démontre pas qu’un boîtier Android peut appeler via le téléphone Bluetooth : ce point nécessite un essai sur l’Incarlink.
 
-![Radio native dans le tableau de bord](../deliverables/radio-1.6.0-800x480.png)
+![Radio native dans le tableau de bord](../deliverables/radio-1.6.1-800x480.png)
+
+![Liste agrandie des radios](../deliverables/radio-list-1.6.1-800x480.png)
 
 ![Clavier Téléphone](../deliverables/phone-1.6.0-800x480.png)

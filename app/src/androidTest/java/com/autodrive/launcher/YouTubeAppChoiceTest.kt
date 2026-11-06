@@ -61,15 +61,16 @@ class YouTubeAppChoiceTest {
                 activity.setContentView(FrameLayout(activity).apply { addView(panel, FrameLayout.LayoutParams(-1, -1)) })
                 panel.start()
                 web = descendants(panel).filterIsInstance<WebView>().single()
+                web.stopLoading()
                 // Local test page, never shown in the shipped application.
                 web.loadDataWithBaseURL("https://m.youtube.com/", """
                     <html><head><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-                    <body style="margin:0"><a style="display:block;width:100vw;height:100vh"
+                    <body style="margin:0"><a id="native-handoff" style="display:block;width:100vw;height:100vh"
                     href="intent://www.youtube.com/watch?v=M7lc1UVf-VE#Intent;scheme=https;package=com.google.android.youtube;end">Open app</a></body></html>
                 """.trimIndent(), "text/html", "UTF-8", null)
             }
             try {
-                SystemClock.sleep(700)
+                awaitWebFixture(instrumentation, web, "native-handoff")
                 val location = IntArray(2)
                 var width = 0
                 var height = 0

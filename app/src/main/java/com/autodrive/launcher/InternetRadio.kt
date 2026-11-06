@@ -16,11 +16,13 @@ internal class InternetRadio(private val context: Context, private val changed: 
     private var engine: ExoPlayer? = null
     var station: RadioStation? = null
         private set
-    private var failed = false
+    private var failure: String? = null
     val playing get() = engine?.isPlaying == true
+    val requestedPlayback get() = engine?.playWhenReady == true && failure == null
     val status: String get() = when {
-        failed -> "Flux indisponible · réessayer"
+        failure != null -> failure!!
         playing -> "En lecture · Internet"
+        engine != null && engine?.playWhenReady == false -> "En pause"
         engine?.playbackState == Player.STATE_BUFFERING -> "Connexion / mise en mémoire…"
         engine?.playbackState == Player.STATE_READY && engine?.playWhenReady == true -> "Lecture suspendue"
         engine?.playbackState == Player.STATE_READY -> "En pause"
@@ -30,7 +32,7 @@ internal class InternetRadio(private val context: Context, private val changed: 
     fun play(value: RadioStation) {
         if (RadioStation.validUrl(value.url) == null) return
         station = value
-        failed = false
+        failure = null
         val player = engine ?: ExoPlayer.Builder(context)
             .setTrackSelector(DefaultTrackSelector(context).apply {
                 parameters = buildUponParameters().setTrackTypeDisabled(C.TRACK_TYPE_VIDEO, true).build()
@@ -39,25 +41,37 @@ internal class InternetRadio(private val context: Context, private val changed: 
             .setHandleAudioBecomingNoisy(true).build().also {
                 engine = it
                 it.addListener(object : Player.Listener {
-                    override fun onEvents(player: Player, events: Player.Events) = changed()
-                    override fun onPlayerError(error: PlaybackException) { failed = true; changed() }
+                    override fun onEvents(player: Player, events: Player.Events) {
+                        if (player !== engine) return
+                        if (player.playbackState == Player.STATE_READY) failure = null
+                        changed()
+                    }
+                    override fun onPlayerError(error: PlaybackException) {
+                        if (engine !== it) return
+                        failure = when (error.errorCode) {
+                            PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED,
+                            PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT -> "Flux indisponible · vérifier Internet"
+                            PlaybackException.ERROR_CODE_DECODING_FORMAT_UNSUPPORTED -> "Format audio incompatible"
+                            else -> "Flux indisponible · réessayer"
+                        }
+                        changed()
+                    }
                 })
             }
-        player.setMediaItem(MediaItem.fromUri(value.url))
+        player.setMediaItem(MediaItem.Builder().setUri(value.url).setMediaId(value.url).build())
         player.prepare()
         player.play()
         changed()
     }
     fun toggle() {
         val player = engine
-        if (player != null && !failed && player.playbackState == Player.STATE_READY) {
-            if (player.playWhenReady) player.pause() else player.play()
-        } else station?.let(::play)
+        if (player != null && player.playWhenReady && failure == null) { player.pause(); player.stop() }
+        else station?.let(::play) // Reconnect to live audio rather than resuming an old buffer.
     }
     fun close() {
         val old = engine
         engine = null
-        failed = false
+        failure = null
         old?.release()
         changed()
     }

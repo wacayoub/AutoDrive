@@ -86,13 +86,14 @@ class MapWebPreferenceTest {
             instrumentation.runOnMainSync {
                 web = views(activity.window.decorView).filterIsInstance<WebView>().first()
                 web.setInitialScale(100)
+                web.stopLoading()
                 // Test-only contrast pattern, never a dashboard map replacement.
                 web.loadDataWithBaseURL("https://www.google.com/maps/", """
                     <html><head><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-                    <body style="margin:0;background:white"><div style="width:80px;height:80px;background:black"></div></body></html>
+                    <body style="margin:0;background:white"><div id="contrast-fixture" style="width:80px;height:80px;background:black"></div></body></html>
                 """.trimIndent(), "text/html", "UTF-8", null)
             }
-            SystemClock.sleep(700)
+            awaitWebFixture(instrumentation, web, "contrast-fixture")
             val completed = CountDownLatch(1)
             var value = ""
             instrumentation.runOnMainSync {
@@ -113,15 +114,28 @@ class MapWebPreferenceTest {
             assertEquals("Stable provider theme prevents double darkening", "false", value)
             val origin = IntArray(2)
             instrumentation.runOnMainSync { web.getLocationOnScreen(origin) }
-            val shot = instrumentation.uiAutomation.takeScreenshot()
-            try {
-                val density = activity.resources.displayMetrics.density
-                val lightPatch = shot.getPixel(origin[0] + (150 * density).toInt(), origin[1] + (150 * density).toInt())
-                val darkPatch = shot.getPixel(origin[0] + (20 * density).toInt(), origin[1] + (20 * density).toInt())
-                fun brightness(color: Int) = (android.graphics.Color.red(color) + android.graphics.Color.green(color) + android.graphics.Color.blue(color)) / 3
-                org.junit.Assert.assertTrue("Whole-page light background must adapt", if (night) brightness(lightPatch) < 80 else brightness(lightPatch) > 200)
-                org.junit.Assert.assertTrue("Labels must retain contrasting luminance: ${brightness(darkPatch)}, night=$night", if (night) brightness(darkPatch) > 180 else brightness(darkPatch) < 60)
-            } finally { shot.recycle() }
+            val deadline = SystemClock.elapsedRealtime() + 5_000
+            var contrastReady = false
+            var light = -1
+            var dark = -1
+            // WebView's render callback can precede the Activity window transition completing.
+            // Wait for the actual foreground pixels, without accepting an unpainted white frame.
+            while (!contrastReady && SystemClock.elapsedRealtime() < deadline) {
+                var focused = false
+                instrumentation.runOnMainSync { focused = activity.hasWindowFocus(); web.getLocationOnScreen(origin) }
+                if (focused) {
+                    val shot = instrumentation.uiAutomation.takeScreenshot()
+                    try {
+                        val density = activity.resources.displayMetrics.density
+                        fun brightness(color: Int) = (android.graphics.Color.red(color) + android.graphics.Color.green(color) + android.graphics.Color.blue(color)) / 3
+                        light = brightness(shot.getPixel(origin[0] + (150 * density).toInt(), origin[1] + (150 * density).toInt()))
+                        dark = brightness(shot.getPixel(origin[0] + (20 * density).toInt(), origin[1] + (20 * density).toInt()))
+                        contrastReady = if (night) light < 80 && dark > 180 else light > 200 && dark < 60
+                    } finally { shot.recycle() }
+                }
+                if (!contrastReady) SystemClock.sleep(100)
+            }
+            org.junit.Assert.assertTrue("Rendered contrast: light=$light, dark=$dark, night=$night", contrastReady)
         } finally { instrumentation.runOnMainSync { activity.finish() } }
     }
 

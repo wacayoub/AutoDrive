@@ -16,9 +16,15 @@ internal class MoroccoRadioDirectory(context: Context) {
         val rows = JSONArray(cache.readText())
         (0 until rows.length()).mapNotNull { i ->
             val row = rows.optJSONObject(i) ?: return@mapNotNull null
-            RadioStation.validUrl(row.optString("url"))?.let { RadioStation(row.optString("name").take(60), it) }
+            RadioStation.validUrl(row.optString("url"))?.let { RadioStation(row.optString("name").take(60), it,
+                logoUrl = RadioStation.validUrl(row.optString("logo")) ?: RadioStation.defaultLogo(it)) }
         }.filter { it.name.isNotBlank() }.distinctBy { it.url }.take(300)
     }.getOrDefault(emptyList())
+
+    fun needsRefresh(): Boolean = runCatching {
+        !cache.exists() || System.currentTimeMillis() - cache.lastModified() > 24 * 60 * 60 * 1000L ||
+            JSONArray(cache.readText()).let { rows -> (0 until rows.length()).any { rows.optJSONObject(it)?.has("logo") != true } }
+    }.getOrDefault(true)
 
     fun fetch(): List<RadioStation> {
         var lastError: Exception? = null
@@ -41,7 +47,9 @@ internal class MoroccoRadioDirectory(context: Context) {
                 } finally { connection.disconnect() }
                 val result = parse(text)
                 check(result.isNotEmpty()) { "No compatible stations" }
-                cache.writeText(JSONArray(result.map { JSONObject().put("name", it.name).put("url", it.url) }).toString())
+                val temporary = File(cache.parentFile, cache.name + ".tmp")
+                temporary.writeText(JSONArray(result.map { JSONObject().put("name", it.name).put("url", it.url).put("logo", it.logoUrl.orEmpty()) }).toString())
+                check(temporary.renameTo(cache)) { "Directory cache update failed" }
                 return result
             } catch (error: Exception) { lastError = error }
         }
@@ -56,8 +64,10 @@ internal class MoroccoRadioDirectory(context: Context) {
                 if (row.optString("countrycode") != "MA" || row.optInt("lastcheckok") != 1) return@mapNotNull null
                 val url = RadioStation.validUrl(row.optString("url_resolved")) ?: return@mapNotNull null
                 val name = row.optString("name").trim().take(60).takeIf { it.isNotEmpty() } ?: return@mapNotNull null
-                RadioStation(name, url)
-            }.distinctBy { it.url }
+                RadioStation(name, url, logoUrl = RadioStation.validUrl(row.optString("favicon")) ?: RadioStation.defaultLogo(url))
+            }.groupBy { it.url }.values.map { duplicates ->
+                duplicates.first().copy(logoUrl = duplicates.firstNotNullOfOrNull { it.logoUrl })
+            }
         }
     }
 }

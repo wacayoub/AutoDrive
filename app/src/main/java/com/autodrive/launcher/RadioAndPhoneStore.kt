@@ -15,9 +15,11 @@ internal object DialNumber {
     }
 }
 
-internal data class RadioStation(val name: String, val url: String, val favorite: Boolean = false) {
+internal data class RadioStation(val name: String, val url: String, val favorite: Boolean = false, val logoUrl: String? = null) {
     override fun toString() = name
     companion object {
+        fun defaultLogo(url: String): String? = if (url == "https://hitradio-maroc.ice.infomaniak.ch/hitradio-maroc-128.mp3")
+            "https://hitradio.ma/small-logo-hitradio.png" else null
         fun validUrl(input: String): String? = runCatching { URI(input.trim()) }.getOrNull()?.takeIf {
             input.length <= 2048 && it.scheme.equals("https", true) && !it.host.isNullOrBlank() &&
                 it.userInfo == null && it.fragment == null && (it.port == -1 || it.port in 1..65535)
@@ -32,17 +34,20 @@ internal class RadioAndPhoneStore(context: Context) {
     val stations: List<RadioStation> get() {
         val saved = read("stations")
         if (!prefs.contains("stations")) return listOf(RadioStation("HIT RADIO",
-            "https://hitradio-maroc.ice.infomaniak.ch/hitradio-maroc-128.mp3"))
+            "https://hitradio-maroc.ice.infomaniak.ch/hitradio-maroc-128.mp3", logoUrl = "https://hitradio.ma/small-logo-hitradio.png"))
         return (0 until saved.length()).mapNotNull { i ->
             val row = saved.optJSONObject(i) ?: return@mapNotNull null
             val url = RadioStation.validUrl(row.optString("url")) ?: return@mapNotNull null
             val name = row.optString("name").trim().take(60).takeIf { it.isNotEmpty() } ?: return@mapNotNull null
-            RadioStation(name, url, row.optBoolean("favorite"))
+            RadioStation(name, url, row.optBoolean("favorite"), RadioStation.validUrl(row.optString("logo")))
         }.distinctBy { it.url }.take(200)
     }
     var selectedUrl: String?
         get() = prefs.getString("selected", null)
         set(value) { prefs.edit().putString("selected", value).apply() }
+    var favoritesOnly: Boolean
+        get() = prefs.getBoolean("favorites_only", false)
+        set(value) { prefs.edit().putBoolean("favorites_only", value).apply() }
     var phoneDraft: String
         get() = prefs.getString("phone_draft", "").orEmpty()
         set(value) { prefs.edit().putString("phone_draft", value.take(80)).apply() }
@@ -52,7 +57,8 @@ internal class RadioAndPhoneStore(context: Context) {
         val all = stations.toMutableList()
         val index = all.indexOfFirst { it.url == url }
         if (index < 0 && all.size >= 200) return false
-        val normalized = station.copy(name = station.name.trim().take(60), url = url)
+        val normalized = station.copy(name = station.name.trim().take(60), url = url,
+            logoUrl = station.logoUrl?.let(RadioStation::validUrl))
         if (index >= 0) all[index] = normalized else all.add(normalized)
         writeStations(all)
         return true
@@ -62,7 +68,7 @@ internal class RadioAndPhoneStore(context: Context) {
         if (selectedUrl == url) selectedUrl = null
     }
     private fun writeStations(stations: List<RadioStation>) = prefs.edit().putString("stations", JSONArray(stations.map {
-        JSONObject().put("name", it.name).put("url", it.url).put("favorite", it.favorite)
+        JSONObject().put("name", it.name).put("url", it.url).put("favorite", it.favorite).put("logo", it.logoUrl.orEmpty())
     }).toString()).apply()
     val phoneFavorites: List<PhoneFavorite> get() {
         val saved = read("phone_favorites")

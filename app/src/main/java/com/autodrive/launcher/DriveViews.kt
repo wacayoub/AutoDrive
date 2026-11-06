@@ -166,6 +166,10 @@ internal class DriveIcon(context: Context, var name: String, var color: Int, pri
             }
             "phone" -> line(5f, 3f, 9f, 2f, 11f, 7f, 8f, 10f, 11f, 14f, 14f, 16f, 17f, 13f,
                 22f, 16f, 21f, 20f, 17f, 22f, 11f, 20f, 6f, 15f, 3f, 9f, 3f, 5f, close = true, fill = true)
+            "search" -> {
+                canvas.drawCircle(10f, 10f, 6f, pen)
+                line(15f, 15f, 21f, 21f)
+            }
             "radio" -> {
                 line(5f, 7f, 19f, 3f)
                 box(3f, 8f, 18f, 12f)

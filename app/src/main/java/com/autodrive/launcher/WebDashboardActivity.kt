@@ -34,6 +34,12 @@ class WebDashboardActivity : ComponentActivity() {
     private lateinit var radioPhone: RadioAndPhoneStore
     private lateinit var radio: InternetRadio
     private var radioPanel: InternetRadioPanel? = null
+    private var expandedRadioPanel: InternetRadioPanel? = null
+    private lateinit var radioArtwork: RadioArtwork
+    private var radioCatalogue = emptyList<RadioStation>()
+    private var radioCatalogueLoaded = false
+    private var radioLoading = false
+    private var radioDirectoryError = false
     private var directoryJob: Job? = null
     private lateinit var gps: GpsMonitor
     private lateinit var root: FrameLayout
@@ -90,6 +96,7 @@ class WebDashboardActivity : ComponentActivity() {
         links = AppLinks(this)
         radioPhone = RadioAndPhoneStore(this)
         radio = InternetRadio(this, ::updateRadio)
+        radioArtwork = RadioArtwork(this)
         updates = ViewModelProvider(this)[UpdateViewModel::class.java]
         gps = GpsMonitor(this, ::updateStatus)
         mapState = state?.getBundle("maps")
@@ -101,6 +108,7 @@ class WebDashboardActivity : ComponentActivity() {
                 val keyboard = insets.getInsets(WindowInsets.Type.ime()).bottom
                 view.setPadding(safe.left, safe.top, safe.right, maxOf(safe.bottom, keyboard))
                 val typing = insets.isVisible(WindowInsets.Type.ime())
+                expandedRadioPanel?.setTyping(typing)
                 keyboardChrome.forEach { it.visibility = if (typing) View.GONE else View.VISIBLE }
                 if (::mediaPane.isInitialized && portrait) {
                     mapPane.visibility = if (typing && !mapFocused) View.GONE else View.VISIBLE
@@ -285,7 +293,7 @@ class WebDashboardActivity : ComponentActivity() {
         super.onPause()
     }
 
-    override fun onDestroy() { installJob?.cancel(); directoryJob?.cancel(); radio.close(); maps.release(); youtube?.release(); super.onDestroy() }
+    override fun onDestroy() { installJob?.cancel(); directoryJob?.cancel(); radio.close(); radioArtwork.close(); maps.release(); youtube?.release(); super.onDestroy() }
 
     override fun onSaveInstanceState(outState: Bundle) {
         outState.putBundle("maps", maps.save() ?: mapState)
@@ -357,17 +365,11 @@ class WebDashboardActivity : ComponentActivity() {
             if (resumed && homeVisible) panel.start(youtubeState)
             youtubeState = null
         } else if (tab == MediaTab.RADIO) {
-            val panel = InternetRadioPanel(this, ::pickRadioStation, { showMoroccoRadios() },
-                { changeRadioStation(-1) }, {
-                    val selected = selectedRadioStation()
-                    if (selected == null) editRadioStation()
-                    else if (radio.station?.url != selected.url) playRadio(selected) else radio.toggle()
-                }, { changeRadioStation(1) }, {
-                    selectedRadioStation()?.let { radioPhone.saveStation(it.copy(favorite = !it.favorite)); updateRadio() }
-                })
+            val panel = createRadioPanel(false)
             radioPanel = panel
-            mediaContent.addView(ScrollView(this).apply { isFillViewport = true; addView(panel) }, FrameLayout.LayoutParams(-1, -1))
+            mediaContent.addView(panel, FrameLayout.LayoutParams(-1, -1))
             updateRadio()
+            loadRadioDirectory()
         } else {
             mediaContent.addView(ui.line(true).apply {
                 gravity = Gravity.CENTER
@@ -382,6 +384,8 @@ class WebDashboardActivity : ComponentActivity() {
     }
 
     private fun showHome() {
+        window.insetsController?.hide(WindowInsets.Type.ime())
+        expandedRadioPanel = null
         updatePanel = null
         pageBack = null
         homeVisible = true
@@ -390,7 +394,8 @@ class WebDashboardActivity : ComponentActivity() {
         if (resumed) startPanels()
     }
 
-    private fun page(title: String, body: LinearLayout, back: () -> Unit = ::showHome) {
+    private fun page(title: String, body: LinearLayout, back: () -> Unit = ::showHome, scroll: Boolean = true) {
+        expandedRadioPanel = null
         stopPanels()
         homeVisible = false
         pageBack = back
@@ -401,7 +406,8 @@ class WebDashboardActivity : ComponentActivity() {
                 addView(ui.action("Back", run = back), LinearLayout.LayoutParams(ui.dp(110), ui.dp(48)))
                 addView(ui.label(title, 24, bold = true).apply { setPadding(ui.dp(12), 0, 0, 0) }, LinearLayout.LayoutParams(0, ui.dp(48), 1f))
             })
-            addView(ScrollView(this@WebDashboardActivity).apply { addView(body) }, LinearLayout.LayoutParams(-1, 0, 1f))
+            if (scroll) addView(ScrollView(this@WebDashboardActivity).apply { addView(body) }, LinearLayout.LayoutParams(-1, 0, 1f))
+            else addView(body, LinearLayout.LayoutParams(-1, 0, 1f))
         })
     }
 
@@ -498,76 +504,76 @@ class WebDashboardActivity : ComponentActivity() {
         dialog.setNegativeButton("Annuler", null).show()
     }
 
-    private fun selectedRadioStation() = radioPhone.stations.firstOrNull { it.url == radioPhone.selectedUrl }
-        ?: radioPhone.stations.firstOrNull()
+    private fun availableRadioStations() = RadioQueue.merge(radioCatalogue, radioPhone.stations)
 
-    private fun updateRadio() { radioPanel?.render(selectedRadioStation(), radio, radioPhone.stations.size) }
+    private fun selectedRadioStation(): RadioStation? {
+        val all = availableRadioStations()
+        return all.firstOrNull { it.url == radioPhone.selectedUrl }
+            ?: radioPhone.stations.firstOrNull()?.let { saved -> all.firstOrNull { it.url == saved.url } ?: saved }
+            ?: all.firstOrNull()
+    }
+
+    private fun updateRadio() {
+        val stations = availableRadioStations()
+        for (panel in listOfNotNull(radioPanel.takeIf { homeVisible }, expandedRadioPanel)) panel.render(selectedRadioStation(), radio,
+            stations, radioPhone.favoritesOnly, radioLoading, radioDirectoryError)
+    }
+
+    private fun createRadioPanel(expanded: Boolean) = InternetRadioPanel(this, radioArtwork, expanded,
+        { showMoroccoRadios() }, { loadRadioDirectory(true) }, {
+            radioPhone.favoritesOnly = it; updateRadio()
+        }, ::playRadio, { station ->
+            radioPhone.saveStation(station.copy(favorite = !station.favorite)); updateRadio()
+        }, { changeRadioStation(-1) }, {
+            selectedRadioStation()?.let { selected ->
+                if (radio.station?.url != selected.url) playRadio(selected) else radio.toggle()
+            }
+        }, { changeRadioStation(1) })
 
     private fun playRadio(station: RadioStation) {
-        radioPhone.selectedUrl = station.url
-        radio.play(station)
+        // Keep user edits/favorites while enriching old saved rows with newly available artwork.
+        val selected = availableRadioStations().firstOrNull { it.url == station.url } ?: station
+        if (!radioPhone.saveStation(selected)) { message("Maximum 200 stations enregistrées"); return }
+        radioPhone.selectedUrl = selected.url
+        radio.play(selected)
     }
 
     private fun changeRadioStation(direction: Int) {
-        val stations = radioPhone.stations
-        if (stations.isEmpty()) return
-        val current = stations.indexOfFirst { it.url == selectedRadioStation()?.url }.coerceAtLeast(0)
-        playRadio(stations[Math.floorMod(current + direction, stations.size)])
-    }
-
-    private fun pickRadioStation() {
-        val stations = radioPhone.stations.sortedByDescending { it.favorite }
-        val dialog = AlertDialog.Builder(this).setTitle("Stations Internet")
-        if (stations.isEmpty()) dialog.setMessage("Ajoute une station pour commencer.")
-        else dialog.setItems(stations.map { (if (it.favorite) "★ " else "") + it.name }.toTypedArray()) { _, i -> playRadio(stations[i]) }
-        dialog.setPositiveButton("Ajouter") { _, _ -> editRadioStation() }
-            .setNeutralButton("Maroc") { _, _ -> showMoroccoRadios() }.setNegativeButton("Fermer", null).show()
+        val queue = RadioQueue.active(availableRadioStations(), radioPhone.favoritesOnly)
+        RadioQueue.neighbor(queue, selectedRadioStation()?.url, direction)?.let(::playRadio)
     }
 
     private fun showMoroccoRadios(refresh: Boolean = false) {
-        if (directoryJob?.isActive == true) return
-        val directory = MoroccoRadioDirectory(this)
-        message(if (refresh) "Actualisation des radios du Maroc…" else "Chargement des radios du Maroc…")
+        val panel = createRadioPanel(true)
+        page("Radio Internet", panel, scroll = false)
+        expandedRadioPanel = panel
+        updateRadio()
+        loadRadioDirectory(refresh)
+    }
+
+    private fun loadRadioDirectory(refresh: Boolean = false) {
+        if (directoryJob?.isActive == true || (!refresh && radioCatalogueLoaded)) return
+        radioLoading = true
+        radioDirectoryError = false
+        if (refresh) radioArtwork.retryFailures()
+        updateRadio()
         directoryJob = CoroutineScope(Dispatchers.Main.immediate).launch {
-            val result = withContext(Dispatchers.IO) {
-                val cached = directory.cached()
-                if (!refresh && cached.isNotEmpty()) cached to false
-                else try { directory.fetch() to false } catch (_: Exception) { cached to true }
+            val directory = MoroccoRadioDirectory(this@WebDashboardActivity)
+            val cached = withContext(Dispatchers.IO) { directory.cached() to directory.needsRefresh() }
+            if (cached.first.isNotEmpty()) {
+                radioCatalogue = cached.first
+                updateRadio()
             }
-            if (isFinishing || isDestroyed) return@launch
-            val stations = result.first
-            val search = android.widget.EditText(this@WebDashboardActivity).apply {
-                hint = "Rechercher une radio"; setSingleLine(true)
+            if (refresh || cached.first.isEmpty() || cached.second) {
+                val fetched = withContext(Dispatchers.IO) { runCatching { directory.fetch() } }
+                fetched.onSuccess { radioCatalogue = it }
+                radioDirectoryError = fetched.isFailure
+                if (fetched.isFailure && radioCatalogue.isNotEmpty() && refresh)
+                    message("Actualisation impossible · liste mémorisée conservée")
             }
-            val list = android.widget.ListView(this@WebDashboardActivity)
-            val adapter = android.widget.ArrayAdapter(this@WebDashboardActivity, android.R.layout.simple_list_item_1, stations)
-            list.adapter = adapter
-            val body = ui.line(true).apply {
-                setPadding(ui.dp(12), 0, ui.dp(12), 0)
-                addView(ui.label(if (result.second) "Hors connexion · catalogue mémorisé" else "Annuaire Radio Browser · ${stations.size} flux HTTPS", 12, Palette.muted))
-                addView(search, LinearLayout.LayoutParams(-1, ui.dp(48)))
-                addView(list, LinearLayout.LayoutParams(-1, ui.dp(180)))
-            }
-            search.addTextChangedListener(object : android.text.TextWatcher {
-                override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
-                override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) { adapter.filter.filter(s) }
-                override fun afterTextChanged(s: android.text.Editable?) = Unit
-            })
-            val dialog = AlertDialog.Builder(this@WebDashboardActivity).setTitle("Radios du Maroc")
-                .setView(body).setPositiveButton("Actualiser") { _, _ -> showMoroccoRadios(true) }
-                .setNegativeButton("Fermer", null).create()
-            list.setOnItemClickListener { _, _, position, _ ->
-                val station = adapter.getItem(position) ?: return@setOnItemClickListener
-                val saved = radioPhone.stations.firstOrNull { it.url == station.url }
-                if (saved == null && !radioPhone.saveStation(station)) { message("Maximum 200 stations enregistrées"); return@setOnItemClickListener }
-                dialog.dismiss()
-                links.tab = MediaTab.RADIO
-                showHome()
-                playRadio(saved ?: station)
-            }
-            dialog.show()
-            if (stations.isEmpty()) message("Catalogue indisponible. Réessaie avec Internet ; les stations enregistrées restent accessibles.")
-            else if (result.second) message("Actualisation impossible · liste mémorisée conservée")
+            radioCatalogueLoaded = true
+            radioLoading = false
+            updateRadio()
         }
     }
 
@@ -578,15 +584,21 @@ class WebDashboardActivity : ComponentActivity() {
             inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_URI
             setSingleLine(true); setText(existing?.url.orEmpty())
         }
-        val body = ui.line(true).apply { setPadding(ui.dp(16), 0, ui.dp(16), 0); addView(name); addView(url) }
+        val logo = android.widget.EditText(this).apply {
+            hint = "Lien du logo HTTPS · facultatif"; setSingleLine(true); setText(existing?.logoUrl.orEmpty())
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_URI
+        }
+        val body = ui.line(true).apply { setPadding(ui.dp(16), 0, ui.dp(16), 0); addView(name); addView(url); addView(logo) }
         val dialog = AlertDialog.Builder(this).setTitle(if (existing == null) "Ajouter une radio" else "Modifier la radio")
             .setView(body).setPositiveButton("Enregistrer", null).setNegativeButton("Annuler", null).create()
         dialog.setOnShowListener {
             dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
-                val value = RadioStation(name.text.toString(), url.text.toString(), existing?.favorite ?: false)
+                val value = RadioStation(name.text.toString(), url.text.toString(), existing?.favorite ?: false,
+                    logo.text.toString().trim().takeIf { it.isNotEmpty() })
                 when {
                     value.name.isBlank() -> name.error = "Indique un nom"
                     RadioStation.validUrl(value.url) == null -> url.error = "Lien direct HTTPS valide requis"
+                    value.logoUrl != null && RadioStation.validUrl(value.logoUrl) == null -> logo.error = "Lien de logo HTTPS valide requis"
                     existing != null && existing.url != RadioStation.validUrl(value.url) && radioPhone.stations.size >= 200 -> url.error = "Supprime une station avant de modifier son lien"
                     !radioPhone.saveStation(value) -> url.error = "Maximum 200 stations"
                     else -> {

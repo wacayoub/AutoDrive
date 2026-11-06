@@ -1,5 +1,18 @@
 # AutoDrive validation
 
+## Version 1.6.1 — radio audit, artwork and station switching
+
+Validated 6 November 2026, `com.autodrive.launcher`, version code 20. [Radio audit and causes](RADIO-AUDIT.md).
+
+- **19 JVM tests passed**, including three queue regression tests. Debug APK and Android test APK assembled; lint completed with **0 errors, 39 warnings and 1 hint** before the final test-fixture synchronization changes. CI runs lint again on the published source.
+- **13 instrumented tests passed in the final combined run** on the AOSP Android 13 emulator, 800 × 480 at density 160. Four new audit checks cover a one-station saved library versus a three-station catalogue, real HIT/Mars playback, both directions and wrap-around, rapid changes, empty/two-station favorites, buffering cancellation, search, bounded real-logo decoding/failure, and old-cache/deduplication metadata. The existing radio/phone, dashboard, YouTube and Maps checks also passed.
+- Earlier combined runs exposed asynchronous test-page/window timing failures in existing YouTube/Maps tests. Their fixture helpers now wait for DOM readiness and rendering, and the contrast assertion waits for the actual foreground window pixels within a bounded deadline. The final combined run passed. No production Google Maps/YouTube page behavior was rewritten for those test waits.
+- Actual touch input on the dashboard changed Radio Mars → Radio MFM → Radio Mars. MFM reached real ExoPlayer playback. The displayed list now contains image views and actual available artwork; a missing/refused logo uses initials. The public HIT logo loaded successfully; the Radio Mars artwork URL returned HTTP 403 during research. Not all catalogue logos or streams were validated.
+- Manual full-list search `hit` with the Android keyboard visible showed HIT RADIO as the first result after the scroll-reset fix. At **800 × 480 / density 213**, the compact radio view displayed the station list, enabled previous/next controls and an accessible full-list button. A compact view can hide the separate station header and filters to preserve list space.
+- A cold restart with emulator Wi-Fi and mobile data disabled loaded the cached 48-station list without autoplay. Network settings and density were restored after these checks. The existing 1.6.0 installation updated to the debug 1.6.1 APK with the same certificate; station/phone preferences were retained.
+
+Actual captures: [dashboard radio](../deliverables/radio-1.6.1-800x480.png), [expanded list](../deliverables/radio-list-1.6.1-800x480.png), [search with keyboard](../deliverables/radio-search-1.6.1-800x480.png), [density 213](../deliverables/radio-1.6.1-density213.png). These are emulator captures, not installed-box evidence. Audio output quality, on-box networking, background playback and steering-wheel controls remain unverified. No installation was performed on the owner's box or phone.
+
 ## Version 1.6.0 — Internet radio and phone
 
 Validated 6 November 2026 on the local AOSP Android 13 emulator, 800 × 480. Package `com.autodrive.launcher`, version code 19. Only the explicitly selected emulator was modified; no installation or call was performed on the owner's Incarlink or Samsung.

@@ -132,7 +132,7 @@ class RadioPhoneTest {
         prefs.edit().clear().commit()
         launcher.edit().remove("app_PHONE").putString("tab", "RADIO").commit()
         try { block() } finally {
-            prefs.edit().clear().apply { old.forEach { (k, v) -> putString(k, v as? String) } }.commit()
+            prefs.edit().clear().apply { old.forEach { (k, v) -> if (v is Boolean) putBoolean(k, v) else putString(k, v as? String) } }.commit()
             launcher.edit().putString("app_PHONE", oldPhone).putString("tab", oldTab).commit()
         }
     }
