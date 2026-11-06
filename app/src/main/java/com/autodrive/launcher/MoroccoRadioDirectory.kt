@@ -56,6 +56,12 @@ internal class MoroccoRadioDirectory(context: Context) {
         throw lastError ?: IllegalStateException("Directory unavailable")
     }
     companion object {
+        // Public live URLs used by each broadcaster's own website; useful if the directory is unavailable.
+        val starter = listOf(
+            RadioStation("HIT RADIO", "https://hitradio-maroc.ice.infomaniak.ch/hitradio-maroc-128.mp3", logoUrl = "https://hitradio.ma/small-logo-hitradio.png"),
+            RadioStation("Radio Mars", "https://radiomars.ice.infomaniak.ch/radiomars-128.mp3"),
+            RadioStation("Radio Aswat", "https://broadcast.ice.infomaniak.ch/aswat-high.mp3")
+        )
         private const val MAX_BYTES = 2 * 1024 * 1024
         fun parse(json: String): List<RadioStation> {
             val rows = JSONArray(json)

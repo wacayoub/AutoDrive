@@ -49,6 +49,7 @@ class WebDashboardActivity : ComponentActivity() {
     private lateinit var homeView: LinearLayout
     private lateinit var maps: BrowserPanel
     private var youtube: BrowserPanel? = null
+    private var renderedMediaTab: MediaTab? = null
     private lateinit var mediaContent: FrameLayout
     private lateinit var mediaPane: LinearLayout
     private lateinit var mapPane: FrameLayout
@@ -103,7 +104,7 @@ class WebDashboardActivity : ComponentActivity() {
         links = AppLinks(this)
         radioPhone = RadioAndPhoneStore(this)
         phoneContacts = ViewModelProvider(this)[PhoneContactsViewModel::class.java]
-        radio = InternetRadio(this, ::updateRadio)
+        radio = InternetRadio(this, ::changeRadioStation, ::updateRadio)
         radioArtwork = RadioArtwork(this)
         updates = ViewModelProvider(this)[UpdateViewModel::class.java]
         gps = GpsMonitor(this, ::updateStatus)
@@ -126,7 +127,8 @@ class WebDashboardActivity : ComponentActivity() {
                 insets
             }
         }
-        maps = BrowserPanel(this, "https://www.google.com/maps/@?api=1&map_action=map", true, ::requestGps, ::openExternal) { mapFocused = true }
+        maps = BrowserPanel(this, "https://www.google.com/maps/@?api=1&map_action=map", true, ::requestGps, ::openExternal,
+            openAccountBrowser = { links.openInBrowser(Uri.parse("https://www.google.com/maps/")) }) { mapFocused = true }
         homeView = dashboard()
         setContentView(root)
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
@@ -348,19 +350,23 @@ class WebDashboardActivity : ComponentActivity() {
 
     private fun stopPanels() {
         mapState = maps.save() ?: mapState
-        maps.release()
+        maps.pause()
         youtubeState = youtube?.save() ?: youtubeState
-        youtube?.release()
+        youtube?.pause()
     }
 
     private fun select(tab: MediaTab) {
+        if (renderedMediaTab == tab && mediaContent.childCount > 0) {
+            if (tab == MediaTab.YOUTUBE && resumed && homeVisible) youtube?.start()
+            if (tab == MediaTab.RADIO) updateRadio()
+            return
+        }
         if (tab != MediaTab.RADIO) radio.close()
-        radioPanel = null
         links.tab = tab
         youtubeState = youtube?.save() ?: youtubeState
-        youtube?.release()
-        youtube = null
+        youtube?.pause()
         mediaContent.removeAllViews()
+        renderedMediaTab = tab
         tabs.forEach { (value, button) ->
             button.isSelected = value == tab
             val frame = button as FrameLayout
@@ -371,14 +377,15 @@ class WebDashboardActivity : ComponentActivity() {
             ui.touch(button, android.graphics.Color.TRANSPARENT, 12) { select(value) }
         }
         if (tab == MediaTab.YOUTUBE) {
-            val panel = BrowserPanel(this, "https://m.youtube.com/", false, {}, ::openExternal,
-                nativeYouTube = { uri -> links.openYouTube(uri) }) { mapFocused = false }
+            val panel = youtube ?: BrowserPanel(this, "https://m.youtube.com/", false, {}, ::openExternal,
+                nativeYouTube = { uri -> links.openYouTube(uri) },
+                openAccountBrowser = { links.openInBrowser(Uri.parse("https://www.youtube.com/")) }) { mapFocused = false }
             youtube = panel
             mediaContent.addView(panel, FrameLayout.LayoutParams(-1, -1))
             if (resumed && homeVisible) panel.start(youtubeState)
             youtubeState = null
         } else if (tab == MediaTab.RADIO) {
-            val panel = createRadioPanel(false)
+            val panel = radioPanel ?: createRadioPanel(false)
             radioPanel = panel
             mediaContent.addView(panel, FrameLayout.LayoutParams(-1, -1))
             updateRadio()
@@ -441,9 +448,10 @@ class WebDashboardActivity : ComponentActivity() {
             })
         }
         row("GPS · autorisations", ::requestGps)
+        row("Comptes Google · panneaux et applications", ::showGoogleAccounts)
         row("Mises à jour · ${updates.source.versionName}", ::showUpdates)
         row("Revenir à l’accueil Google Maps") { mapState = null; maps.loadHome(); showHome() }
-        row("Revenir à l’accueil YouTube") { youtubeState = null; links.tab = MediaTab.YOUTUBE; showHome() }
+        row("Revenir à l’accueil YouTube") { youtubeState = null; youtube?.loadHome(); links.tab = MediaTab.YOUTUBE; showHome() }
         val youtubeApp = links.forTab(MediaTab.YOUTUBE, links.apps())
         val youtubeLabel = youtubeApp?.label ?: if (links.association(MediaTab.YOUTUBE.name) == null)
             "Choisir une application" else "Application enregistrée indisponible"
@@ -521,7 +529,8 @@ class WebDashboardActivity : ComponentActivity() {
         dialog.setNegativeButton("Annuler", null).show()
     }
 
-    private fun availableRadioStations() = RadioQueue.merge(radioCatalogue, radioPhone.stations)
+    private fun availableRadioStations() = RadioQueue.merge(
+        (radioCatalogue.ifEmpty { MoroccoRadioDirectory.starter }) + listOfNotNull(radioPhone.lastStation), radioPhone.stations)
 
     private fun selectedRadioStation(): RadioStation? {
         val all = availableRadioStations()
@@ -532,7 +541,8 @@ class WebDashboardActivity : ComponentActivity() {
 
     private fun updateRadio() {
         val stations = availableRadioStations()
-        for (panel in listOfNotNull(radioPanel.takeIf { homeVisible }, expandedRadioPanel)) panel.render(selectedRadioStation(), radio,
+        radio.setCanSkip(RadioQueue.active(stations, radioPhone.favoritesOnly).size > 1)
+        for (panel in listOfNotNull(radioPanel.takeIf { homeVisible && links.tab == MediaTab.RADIO }, expandedRadioPanel)) panel.render(selectedRadioStation(), radio,
             stations, radioPhone.favoritesOnly, radioLoading, radioDirectoryError)
     }
 
@@ -540,7 +550,8 @@ class WebDashboardActivity : ComponentActivity() {
         { showMoroccoRadios() }, { loadRadioDirectory(true) }, {
             radioPhone.favoritesOnly = it; updateRadio()
         }, ::playRadio, { station ->
-            radioPhone.saveStation(station.copy(favorite = !station.favorite)); updateRadio()
+            if (!radioPhone.saveStation(station.copy(favorite = !station.favorite))) message("Bibliothèque pleine · retire une station enregistrée dans Réglages")
+            updateRadio()
         }, { changeRadioStation(-1) }, {
             selectedRadioStation()?.let { selected ->
                 if (radio.station?.url != selected.url) playRadio(selected) else radio.toggle()
@@ -550,7 +561,8 @@ class WebDashboardActivity : ComponentActivity() {
     private fun playRadio(station: RadioStation) {
         // Keep user edits/favorites while enriching old saved rows with newly available artwork.
         val selected = availableRadioStations().firstOrNull { it.url == station.url } ?: station
-        if (!radioPhone.saveStation(selected)) { message("Maximum 200 stations enregistrées"); return }
+        // Listening must not fill (or depend on the capacity of) the user's saved/favorite library.
+        radioPhone.lastStation = selected
         radioPhone.selectedUrl = selected.url
         radio.play(selected)
     }
@@ -659,6 +671,16 @@ class WebDashboardActivity : ComponentActivity() {
     private fun phoneAppLabel(): String {
         return links.phoneApp()?.label ?: if (links.association(AppLinks.PHONE) != null) "Application indisponible" else "Choisir téléphone Bluetooth"
     }
+
+    private fun showGoogleAccounts() = page("Comptes Google", ui.line(true).apply {
+        addView(ui.label("Le panneau intégré, le navigateur et les applications installées ont des connexions séparées. Une connexion dans Chrome ou YouTube ne connecte pas le panneau. Les panneaux gardent leur page pendant les changements d’onglet. Si Google refuse la connexion dans le panneau, utilise son application ou ton navigateur.", 16, Palette.muted).apply {
+            maxLines = 10; setPadding(ui.dp(8), ui.dp(8), ui.dp(8), ui.dp(12))
+        })
+        addView(ui.action("Maps dans le navigateur") { if (!links.openInBrowser(Uri.parse("https://www.google.com/maps/"))) message("Aucun navigateur compatible disponible") })
+        addView(ui.action("YouTube dans le navigateur") { if (!links.openInBrowser(Uri.parse("https://www.youtube.com/"))) message("Aucun navigateur compatible disponible") })
+        addView(ui.action("Application Google Maps") { if (!links.openMaps()) message("Google Maps non installé") })
+        addView(ui.action("Application YouTube choisie") { if (!links.openYouTube()) chooseApp(MediaTab.YOUTUBE) })
+    }, back = ::showSettings)
 
     private fun choosePhoneApp(after: () -> Unit) {
         val apps = links.apps().sortedBy { if (it.component == AppLinks.OEM_PHONE) 0 else 1 }

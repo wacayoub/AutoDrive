@@ -22,7 +22,8 @@ class MapWebPreferenceTest {
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as WebDashboardActivity
         lateinit var web: WebView
         try {
-            instrumentation.runOnMainSync { web = views(activity.window.decorView).filterIsInstance<WebView>().first() }
+            instrumentation.waitForIdleSync()
+            instrumentation.runOnMainSync { web = isolatedMap(activity) }
             // Synthetic controls exercise the preference action, not real map rendering.
             for (label in listOf("Stay on web", "Rester sur le site Web")) {
                 instrumentation.runOnMainSync {
@@ -73,7 +74,10 @@ class MapWebPreferenceTest {
             inspected.await(2, TimeUnit.SECONDS)
             assertEquals("Never hide account controls", "false", value)
         } finally {
-            instrumentation.runOnMainSync { activity.finish() }
+            instrumentation.runOnMainSync {
+                views(activity.window.decorView).filterIsInstance<BrowserPanel>().forEach { it.release() }
+                activity.finish()
+            }
         }
     }
 
@@ -83,8 +87,9 @@ class MapWebPreferenceTest {
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as WebDashboardActivity
         lateinit var web: WebView
         try {
+            instrumentation.waitForIdleSync()
             instrumentation.runOnMainSync {
-                web = views(activity.window.decorView).filterIsInstance<WebView>().first()
+                web = isolatedMap(activity)
                 web.setInitialScale(100)
                 web.stopLoading()
                 // Test-only contrast pattern, never a dashboard map replacement.
@@ -136,7 +141,10 @@ class MapWebPreferenceTest {
                 if (!contrastReady) SystemClock.sleep(100)
             }
             org.junit.Assert.assertTrue("Rendered contrast: light=$light, dark=$dark, night=$night", contrastReady)
-        } finally { instrumentation.runOnMainSync { activity.finish() } }
+        } finally { instrumentation.runOnMainSync {
+                views(activity.window.decorView).filterIsInstance<BrowserPanel>().forEach { it.release() }
+                activity.finish()
+            } }
     }
 
     private fun fixture(label: String) = """
@@ -154,6 +162,18 @@ class MapWebPreferenceTest {
         }, 300);
         </script></body></html>
     """.trimIndent()
+
+    private fun isolatedMap(activity: WebDashboardActivity): WebView {
+        // Exercise BrowserPanel's real map client/theme without racing live provider startup
+        // redirects against the local preference/contrast fixtures.
+        views(activity.window.decorView).filterIsInstance<BrowserPanel>().forEach { it.release() }
+        val panel = BrowserPanel(activity, "about:blank", true, {}, {}) {}
+        activity.setContentView(android.widget.FrameLayout(activity).apply {
+            addView(panel, android.widget.FrameLayout.LayoutParams(-1, -1))
+        })
+        panel.start()
+        return views(panel).filterIsInstance<WebView>().single()
+    }
 
     private fun views(view: View): List<View> = listOf(view) +
         if (view is ViewGroup) (0 until view.childCount).flatMap { views(view.getChildAt(it)) } else emptyList()

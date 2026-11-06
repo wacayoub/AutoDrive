@@ -12,15 +12,15 @@ internal class InternetRadioPanel(context: Context, private val artwork: RadioAr
     private val ui = DriveViews(context)
     private val logo = RadioLogoView(context)
     private val title = ui.label("Radio Internet", 17, bold = true)
-    private val status = ui.label("Prêt à écouter", 11, Palette.muted)
+    private val status = ui.label("Prêt à écouter", 11, Palette.muted).apply { maxLines = 2 }
     private val playIcon = ui.icon("play", Palette.green)
     private val previousButton: View
     private val nextButton: View
     private val playButton: View
     private lateinit var header: View
     private lateinit var transport: View
-    private lateinit var compactBrowse: View
-    private var compact = false
+    private val favoritesButton = ui.action("☆") { mode(!favoritesOnly) }.apply { contentDescription = "Afficher les radios favorites" }
+    private var favoritesOnly = false
     private val list = RadioStationList(context, artwork, expanded, select, favorite, mode, refresh)
     init {
         orientation = VERTICAL
@@ -32,11 +32,13 @@ internal class InternetRadioPanel(context: Context, private val artwork: RadioAr
             ui.touch(this, Palette.raised, 12, action = browse)
         }
         header = ui.line().apply {
-            addView(logo, LayoutParams(ui.dp(44), ui.dp(44)).apply { marginEnd = ui.dp(7) })
+            if (expanded) addView(logo, LayoutParams(ui.dp(40), ui.dp(40)).apply { marginEnd = ui.dp(7) })
             addView(ui.line(true).apply { addView(title); addView(status) }, LayoutParams(0, -2, 1f))
-            if (!expanded) addView(browseButton(), LayoutParams(ui.dp(48), ui.dp(48)))
+            if (!expanded) {
+                addView(favoritesButton, LayoutParams(ui.dp(48), ui.dp(48)))
+                addView(browseButton(), LayoutParams(ui.dp(48), ui.dp(48)))
+            }
         }
-        addView(header, LayoutParams(-1, ui.dp(52)))
         fun control(description: String, icon: View, action: () -> Unit) = FrameLayout(context).apply {
             contentDescription = description
             addView(icon, FrameLayout.LayoutParams(ui.dp(24), ui.dp(24), Gravity.CENTER))
@@ -45,16 +47,26 @@ internal class InternetRadioPanel(context: Context, private val artwork: RadioAr
         previousButton = control("Station précédente", ui.icon("prev"), previous)
         playButton = control("Écouter la radio", playIcon, toggle)
         nextButton = control("Station suivante", ui.icon("next"), next)
-        compactBrowse = browseButton().apply { visibility = View.GONE }
         transport = ui.line().apply {
             for (button in listOf(previousButton, playButton, nextButton)) addView(button,
                 LayoutParams(0, ui.dp(48), 1f).apply { marginEnd = ui.dp(3) })
-            if (!expanded) addView(compactBrowse, LayoutParams(ui.dp(48), ui.dp(48)))
         }
-        addView(transport)
+        if (expanded && resources.configuration.screenWidthDp >= 600) addView(ui.line().apply {
+            addView(header, LayoutParams(0, ui.dp(48), 1f))
+            addView(transport, LayoutParams(ui.dp(192), ui.dp(48)))
+        }) else {
+            addView(header, LayoutParams(-1, ui.dp(48)))
+            addView(transport)
+        }
         addView(list, LayoutParams(-1, 0, 1f).apply { topMargin = ui.dp(4) })
     }
     fun render(station: RadioStation?, player: InternetRadio, stations: List<RadioStation>, favorites: Boolean, loading: Boolean, error: Boolean) {
+        favoritesOnly = favorites
+        favoritesButton.contentDescription = if (favorites) "Afficher les radios du Maroc" else "Afficher les radios favorites"
+        (favoritesButton.getChildAt(0) as android.widget.TextView).text = if (favorites) "★" else "☆"
+        (favoritesButton.getChildAt(0) as android.widget.TextView).setTextColor(Palette.amber)
+        favoritesButton.tooltipText = if (favorites) "Afficher toutes les radios" else "Favoris · ${stations.count { it.favorite }}"
+        favoritesButton.background = ui.shape(if (favorites) 0xFF244E73.toInt() else Palette.raised, 12, if (favorites) Palette.blue else Palette.border)
         title.text = station?.name ?: "Radio Internet"
         title.contentDescription = "Station choisie : ${station?.name.orEmpty()}"
         if (station != null) logo.bind(station, artwork)
@@ -81,16 +93,5 @@ internal class InternetRadioPanel(context: Context, private val artwork: RadioAr
         if (!expanded) return
         header.visibility = if (typing) View.GONE else View.VISIBLE
         transport.visibility = if (typing) View.GONE else View.VISIBLE
-    }
-    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
-        super.onSizeChanged(w, h, oldw, oldh)
-        val small = !expanded && h < ui.dp(230)
-        if (small == compact) return
-        compact = small
-        post {
-            header.visibility = if (compact) View.GONE else View.VISIBLE
-            compactBrowse.visibility = if (compact) View.VISIBLE else View.GONE
-            list.setCompact(compact)
-        }
     }
 }

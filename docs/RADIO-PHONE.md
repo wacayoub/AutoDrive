@@ -1,6 +1,8 @@
-# Radio Internet et Téléphone — 1.7.0
+# Radio Internet et Téléphone — 1.8.0
 
 ## Radio
+
+Depuis 1.8.0, la liste agrandie utilise une grille en paysage, avec recherche et favoris. Les commandes de lecture et les filtres partagent leur ligne avec les informations de station pour laisser plus de place aux choix. L’accueil garde le nom et l’état de lecture visibles, une étoile pour le filtre favoris et une loupe pour la liste complète. La dernière station est mémorisée sans enregistrer automatiquement chaque écoute dans la bibliothèque. Trois flux officiels de départ (HIT, Mars, Aswat) restent disponibles comme choix si l’annuaire ne répond pas. Une session média Android reçoit les commandes standard pendant l’utilisation du lecteur ; les commandes Toyota physiques restent à vérifier. [Audit 1.8.0](RADIO-AUDIT.md).
 
 Le propriétaire a choisi les stations Internet et demandé les radios du Maroc. L’onglet Radio utilise maintenant un lecteur audio natif Media3. Il ne dépend pas d’une application radio externe ou du tuner Toyota.
 
@@ -30,8 +32,8 @@ Le mode Automatique choisit **BT Phone** (`com.carsyso.bluetooth`) lorsqu’il e
 
 L’[audit Téléphone Incarlink](PHONE-INCARLINK-AUDIT.md) détaille les manifestes constructeur, les limites de l’intégration et les essais matériels restant nécessaires.
 
-![Radio native dans le tableau de bord](../deliverables/radio-1.6.1-800x480.png)
+![Radio native dans le tableau de bord](../deliverables/radio-1.8.0-800x480.png)
 
-![Liste agrandie des radios](../deliverables/radio-list-1.6.1-800x480.png)
+![Liste agrandie des radios](../deliverables/radio-grid-1.8.0-800x480.png)
 
 ![Contacts Android de test et clavier — émulateur](../deliverables/phone-contacts-1.7.0-800x480.png)

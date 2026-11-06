@@ -45,6 +45,17 @@ internal class RadioAndPhoneStore(context: Context) {
     var selectedUrl: String?
         get() = prefs.getString("selected", null)
         set(value) { prefs.edit().putString("selected", value).apply() }
+    var lastStation: RadioStation?
+        get() = runCatching {
+            val row = JSONObject(prefs.getString("last_station", null) ?: return null)
+            val url = RadioStation.validUrl(row.optString("url")) ?: return null
+            val name = row.optString("name").trim().take(60).takeIf { it.isNotEmpty() } ?: return null
+            RadioStation(name, url, logoUrl = RadioStation.validUrl(row.optString("logo")))
+        }.getOrNull()
+        set(value) {
+            val row = value?.let { JSONObject().put("name", it.name).put("url", it.url).put("logo", it.logoUrl.orEmpty()).toString() }
+            prefs.edit().putString("last_station", row).apply()
+        }
     var favoritesOnly: Boolean
         get() = prefs.getBoolean("favorites_only", false)
         set(value) { prefs.edit().putBoolean("favorites_only", value).apply() }

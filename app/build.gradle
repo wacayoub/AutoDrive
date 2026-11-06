@@ -9,8 +9,8 @@ android {
         applicationId 'com.autodrive.launcher'
         minSdk 33
         targetSdk 35
-        versionCode providers.gradleProperty('autodriveVersionCode').getOrElse('22').toInteger()
-        versionName providers.gradleProperty('autodriveVersionName').getOrElse('1.7.0')
+        versionCode providers.gradleProperty('autodriveVersionCode').getOrElse('23').toInteger()
+        versionName providers.gradleProperty('autodriveVersionName').getOrElse('1.8.0')
         testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
     }
     signingConfigs {

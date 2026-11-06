@@ -97,6 +97,20 @@ internal class AppLinks(private val activity: Activity) {
             .takeIf { it.resolveActivity(packages) != null }
 
     fun mapsAvailable() = mapsIntent() != null
+    fun openMaps() = mapsIntent()?.let(::start) ?: false
+
+    fun openInBrowser(uri: Uri): Boolean {
+        if (uri.scheme != "https" || uri.userInfo != null || uri.port !in setOf(-1, 443)) return false
+        val neutral = Intent(Intent.ACTION_VIEW, Uri.parse("https://example.org/")).addCategory(Intent.CATEGORY_BROWSABLE)
+        val browserPackages = packages.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_APP_BROWSER),
+            PackageManager.ResolveInfoFlags.of(0)).map { it.activityInfo.packageName }.toSet()
+        val handlers = packages.queryIntentActivities(neutral, PackageManager.ResolveInfoFlags.of(PackageManager.MATCH_DEFAULT_ONLY.toLong()))
+            .filter { it.activityInfo.packageName in browserPackages && it.activityInfo.exported && it.activityInfo.enabled && it.activityInfo.applicationInfo.enabled }
+        val preferred = neutral.resolveActivity(packages)?.packageName
+        val handler = handlers.firstOrNull { it.activityInfo.packageName == preferred }
+            ?: handlers.firstOrNull { it.activityInfo.packageName == "com.android.chrome" } ?: handlers.firstOrNull() ?: return false
+        return start(Intent(Intent.ACTION_VIEW, uri).addCategory(Intent.CATEGORY_BROWSABLE).setPackage(handler.activityInfo.packageName))
+    }
 
     fun mapsVersion() = runCatching {
         packages.getPackageInfo(MAPS, PackageManager.PackageInfoFlags.of(0)).versionName

@@ -27,7 +27,7 @@ class RadioAuditTest {
             fun views() = descendants(activity.window.decorView)
             fun click(description: String) = views().single { it.isShown && it.contentDescription == description }.performClick()
             fun title(name: String) = views().any { it.contentDescription == "Station choisie : $name" }
-            waitFor { views().any { it.contentDescription == "Station suivante" && it.isEnabled } }
+            waitFor { views().any { it.contentDescription == "Écouter Mars test" } && views().any { it.contentDescription == "Station suivante" && it.isEnabled } }
             instrumentation.runOnMainSync {
                 assertEquals(1, RadioAndPhoneStore(activity).stations.size)
                 assertTrue(views().any { it is RadioLogoView })
@@ -64,7 +64,7 @@ class RadioAuditTest {
                 (views().single { it.contentDescription == "Rechercher une radio" } as android.widget.EditText).setText("hit")
             }
             waitFor {
-                val list = views().filterIsInstance<android.widget.ListView>().single()
+                val list = views().filterIsInstance<android.widget.AbsListView>().single()
                 list.count == 1 && list.firstVisiblePosition == 0
             }
         }

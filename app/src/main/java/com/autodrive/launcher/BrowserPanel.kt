@@ -28,6 +28,7 @@ internal class BrowserPanel(
     private val requestLocation: () -> Unit,
     private val external: (Uri) -> Unit,
     private val nativeYouTube: ((Uri?) -> Boolean)? = null,
+    private val openAccountBrowser: (() -> Boolean)? = null,
     private val focused: () -> Unit
 ) : FrameLayout(activity) {
     private var browser: WebView? = null
@@ -46,11 +47,26 @@ internal class BrowserPanel(
         addView(ui.label("Vérifie Internet et Android System WebView.", 14, Palette.muted).apply { maxLines = 3 })
         addView(ui.action("Réessayer") { loadHome() }, LinearLayout.LayoutParams(-1, ui.dp(48)))
     }
+    private val account: android.widget.ScrollView = android.widget.ScrollView(activity).apply {
+        contentDescription = "Connexion Google dans le navigateur"
+        setBackgroundColor(Palette.surface)
+        addView(ui.line(true).apply {
+            setPadding(ui.dp(12), ui.dp(12), ui.dp(12), ui.dp(12))
+            addView(ui.label("Compte Google", 19, bold = true))
+            addView(ui.label("Google peut refuser une connexion dans un panneau intégré. Le navigateur a sa propre connexion : ouvre la page complète pour l’utiliser.", 14, Palette.muted).apply { maxLines = 8 }, LinearLayout.LayoutParams(-1, -2))
+            addView(ui.action("Ouvrir dans le navigateur") {
+                if (openAccountBrowser?.invoke() != true) android.widget.Toast.makeText(activity, "Aucun navigateur compatible disponible", android.widget.Toast.LENGTH_LONG).show()
+            }, LinearLayout.LayoutParams(-1, ui.dp(48)).apply { topMargin = ui.dp(8) })
+            addView(ui.action("Retour au panneau") { this@BrowserPanel.account.visibility = GONE }, LinearLayout.LayoutParams(-1, ui.dp(48)).apply { topMargin = ui.dp(4) })
+        })
+        visibility = GONE
+    }
 
     init {
         setBackgroundColor(Color.BLACK)
         addView(error, LayoutParams(-1, -1))
         addView(progress, LayoutParams(-1, ui.dp(3), android.view.Gravity.TOP))
+        addView(account, LayoutParams(-1, -1))
         error.visibility = GONE
     }
 
@@ -81,6 +97,18 @@ internal class BrowserPanel(
                 override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                     if (!request.isForMainFrame) return false
                     val uri = request.url
+                    val googleAccounts = uri.scheme == "https" && uri.userInfo == null && uri.port in setOf(-1, 443) &&
+                        uri.host in setOf("accounts.google.com", "accounts.youtube.com")
+                    val oauth = googleAccounts && (uri.path.orEmpty().startsWith("/o/oauth2") || uri.path.orEmpty().startsWith("/signin/oauth") ||
+                        (uri.getQueryParameter("client_id") != null && uri.getQueryParameter("response_type") != null))
+                    if (googleAccounts && oauth) {
+                        // Never transfer a browser login back into WebView, or attempt embedded OAuth.
+                        showAccountNotice()
+                        return true
+                    }
+                    // A first-party website sign-in stays in its existing WebView profile.
+                    // Google may refuse this browser; do not spoof it or bypass that refusal.
+                    if (googleAccounts) return false
                     if (inside(uri)) return false
                     if (uri.scheme == "intent") {
                         val parsed = runCatching { Intent.parseUri(uri.toString(), Intent.URI_INTENT_SCHEME) }.getOrNull()
@@ -104,6 +132,7 @@ internal class BrowserPanel(
                 }
 
                 override fun onPageStarted(view: WebView, url: String?, favicon: android.graphics.Bitmap?) {
+                    account.visibility = GONE
                     error.visibility = GONE
                     progress.visibility = VISIBLE
                 }
@@ -124,7 +153,10 @@ internal class BrowserPanel(
                 }
 
                 override fun onReceivedHttpError(view: WebView, request: WebResourceRequest, response: android.webkit.WebResourceResponse) {
-                    if (request.isForMainFrame && response.statusCode >= 400) showError()
+                    if (request.isForMainFrame && response.statusCode >= 400) {
+                        if (request.url.scheme == "https" && request.url.host in setOf("accounts.google.com", "accounts.youtube.com")) showAccountNotice()
+                        else showError()
+                    }
                 }
 
                 override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
@@ -174,8 +206,10 @@ internal class BrowserPanel(
     }
 
     private fun showError() { progress.visibility = GONE; error.visibility = VISIBLE }
+    private fun showAccountNotice() { progress.visibility = GONE; error.visibility = GONE; account.visibility = VISIBLE }
 
     fun loadHome() {
+        account.visibility = GONE
         if (!hasNetwork()) { showError(); return }
         error.visibility = GONE
         if (browser == null) start() else browser?.loadUrl(home)
@@ -184,6 +218,7 @@ internal class BrowserPanel(
     private fun hasNetwork() = activity.getSystemService(android.net.ConnectivityManager::class.java).activeNetwork != null
 
     fun back(): Boolean {
+        if (account.visibility == VISIBLE) { account.visibility = GONE; return true }
         if (fullscreen != null) { hideFullscreen(); return true }
         val web = browser ?: return false
         if (!web.canGoBack()) return false
@@ -196,7 +231,13 @@ internal class BrowserPanel(
         Bundle().also { web.saveState(it) }
     }
 
-    fun pause() { hideFullscreen(); browser?.onPause(); WebSessionStorage.persist() }
+    fun pause() {
+        hideFullscreen()
+        // Retain the document, history and sessionStorage; stop ordinary HTML media while hidden.
+        browser?.evaluateJavascript("document.querySelectorAll('video,audio').forEach(media => media.pause());", null)
+        browser?.onPause()
+        WebSessionStorage.persist()
+    }
 
     fun release() {
         WebSessionStorage.persist()

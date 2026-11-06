@@ -71,6 +71,8 @@ class WebDashboardTest {
                 assertEquals(0, web().size)
                 click("Back")
                 assertEquals(2, web().size)
+                org.junit.Assert.assertSame(map, web().first { it === map })
+                org.junit.Assert.assertSame(video, web().first { it === video })
             }
         } finally {
             instrumentation.runOnMainSync { activity.finish() }

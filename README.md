@@ -16,6 +16,9 @@ La même identité de signature est conservée pour permettre les mises à jour 
 
 ## Tableau de bord
 
+- Version **1.8.0** : grille Radio avec recherche/favoris, station et état toujours visibles, commandes média Android et changement de station indépendant de la capacité de la bibliothèque. Trois flux marocains officiels servent de liste de départ si l’annuaire est inaccessible. [Audit Radio](docs/RADIO-AUDIT.md).
+- Maps/YouTube conservent maintenant leur document lors des changements de page, d’onglet ou d’application. La connexion web ordinaire reste dans le même profil quand Google l’autorise ; une connexion externe reste séparée. La persistance d’un compte Google réel sur le boîtier reste à confirmer. [Audit sessions et limites](docs/WEB-SESSIONS.md).
+
 - Version **1.7.0** : clavier Téléphone corrigé, contacts du poste avec recherche et préférence automatique pour BT Phone lorsque présent. Le carnet Bluetooth privé et les appels restent dans l’application constructeur ; aucune synchronisation Bluetooth directe n’est revendiquée. [Audit Téléphone Incarlink](docs/PHONE-INCARLINK-AUDIT.md).
 
 - Version **1.6.2** : conservation des cookies des panneaux Maps/YouTube renforcée, avec acceptation explicite des cookies tiers et enregistrement sur disque à la sortie. Les cookies de test ont survécu à un arrêt complet ; la connexion réelle du propriétaire à Google reste à confirmer. Les sessions de Chrome et des applications installées restent séparées. [Fonctionnement et limites](docs/WEB-SESSIONS.md).
@@ -32,7 +35,9 @@ La même identité de signature est conservée pour permettre les mises à jour 
 
 ![Capture réelle du tableau de bord de jour](deliverables/dashboard-1.5.1-800x480.png)
 
-![Radio Internet 1.6.1](deliverables/radio-1.6.1-800x480.png)
+![Radio Internet 1.8.0](deliverables/radio-1.8.0-800x480.png)
+
+![Catalogue Radio 1.8.0 — capture réelle](deliverables/radio-grid-1.8.0-800x480.png)
 
 ![Téléphone 1.7.0 — contacts synthétiques sur émulateur](deliverables/phone-contacts-1.7.0-800x480.png)
 

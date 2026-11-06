@@ -11,9 +11,11 @@ import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.ListView
+import android.widget.AbsListView
+import android.widget.GridView
 import java.util.Locale
 
-internal class RadioStationList(context: Context, private val artwork: RadioArtwork, expanded: Boolean,
+internal class RadioStationList(context: Context, private val artwork: RadioArtwork, private val expanded: Boolean,
     select: (RadioStation) -> Unit, favorite: (RadioStation) -> Unit, mode: (Boolean) -> Unit, refresh: () -> Unit) : LinearLayout(context) {
     private val ui = DriveViews(context)
     private var all = emptyList<RadioStation>()
@@ -25,11 +27,12 @@ internal class RadioStationList(context: Context, private val artwork: RadioArtw
     private var statusText = ""
     private var emptyMessage = "Aucune radio disponible"
     private lateinit var filters: LinearLayout
-    private lateinit var listView: ListView
+    private lateinit var listView: AbsListView
     private val allButton = ui.action("Maroc") { mode(false) }.apply { contentDescription = "Afficher les radios du Maroc" }
     private val favoritesButton = ui.action("☆ Favoris") { mode(true) }.apply { contentDescription = "Afficher les radios favorites" }
     private val refreshButton = ui.action("↻", run = refresh).apply { contentDescription = "Actualiser les radios" }
     private val empty = ui.label("Chargement des radios…", 13, Palette.muted).apply { gravity = Gravity.CENTER; maxLines = 3 }
+    private val directoryStatus = ui.label("", 12, Palette.amber).apply { visibility = View.GONE }
     private var rows = emptyList<RadioStation>()
     private val adapter = object : BaseAdapter() {
         override fun getCount() = rows.size
@@ -54,27 +57,52 @@ internal class RadioStationList(context: Context, private val artwork: RadioArtw
             addView(favoritesButton, LayoutParams(0, ui.dp(48), 1f).apply { marginEnd = ui.dp(3) })
             addView(refreshButton, LayoutParams(ui.dp(48), ui.dp(48)))
         }
-        addView(filters)
-        if (expanded) addView(EditText(context).apply {
+        val search = if (expanded) EditText(context).apply {
             hint = "Rechercher une radio"; contentDescription = "Rechercher une radio"
             setSingleLine(true); setTextColor(Palette.text); setHintTextColor(Palette.muted)
+            imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH or android.view.inputmethod.EditorInfo.IME_FLAG_NO_EXTRACT_UI
+            setOnEditorActionListener { _, action, _ ->
+                if (action == android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH) {
+                    windowInsetsController?.hide(android.view.WindowInsets.Type.ime()); true
+                } else false
+            }
             addTextChangedListener(object : TextWatcher {
                 override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
                 override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) { query = s.toString(); filter(true) }
                 override fun afterTextChanged(s: Editable?) = Unit
             })
-        }, LayoutParams(-1, ui.dp(48)))
+        } else null
+        if (search != null && resources.configuration.screenWidthDp >= 600) {
+            addView(ui.line().apply {
+                addView(search, LayoutParams(0, ui.dp(48), 1f))
+                addView(filters, LayoutParams(ui.dp(280), ui.dp(48)))
+            })
+        } else {
+            addView(filters.apply { visibility = if (expanded) View.VISIBLE else View.GONE })
+            if (search != null) addView(search, LayoutParams(-1, ui.dp(48)))
+        }
+        if (expanded) addView(directoryStatus, LayoutParams(-1, ui.dp(22)))
         addView(FrameLayout(context).apply {
-            listView = ListView(context).apply {
-                this.adapter = this@RadioStationList.adapter
-                emptyView = empty; divider = null
+            listView = if (expanded) GridView(context).apply {
+                numColumns = if (resources.configuration.screenWidthDp >= 600) 2 else 1
+                horizontalSpacing = ui.dp(8); verticalSpacing = ui.dp(6)
+                stretchMode = GridView.STRETCH_COLUMN_WIDTH
+            } else ListView(context).apply { divider = null }
+            listView.apply {
+                adapter = this@RadioStationList.adapter
+                emptyView = empty
                 contentDescription = "Liste des radios avec logos"
+                isFastScrollEnabled = expanded
+                clipToPadding = false
+                setPadding(0, ui.dp(3), 0, ui.dp(3))
             }
             addView(listView, FrameLayout.LayoutParams(-1, -1))
             addView(empty, FrameLayout.LayoutParams(-1, -1))
         }, LayoutParams(-1, 0, 1f))
     }
     fun render(stations: List<RadioStation>, favorites: Boolean, selectedUrl: String?, playingUrl: String?, playbackStatus: String, loading: Boolean, error: Boolean) {
+        directoryStatus.visibility = if (loading || error) View.VISIBLE else View.GONE
+        directoryStatus.text = if (loading) "Chargement du catalogue du Maroc…" else "Annuaire inaccessible · stations disponibles conservées"
         val selectionChanged = selected != selectedUrl
         val queueChanged = RadioQueue.active(all, favoritesOnly).map { it.url } != RadioQueue.active(stations, favorites).map { it.url }
         val changed = all != stations || favoritesOnly != favorites || selectionChanged || playing != playingUrl || statusText != playbackStatus || artworkGeneration != artwork.generation
@@ -100,7 +128,6 @@ internal class RadioStationList(context: Context, private val artwork: RadioArtw
             if (position >= 0) listView.post { listView.setSelection(position) }
         }
     }
-    fun setCompact(compact: Boolean) { filters.visibility = if (compact) View.GONE else View.VISIBLE }
     private fun filter(resetScroll: Boolean = false) {
         val text = query.trim().lowercase(Locale.ROOT)
         rows = RadioQueue.active(all, favoritesOnly).filter { text.isEmpty() || it.name.lowercase(Locale.ROOT).contains(text) }
@@ -110,19 +137,20 @@ internal class RadioStationList(context: Context, private val artwork: RadioArtw
     }
     private inner class StationRow(context: Context) : LinearLayout(context) {
         val logo = RadioLogoView(context)
-        val name = ui.label("", 15, bold = true).apply { maxLines = 2 }
+        val name = ui.label("", if (expanded) 17 else 16, bold = true).apply { maxLines = 2 }
         val state = ui.label("", 11, Palette.muted)
         val star = ui.label("☆", 23, Palette.amber).apply { gravity = Gravity.CENTER }
         init {
-            orientation = HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; minimumHeight = ui.dp(58)
-            setPadding(ui.dp(4), ui.dp(3), 0, ui.dp(3))
+            orientation = HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; minimumHeight = ui.dp(if (expanded) 76 else 64)
+            setPadding(ui.dp(6), ui.dp(5), 0, ui.dp(5))
+            layoutParams = AbsListView.LayoutParams(-1, -2)
             addView(logo, LayoutParams(ui.dp(44), ui.dp(44)).apply { marginEnd = ui.dp(8) })
             addView(ui.line(true).apply { addView(name); addView(state) }, LayoutParams(0, -2, 1f))
             addView(star, LayoutParams(ui.dp(48), ui.dp(48)))
         }
         fun bind(station: RadioStation, selected: Boolean, playing: Boolean) {
             logo.bind(station, artwork); name.text = station.name
-            state.text = if (playing) "En lecture" else if (selected) statusText else "Radio Internet"
+            state.text = if (playing) "En lecture" else if (selected) statusText else if (station.favorite) "Favori" else "Écouter"
             state.setTextColor(if (playing) Palette.green else Palette.muted)
             star.text = if (station.favorite) "★" else "☆"
         }

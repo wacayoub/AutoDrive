@@ -1,6 +1,25 @@
 # AutoDrive validation
 
 
+## Version 1.8.0 — radio controls/catalogue and retained web documents
+
+Validated 6 November 2026, `com.autodrive.launcher`, version code 23. [Radio audit](RADIO-AUDIT.md), [session audit](WEB-SESSIONS.md).
+
+- **19 JVM tests passed**, debug and test APKs assembled, Android lint completed with **0 errors, 46 warnings and 1 hint**.
+- **23 instrumented tests passed in the final combined run** on AOSP Android 13 / 800 × 480 / density 160: the previous 19 checks plus two radio and two retained-panel checks.
+- A real 200-entry saved-library fixture no longer prevents selecting a new station. Actual injected touches exercised next, previous, play/pause, grid row selection and favorite filtering. The library remains at 200 entries while the last selected station persists separately. Single-favorite mode correctly disables skipping when it has only one entry.
+- Public Android media-key dispatch selected the previous station through the active platform MediaSession. Controller pause/play callbacks, actions, state and metadata were verified against actual player events. This does **not** establish that the Toyota/Incarlink hardware keys are forwarded to Android as media keys.
+- Real HTTPS streams for **HIT RADIO, Radio Mars and Radio Aswat** reached ExoPlayer playback independently of directory data. The first Aswat attempt failed: its published alias returns HTTP 302 to an HTTP address. A separately verified canonical HTTPS endpoint is now used only for that known alias; it played in the final run. Arbitrary HTTP downgrades remain disabled.
+- Synthetic `.example` documents verified the **same WebView instances and sessionStorage** after Settings/Back, Radio/YouTube tab changes and an actual external Android Settings Activity round trip. A synthetic silent HTML audio fixture was playing before leaving, paused while hidden and remained paused on return. No Google credentials or accounts were used.
+- Redirect fixtures verify that ordinary first-party Google website sign-in stays in its current WebView profile, while OAuth authorization routes show an explicit browser alternative. The browser button opens a separately identified browser profile; no authentication state is copied back. No real Google sign-in was attempted.
+- An earlier combined run exposed two existing Maps fixture/startup timing failures. Those tests now isolate the actual BrowserPanel map client/theme on an initial blank document before installing their local controls/contrast fixtures, avoiding races against unrelated live Google startup redirects. Their account-control, branding, web-choice and pixel-contrast assertions remain. The final combined run passed.
+
+- Actual UI checks with the directory cache removed and emulator Wi-Fi/data disabled confirmed that next changes the selected real station and previous returns to it using the bundled start list. The cache and network settings were restored. This verifies selection while offline, **not audio without Internet**.
+- Real keyboard input `hit` filtered the expanded grid. Actual captures show the current 48-entry cached directory and available broadcaster logos: [dashboard](../deliverables/radio-1.8.0-800x480.png), [grid](../deliverables/radio-grid-1.8.0-800x480.png), [density 213](../deliverables/radio-grid-1.8.0-density213.png). At density 213 the transport/filter targets are fully visible with at least 63 physical pixels of height, corresponding to 48 dp. An initial UI hierarchy tool exited 137 during the density transition; a bounded retry after the new window settled completed the check. Density was restored afterward.
+
+Unverified: the owner's real account persistence and whether Google accepts that device's WebView; live Google service revocation/expiration; all directory stations/logos; the Incarlink network and audio output; steering-wheel/head-unit key forwarding. No owner device was installed or changed, and no cookie/credential export, root, firmware modification or hidden API was used.
+
+
 ## Version 1.7.0 — Incarlink phone audit and contact access
 
 Validated 6 November 2026, `com.autodrive.launcher`, version code 22. [Phone audit, manufacturer evidence and limitations](PHONE-INCARLINK-AUDIT.md).

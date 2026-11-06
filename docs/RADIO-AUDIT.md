@@ -1,3 +1,31 @@
+# Audit Radio — suivi 1.8.0
+
+Le propriétaire confirme que **précédente / suivante** restent inopérantes sur son Incarlink et que la liste est difficile à utiliser. Les causes exactes sur son matériel ne sont pas encore reproduites ; les constats suivants viennent du code et des essais sur émulateur.
+
+| Constat 1.7.0 | Correction 1.8.0 |
+| --- | --- |
+| Chaque écoute ajoute la station à une bibliothèque limitée à 200 entrées. Une bibliothèque pleine empêche `playRadio` de changer vers une nouvelle station. | La dernière station est mémorisée séparément. Écouter ou changer de station ne remplit plus la bibliothèque et ne dépend plus de sa capacité. Les favoris/entrées manuelles existants sont conservés. Un refus d’ajout aux favoris produit désormais un message. |
+| Sans catalogue/cache utilisable, la station initiale unique laisse précédente/suivante désactivées. | Trois stations de départ (HIT RADIO, Radio Mars, Radio Aswat) sont disponibles sans téléchargement d’annuaire. Le catalogue complet les remplace après chargement. Hors connexion, ces métadonnées ne constituent pas une lecture audio : une erreur réseau reste affichée. |
+| Aucun MediaSession Android ne reçoit les commandes système. | Une session publique accompagne le lecteur actif et expose lecture, pause, arrêt, précédente et suivante, avec les vraies métadonnées/états du lecteur. Elle est libérée à sa fermeture. Cela ne prouve pas que les boutons Toyota/Incarlink sont transmis comme touches média Android. |
+| Le mode compact masque le nom et l’état de la station. | Ces informations restent visibles. L’étoile filtre les favoris et la loupe ouvre le catalogue. |
+| La grande liste laisse peu de stations visibles. | Grille à deux colonnes en paysage large, logos disponibles, noms sur deux lignes, étoile tactile séparée, recherche et filtres réunis sur une ligne. Le bandeau de lecture et ses commandes partagent une ligne. Sur un écran étroit, les commandes restent disposées en plusieurs lignes. |
+
+## Sources des stations de départ
+
+- HIT RADIO : [site officiel](https://hitradio.ma/?lang=fr), flux `https://hitradio-maroc.ice.infomaniak.ch/hitradio-maroc-128.mp3`.
+- Radio Mars : [lecteur officiel](https://radiomars.ma/radio-live/), dont la balise audio utilise `https://radiomars.ice.infomaniak.ch/radiomars-128.mp3`.
+- Radio Aswat : [page du direct officielle](https://radioaswat.ma/%D8%A7%D9%84%D9%85%D8%A8%D8%A7%D8%B4%D8%B1/), flux `https://broadcast.ice.infomaniak.ch/aswat-high.mp3`.
+
+Le lien Aswat publié renvoie une redirection 302 vers HTTP. Son endpoint canonique `https://aswat.ice.infomaniak.ch/aswat-high.mp3` a été vérifié séparément (TLS, HTTP 200, `audio/mpeg`). Le lecteur utilise explicitement cet endpoint pour cet alias précis ; les redirections générales vers HTTP ne sont pas autorisées.
+
+URLs publiques observées le 6 novembre 2026. Les flux et logos sont chargés depuis leurs serveurs ; aucun audio/logo n’est réhébergé. Leurs adresses et disponibilités peuvent changer. Les logos absents ou refusés utilisent des initiales. Le catalogue Radio Browser reste une liste communautaire non exhaustive ; les trois entrées de départ ne représentent pas toutes les stations marocaines.
+
+Les boutons parcourent le catalogue actif, ou les favoris si ce filtre est choisi. Avec zéro ou un favori, précédente/suivante restent logiquement désactivées dans ce filtre. L’étoile de l’accueil permet de revenir à la liste Maroc. Une station refusée ou un réseau coupé ne sont pas présentés comme une lecture réussie.
+
+Résultats mesurés et limites : [TEST-RESULTS.md](TEST-RESULTS.md). Aucun essai sur le boîtier du propriétaire ni accès au tuner FM Toyota n’est revendiqué. [API publique MediaSession.Callback](https://developer.android.com/reference/android/media/session/MediaSession.Callback).
+
+---
+
 # Audit Radio — 1.6.0 vers 1.6.1
 
 Audit demandé le 6 novembre 2026 après le retour du propriétaire : liste sans icônes et boutons de changement de station inopérants. Les constats ci-dessous viennent du code 1.6.0 ; ils ne constituent pas un diagnostic du réseau du boîtier.

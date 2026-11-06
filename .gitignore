@@ -43,3 +43,7 @@ __pycache__/
 *.iml
 *.jks
 *.keystore
+
+!/deliverables/radio-1.8.0-800x480.png
+!/deliverables/radio-grid-1.8.0-800x480.png
+!/deliverables/radio-grid-1.8.0-density213.png
