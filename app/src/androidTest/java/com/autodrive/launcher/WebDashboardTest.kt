@@ -120,6 +120,15 @@ class WebDashboardTest {
             instrumentation.runOnMainSync { video.evaluateJavascript(script) { result = it; done.countDown() } }
             check(done.await(4, java.util.concurrent.TimeUnit.SECONDS)); return result
         }
+        val compact = org.json.JSONObject(org.json.JSONTokener(evaluate("""
+            JSON.stringify((()=>{const b=document.querySelector('ytm-pivot-bar-renderer');
+              const icon=b&&[...b.querySelectorAll('c3-icon')].find(e=>e.getBoundingClientRect().width>0);
+              const title=b&&b.querySelector('.pivot-bar-item-title');
+              return {height:b?.getBoundingClientRect().height||0,icon:icon?.getBoundingClientRect().width||0,font:title?parseFloat(getComputedStyle(title).fontSize):0};})())
+        """.trimIndent())).nextValue() as String)
+        assertTrue("Actual compact provider bar: $compact", compact.getDouble("height") in 48.0..49.5)
+        assertTrue("Actual compact provider icon: $compact", compact.getDouble("icon") in 17.97..18.03)
+        assertTrue("Actual compact provider label: $compact", compact.getDouble("font") in 9.97..10.03)
         val observations = org.json.JSONArray()
         for ((selector, paths) in listOf(
             ".pivot-you" to listOf("/feed/you", "/feed/library"),
