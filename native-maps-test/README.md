@@ -2,7 +2,26 @@
 
 Cette application de diagnostic (`com.autodrive.nativeprobe`, Android 13 minimum) essaie l’intégration d’une activité Google Maps avec les API publiques AndroidX WindowManager 1.5.1. Elle ne remplace pas AutoDrive, ne devient pas lanceur HOME et ne charge aucun site web. Aucun accès root, permission privilégiée, API cachée, capture d’écran continue ou injection tactile n’est utilisé.
 
-[Télécharger l’APK expérimental 0.2](https://github.com/wacayoub/AutoDrive/releases/download/native-maps-test-0.2/AutoDrive-Native-Maps-Test-0.2.apk). Cette préversion est séparée de la version stable et ne sera pas proposée comme mise à jour d’AutoDrive. Elle met à jour le diagnostic 0.1 avec le même identifiant et certificat.
+[Télécharger l’APK expérimental 0.3](https://github.com/wacayoub/AutoDrive/releases/download/native-maps-test-0.3/AutoDrive-Native-Maps-Test-0.3.apk). Cette préversion est séparée de la version stable et ne sera pas proposée comme mise à jour d’AutoDrive. Elle met à jour les diagnostics 0.1 / 0.2 avec le même identifiant et certificat.
+
+## Version 0.3 : contrôler la piste firmware / lanceurs
+
+Le contrôle AndroidX précédent ne couvre pas l’hébergement privilégié d’applications par le constructeur. La 0.3 ajoute `oemHostingAudit` au rapport (schéma 3), sans changer les conditions du bouton d’essai Maps. Elle utilise uniquement les API publiques PackageManager, sur un thread de travail :
+
+- certificat SHA-256 courant de la plateforme et comparaison avec le certificat public observé dans AB Launcher 1.5.5 et DUO 1.7.8 ;
+- composant HOME résolu et activités HOME visibles (un composant résolu peut être un sélecteur plutôt qu’un lanceur par défaut) ;
+- versions et certificats des paquets ciblés, UID, présence sur l’image système et correspondance avec la signature plateforme ;
+- permissions pertinentes demandées, indicateurs de permission accordée et permissions effectivement accordées selon Android. Une permission peut être effective sans être explicitement demandée, notamment pour certains UID partagés.
+
+Une application non visible est indiquée `NOT_VISIBLE_OR_NOT_INSTALLED` : le diagnostic ne conclut pas automatiquement qu’elle est absente. Aucun inventaire général des applications, position, compte, numéro de série ou clé privée n’est collecté. Les données restent dans le fichier privé de l’application ; le bouton Copier permet au propriétaire de transmettre le rapport. Les seules nouvelles déclarations du manifeste sont des requêtes de visibilité ciblées. Aucune permission système, connexion Internet, commande shell, interface privée constructeur ou modification de réglage n’est ajoutée.
+
+**Un certificat identique à la référence n’est pas une validation d’hébergement.** Sur l’émulateur AOSP Android 13 testé, ce certificat correspond effectivement à la plateforme, tandis que le diagnostic et AutoDrive gardent leurs permissions privilégiées refusées. Avec Maps installé, `eligible` reste faux et `nativeHostingVerified` reste faux. Ni un certificat public, ni un résultat positif de comparaison ne fournissent une clé de signature ou une autorisation constructeur. Le firmware exact de l’Incarlink et une interface d’hébergement prise en charge restent à vérifier.
+
+Résultats locaux 0.3 : compilation debug et tests instrumentés compilés ; lint **0 erreur, 29 avertissements, 1 hint** ; **1 test instrumenté réussi** sur Android 13 ; mise à jour réelle 0.2 → 0.3 réussie ; Maps absent puis Maps 11.129.0103 présent ; actualisation et copie horodatée vérifiées ; écran 800 × 480 vérifié visuellement. AutoDrive est resté en version code 18. Un dialogue de plantage du service système AOSP de vérification des liens a d’abord interrompu l’automatisation UI ; après fermeture de ce dialogue, les contrôles UI ont passé. Ce n’était pas un plantage du diagnostic. Aucun essai sur le téléphone ou le boîtier du propriétaire n’a été effectué.
+
+Preuves réelles : [rapport Maps absent](evidence/firmware-emulator-api33-v03-missing.json), [rapport Maps présent](evidence/firmware-emulator-api33-v03-maps.json), [capture 800 × 480](evidence/firmware-800x480-v03.png). L’inspection `aapt` de l’APK final ne relève que la permission interne AndroidX `DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION`, sans permission système, localisation ou réseau. Signature APK vérifiée : même certificat que 0.2 et AutoDrive. SHA-256 APK 0.3 : `c5859dee704eb0ba1603b2d18ca6341d06e8c9e567662ec1ee78c1df19ffc410`.
+
+Ce diagnostic ne rend pas Maps intégré fonctionnel. [Audit des pistes AB / DUO et limites](../docs/NAVIGATION-AUDIT.md#additional-native-hosting-research--6-november-2026).
 
 ## Version 0.2 : identifier l’appareil et dater le contrôle
 
@@ -40,6 +59,9 @@ Le paramètre de test `emulatorAttempt` n’est accepté que lorsque `Build.HARD
 
 ```sh
 ./gradlew :native-maps-test:assembleDebug :native-maps-test:lintDebug
+./gradlew :native-maps-test:assembleDebugAndroidTest
+# Sur un émulateur de test explicitement sélectionné :
+ANDROID_SERIAL=emulator-5568 ./gradlew :native-maps-test:connectedDebugAndroidTest
 ```
 
 Compilation et lint réussis localement : **0.2 : 0 erreur, 20 avertissements, 1 hint** ; 0.1 : 0 erreur, 18 avertissements, 1 hint. Vérifications de l’essai natif 0.1 : Maps absent ; préconditions bloquées avec Maps installé ; véritable tentative native sans intégration. Vérifications 0.2 : mise à jour, identification de l’appareil, actualisation et copie horodatée du rapport. Les 14 tests JVM de l’application principale avaient également passé le contrôle 0.1. Les installations temporaires ont été retirées de l’émulateur après les essais.

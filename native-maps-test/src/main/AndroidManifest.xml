@@ -1,5 +1,16 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <queries><package android:name="com.google.android.apps.maps" /></queries>
+    <queries>
+        <package android:name="com.google.android.apps.maps" />
+        <package android:name="android" />
+        <package android:name="com.autodrive.launcher" />
+        <package android:name="com.android.launcher3" />
+        <package android:name="com.aibox.launcher" />
+        <package android:name="kr.duohome.launcher.aibox" />
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.HOME" />
+        </intent>
+    </queries>
     <application android:label="AutoDrive Test Maps" android:allowBackup="false" android:icon="@drawable/ic_probe"
         android:theme="@android:style/Theme.Material.NoActionBar">
         <property android:name="android.window.PROPERTY_ACTIVITY_EMBEDDING_SPLITS_ENABLED" android:value="true" />

@@ -2,6 +2,50 @@
 
 Reviewed 4 November 2026 for AutoDrive on an Incarlink Max X15-SLM927-72 Android 13 box that runs the launcher locally and presents its output on a Toyota in-dash display.
 
+## Additional native-hosting research — 6 November 2026
+
+The earlier negative result applies to **public AndroidX cross-application activity embedding**. It does not exclude OEM/system-privileged task or display hosting. The phone report is not a compatibility report for the Incarlink. No physical Incarlink test, third-party launcher installation, firmware change or privilege grant was performed for this research.
+
+### Relevant launcher implementations
+
+| Project | Publisher's documented behavior | Assessment for AutoDrive |
+| --- | --- | --- |
+| [AB Launcher](https://marrusoft.com/) | Runs Android apps in configurable panels; compatibility depends on device firmware. Its [manual](https://marrusoft.com/en/manual/kr) describes choosing panel apps and adjusting their density. | Relevant evidence for a native app-hosting approach on some AI boxes. Exact X15-SLM927-72 compatibility and its private hosting implementation are unverified. This is a separate launcher, with no documented hosting service for AutoDrive found in the reviewed material. |
+| [DUO Launcher AI Box](https://github.com/byezzun/duo-launcher-updates) | Runs apps in its panes when its signature, system privileges and firmware permit. The publisher explicitly says installation alone does not grant those privileges; model coverage is incomplete. | Relevant, with an explicit privilege dependency. Source is maintained separately and is not supplied by the public update repository. Its PC-rendered screenshots are not hardware verification for this box. |
+| [Carlinkit Split Deck](https://github.com/stevelea/carlinkit-split-deck) | Uses the stock launcher's private split-screen property/broadcast, or freeform windows requiring an ADB permission grant. Its documented test device is an Ultra/SM6350 Android 15 box. | Separate system windows do not satisfy the requested single AutoDrive panel. Private firmware interfaces and its tested firmware are not a portable supported integration for this Android 13 device. No such commands were run. |
+| [CarLab](https://car-lab.app/) | Advertises an integrated Google Navigation SDK map with search, pan, zoom and guidance. | A distinct SDK implementation, not embedding the installed Google Maps application. Its product page does not establish AutoDrive's Google agreement or eligibility. |
+
+### APK metadata actually inspected
+
+Downloaded the standard AB Launcher 1.5.5 APK from its publisher's website and DUO 1.7.8 from its publisher's GitHub release. Inspection used Android build-tools 35.0.0 `aapt` and `apksigner`; neither APK was installed or executed. Proprietary code was not decompiled. Downloaded APKs and raw manifests remain in ignored local research storage and are not redistributed.
+
+| Observed field | AB Launcher 1.5.5 | DUO 1.7.8 |
+| --- | --- | --- |
+| Package / version code | `com.aibox.launcher` / 32 | `kr.duohome.launcher.aibox` / 65 |
+| Shared UID requested | `android.uid.system` | `android.uid.system` |
+| Relevant requested permissions | `ADD_TRUSTED_DISPLAY`, `INJECT_EVENTS`, `MANAGE_ACTIVITY_TASKS`, `INTERNAL_SYSTEM_WINDOW` | `ADD_TRUSTED_DISPLAY`, `INJECT_EVENTS`, `INTERNAL_SYSTEM_WINDOW` |
+| APK SHA-256 | `7b6539a7caf2b893e901ed6b1d87b19613e14e308856cae8f18c35695b24024f` | `a86c9a119a31983e0226bb5f88365d923d836d13fc89e0b6f5065c3325e088a0` |
+
+Both APK signatures verified and both certificate SHA-256 fingerprints were `c8a2e9bccf597c2fb6dc66bee293fc13f2fc47ec77bc6b2b0d52c11f51192ab8`. This is an observed certificate match **between those two APKs**, not a verified match to the Incarlink platform certificate, proof of manufacturer endorsement, or a grant of permissions. A certificate fingerprint is public identification data; it does not provide the signing key.
+
+Follow-up on the local AOSP Android 13 emulator also found that exact certificate on its platform package. It must not be treated as a unique Incarlink identity. The new [read-only diagnostic 0.3](../native-maps-test/README.md) can compare the actual device's certificate and read targeted launcher permission metadata. On the emulator it reported a reference match while both AutoDrive and the diagnostic remained unprivileged and Maps embedding stayed blocked. This is a metadata check, not a privileged hosting test.
+
+The manifests are consistent with a privileged app-hosting architecture. They do not prove the precise internal rendering mechanism, that requested permissions are granted, that navigation remains functional in a pane, or that this firmware accepts either app. Those require actual device verification.
+
+### Why the earlier probe is insufficient for this path
+
+Public [cross-app activity embedding](https://developer.android.com/develop/ui/views/layout/activity-embedding#cross-application-embedding) relies on target opt-in or accepted host certificates. A system-controlled display/task host is a different integration class. AOSP documents [display access restrictions](https://source.android.com/docs/core/display/multi_display/recommended-practices), [signature-protected permissions](https://developer.android.com/guide/topics/manifest/permission-element) and [platform-signed shared UIDs](https://source.android.com/docs/core/permissions/platform-signed-shared-uid-allowlist). The additional shared-UID allowlist requirement on that last page starts at Android 15; it must not be assumed to apply unchanged to this Android 13 box.
+
+Adding `android.uid.system` or protected permissions to AutoDrive's manifest cannot give its existing signing identity system authority. A supported AutoDrive implementation would need an OEM-exposed hosting interface, or manufacturer-authorized signing/integration with the necessary privileges. Reusing another application's certificate fingerprint cannot sign AutoDrive. No private keys, re-signed Google applications, hidden-API bypasses, root installation or system-partition changes are proposed.
+
+### Decision and next evidence
+
+The strongest new lead is **firmware-supported privileged hosting**, as used by the two inspected AI-box launcher APKs. The next useful hardware check is read-only identification of the box's platform certificate, stock launcher's actual granted capabilities, and any manufacturer-documented hosting service. A successful third-party launcher trial, if separately authorized, would establish that launcher's compatibility; it would not automatically expose its host to AutoDrive. No published supported AutoDrive-facing service was found in the reviewed pages.
+
+A Google Navigation SDK implementation remains conditional on eligibility and the applicable agreement: the current [Navigation SDK policy](https://developers.google.com/maps/documentation/navigation/android-sdk/policies) restricts it to commercial applications, and standard [Maps Platform terms](https://cloud.google.com/maps-platform/terms) §3.2.3(f) restrict embedded vehicle systems. Another launcher's marketing does not resolve those conditions for this private deployment.
+
+No production code or version was changed. Stable 1.5.1 still uses the actual Maps and YouTube websites. Native in-panel Google Maps on the specified Incarlink remains unimplemented and untested; this research identifies an additional route to investigate, not a working fix.
+
 ## Current integration: 1.5.1 inline Maps website restored
 
 ### Separate native embedding experiment

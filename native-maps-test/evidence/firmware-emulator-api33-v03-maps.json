@@ -1,0 +1,266 @@
+{
+  "reportSchema": 3,
+  "probeVersion": "0.3-test",
+  "generatedAtUtc": "2026-11-06T08:43:25.446121Z",
+  "deviceManufacturer": "unknown",
+  "deviceModel": "Android SDK built for x86_64",
+  "deviceBrand": "Android",
+  "buildDisplay": "sdk_phone64_x86_64-userdebug 13 TE1A.220922.034 10940250 test-keys",
+  "androidRelease": "13",
+  "androidApi": 33,
+  "hardware": "ranchu",
+  "splitSupport": "SplitSupportStatus: AVAILABLE",
+  "phase": "CHECKED",
+  "reportedSplitCount": 0,
+  "mapsComponent": "com.google.android.apps.maps/com.google.android.maps.MapsActivity",
+  "mapsVersion": "11.129.0103",
+  "mapsAllowsUntrustedEmbedding": false,
+  "hostCertificateAccepted": false,
+  "knownHostCertificateCount": 0,
+  "mapsLaunchMode": 2,
+  "projectionRequiredPermission": "com.google.android.projection.gearhead.permission.START_PROJECTED_ACTIVITY",
+  "projectionPermissionGranted": false,
+  "eligible": false,
+  "oemHostingAudit": {
+    "phase": "COMPLETE",
+    "checkedAtUtc": "2026-11-06T08:43:25.808761Z",
+    "method": "PUBLIC_PACKAGE_METADATA_ONLY",
+    "referenceAiBoxLauncherCertificateSha256": "c8a2e9bccf597c2fb6dc66bee293fc13f2fc47ec77bc6b2b0d52c11f51192ab8",
+    "platformCertificateMatchesReference": true,
+    "assessment": "REFERENCE_CERT_MATCH_VENDOR_INTERFACE_STILL_REQUIRED",
+    "resolvedHomeComponent": "com.android.launcher3/com.android.launcher3.uioverrides.QuickstepLauncher",
+    "resolvedHomeIsListedHandler": true,
+    "homeActivities": [
+      "com.android.launcher3/com.android.launcher3.uioverrides.QuickstepLauncher",
+      "com.android.settings/com.android.settings.FallbackHome",
+      "com.autodrive.launcher/com.autodrive.launcher.WebDashboardActivity"
+    ],
+    "packages": [
+      {
+        "package": "android",
+        "status": "READ",
+        "versionName": "13",
+        "uid": 1000,
+        "systemImageApp": true,
+        "currentSignerSha256": [
+          "c8a2e9bccf597c2fb6dc66bee293fc13f2fc47ec77bc6b2b0d52c11f51192ab8"
+        ],
+        "platformSignatureMatch": true,
+        "hostingPermissions": [
+          {
+            "name": "android.permission.ADD_TRUSTED_DISPLAY",
+            "requested": false,
+            "requestedPermissionFlagGranted": false,
+            "effectiveGranted": false
+          },
+          {
+            "name": "android.permission.INJECT_EVENTS",
+            "requested": false,
+            "requestedPermissionFlagGranted": false,
+            "effectiveGranted": false
+          },
+          {
+            "name": "android.permission.MANAGE_ACTIVITY_TASKS",
+            "requested": false,
+            "requestedPermissionFlagGranted": false,
+            "effectiveGranted": false
+          },
+          {
+            "name": "android.permission.ACTIVITY_EMBEDDING",
+            "requested": false,
+            "requestedPermissionFlagGranted": false,
+            "effectiveGranted": false
+          },
+          {
+            "name": "android.permission.INTERNAL_SYSTEM_WINDOW",
+            "requested": false,
+            "requestedPermissionFlagGranted": false,
+            "effectiveGranted": false
+          }
+        ]
+      },
+      {
+        "package": "com.autodrive.nativeprobe",
+        "status": "READ",
+        "versionName": "0.3-test",
+        "uid": 10127,
+        "systemImageApp": false,
+        "currentSignerSha256": [
+          "1ef249ecb8d4af1bbd730a15aea2248acf5d578dffde2d637fd01b7e5f637efb"
+        ],
+        "platformSignatureMatch": false,
+        "hostingPermissions": [
+          {
+            "name": "android.permission.ADD_TRUSTED_DISPLAY",
+            "requested": false,
+            "requestedPermissionFlagGranted": false,
+            "effectiveGranted": false
+          },
+          {
+            "name": "android.permission.INJECT_EVENTS",
+            "requested": false,
+            "requestedPermissionFlagGranted": false,
+            "effectiveGranted": false
+          },
+          {
+            "name": "android.permission.MANAGE_ACTIVITY_TASKS",
+            "requested": false,
+            "requestedPermissionFlagGranted": false,
+            "effectiveGranted": false
+          },
+          {
+            "name": "android.permission.ACTIVITY_EMBEDDING",
+            "requested": false,
+            "requestedPermissionFlagGranted": false,
+            "effectiveGranted": false
+          },
+          {
+            "name": "android.permission.INTERNAL_SYSTEM_WINDOW",
+            "requested": false,
+            "requestedPermissionFlagGranted": false,
+            "effectiveGranted": false
+          }
+        ]
+      },
+      {
+        "package": "com.autodrive.launcher",
+        "status": "READ",
+        "versionName": "1.5.1",
+        "uid": 10144,
+        "systemImageApp": false,
+        "currentSignerSha256": [
+          "1ef249ecb8d4af1bbd730a15aea2248acf5d578dffde2d637fd01b7e5f637efb"
+        ],
+        "platformSignatureMatch": false,
+        "hostingPermissions": [
+          {
+            "name": "android.permission.ADD_TRUSTED_DISPLAY",
+            "requested": false,
+            "requestedPermissionFlagGranted": false,
+            "effectiveGranted": false
+          },
+          {
+            "name": "android.permission.INJECT_EVENTS",
+            "requested": false,
+            "requestedPermissionFlagGranted": false,
+            "effectiveGranted": false
+          },
+          {
+            "name": "android.permission.MANAGE_ACTIVITY_TASKS",
+            "requested": false,
+            "requestedPermissionFlagGranted": false,
+            "effectiveGranted": false
+          },
+          {
+            "name": "android.permission.ACTIVITY_EMBEDDING",
+            "requested": false,
+            "requestedPermissionFlagGranted": false,
+            "effectiveGranted": false
+          },
+          {
+            "name": "android.permission.INTERNAL_SYSTEM_WINDOW",
+            "requested": false,
+            "requestedPermissionFlagGranted": false,
+            "effectiveGranted": false
+          }
+        ]
+      },
+      {
+        "package": "com.android.launcher3",
+        "status": "READ",
+        "versionName": "13",
+        "uid": 10107,
+        "systemImageApp": true,
+        "currentSignerSha256": [
+          "a40da80a59d170caa950cf15c18c454d47a39b26989d8b640ecd745ba71bf5dc"
+        ],
+        "platformSignatureMatch": false,
+        "hostingPermissions": [
+          {
+            "name": "android.permission.ADD_TRUSTED_DISPLAY",
+            "requested": false,
+            "requestedPermissionFlagGranted": false,
+            "effectiveGranted": false
+          },
+          {
+            "name": "android.permission.INJECT_EVENTS",
+            "requested": false,
+            "requestedPermissionFlagGranted": false,
+            "effectiveGranted": false
+          },
+          {
+            "name": "android.permission.MANAGE_ACTIVITY_TASKS",
+            "requested": true,
+            "requestedPermissionFlagGranted": true,
+            "effectiveGranted": true
+          },
+          {
+            "name": "android.permission.ACTIVITY_EMBEDDING",
+            "requested": false,
+            "requestedPermissionFlagGranted": false,
+            "effectiveGranted": false
+          },
+          {
+            "name": "android.permission.INTERNAL_SYSTEM_WINDOW",
+            "requested": false,
+            "requestedPermissionFlagGranted": false,
+            "effectiveGranted": false
+          }
+        ]
+      },
+      {
+        "package": "com.aibox.launcher",
+        "status": "NOT_VISIBLE_OR_NOT_INSTALLED"
+      },
+      {
+        "package": "kr.duohome.launcher.aibox",
+        "status": "NOT_VISIBLE_OR_NOT_INSTALLED"
+      },
+      {
+        "package": "com.android.settings",
+        "status": "READ",
+        "versionName": "13",
+        "uid": 1000,
+        "systemImageApp": true,
+        "currentSignerSha256": [
+          "c8a2e9bccf597c2fb6dc66bee293fc13f2fc47ec77bc6b2b0d52c11f51192ab8"
+        ],
+        "platformSignatureMatch": true,
+        "hostingPermissions": [
+          {
+            "name": "android.permission.ADD_TRUSTED_DISPLAY",
+            "requested": false,
+            "requestedPermissionFlagGranted": false,
+            "effectiveGranted": false
+          },
+          {
+            "name": "android.permission.INJECT_EVENTS",
+            "requested": false,
+            "requestedPermissionFlagGranted": false,
+            "effectiveGranted": false
+          },
+          {
+            "name": "android.permission.MANAGE_ACTIVITY_TASKS",
+            "requested": false,
+            "requestedPermissionFlagGranted": false,
+            "effectiveGranted": false
+          },
+          {
+            "name": "android.permission.ACTIVITY_EMBEDDING",
+            "requested": false,
+            "requestedPermissionFlagGranted": false,
+            "effectiveGranted": false
+          },
+          {
+            "name": "android.permission.INTERNAL_SYSTEM_WINDOW",
+            "requested": false,
+            "requestedPermissionFlagGranted": false,
+            "effectiveGranted": false
+          }
+        ]
+      }
+    ],
+    "nativeHostingVerified": false,
+    "limitations": "Certificate and permission metadata do not prove app hosting or navigation compatibility. No vendor API was invoked. Missing packages may be filtered by Android visibility. A reference certificate match grants AutoDrive no privileges."
+  }
+}

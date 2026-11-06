@@ -25,6 +25,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.File
 import java.security.MessageDigest
@@ -37,6 +38,7 @@ class NativeMapsProbeActivity : ComponentActivity() {
     private var report = JSONObject()
     private lateinit var status: TextView
     private lateinit var launch: Button
+    private lateinit var firmwareStatus: TextView
     private var target: ComponentName? = null
     private var eligible = false
 
@@ -47,7 +49,7 @@ class NativeMapsProbeActivity : ComponentActivity() {
             setPadding(20, 12, 20, 12)
             setBackgroundColor(0xFF101F32.toInt())
         }
-        body.addView(TextView(this).apply { text = "AutoDrive · Test Maps Android 0.2"; textSize = 22f })
+        body.addView(TextView(this).apply { text = "AutoDrive · Test Maps Android 0.3"; textSize = 22f })
         status = TextView(this).apply { textSize = 15f; setPadding(0, 10, 0, 10) }
         body.addView(status)
         body.addView(Button(this).apply { text = "Vérifier la compatibilité"; setOnClickListener { inspect() } })
@@ -66,6 +68,8 @@ class NativeMapsProbeActivity : ComponentActivity() {
             text = "Test séparé : ne remplace pas AutoDrive. Aucun site web ni ouverture plein écran de remplacement. Une intégration annoncée par Android doit encore être vérifiée visuellement."
             textSize = 13f
         })
+        firmwareStatus = TextView(this).apply { textSize = 15f; setPadding(0, 12, 0, 12) }
+        body.addView(firmwareStatus)
         setContentView(ScrollView(this).apply { isFillViewport = true; addView(body) })
         inspect()
         scope.launch {
@@ -84,7 +88,7 @@ class NativeMapsProbeActivity : ComponentActivity() {
     private fun inspect() {
         report = JSONObject()
         val support = SplitController.getInstance(this).splitSupportStatus
-        report.put("reportSchema", 2)
+        report.put("reportSchema", 3)
             .put("probeVersion", packageManager.getPackageInfo(packageName, PackageManager.PackageInfoFlags.of(0)).versionName)
             .put("generatedAtUtc", Instant.now().toString())
             .put("deviceManufacturer", Build.MANUFACTURER).put("deviceModel", Build.MODEL)
@@ -133,7 +137,29 @@ class NativeMapsProbeActivity : ComponentActivity() {
         }
         launch.isEnabled = eligible
         report.put("eligible", eligible)
+        report.put("oemHostingAudit", JSONObject().put("phase", "PENDING"))
+        firmwareStatus.text = "Firmware / lanceurs : vérification en cours…"
         save()
+        val inspectedReport = report
+        scope.launch {
+            val audit = withContext(Dispatchers.IO) {
+                try {
+                    FirmwareHostingInspector(packageManager, packageName).inspect()
+                } catch (error: RuntimeException) {
+                    JSONObject().put("phase", "FAILED").put("errorType", error.javaClass.simpleName)
+                }
+            }
+            // Refreshes can finish out of order. Never append an old audit to a new report.
+            if (report !== inspectedReport) return@launch
+            report.put("oemHostingAudit", audit)
+            firmwareStatus.text = "Firmware / lanceurs — lecture seule\n" + when {
+                audit.optString("phase") != "COMPLETE" -> "Métadonnées indisponibles. Aucun réglage modifié."
+                audit.isNull("platformCertificateMatchesReference") -> "Certificat système non lisible. Compatibilité indéterminée."
+                audit.optBoolean("platformCertificateMatchesReference") -> "Certificat système identique à la référence AB / DUO. L’interface constructeur et le fonctionnement restent à vérifier."
+                else -> "Certificat système différent de la référence AB / DUO. Une interface constructeur reste à rechercher."
+            } + "\nLe rapport inclut les lanceurs visibles et leurs permissions. Ce contrôle n’accorde aucun droit et ne prouve pas l’intégration de Maps."
+            save()
+        }
     }
 
     private fun attempt(emulatorOnly: Boolean) {
