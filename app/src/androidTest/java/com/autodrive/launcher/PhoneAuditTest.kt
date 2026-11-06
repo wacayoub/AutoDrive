@@ -34,6 +34,7 @@ class PhoneAuditTest {
             assertEquals(oem, links.phoneApp(listOf(other, oem)))
             assertNull(links.phoneApp(listOf(other)))
             assertNull(links.dialIntent("12345"))
+            assertNull(links.bluetoothCallIntent("12345"))
             assertFalse(links.openPhone()) // No generic/SIM fallback without a selected Bluetooth app.
             links.saveAssociation(AppLinks.PHONE, other.component)
             assertEquals(other, links.phoneApp(listOf(oem, other)))

@@ -31,6 +31,11 @@ import kotlinx.coroutines.withContext
 class WebDashboardActivity : ComponentActivity() {
     private lateinit var ui: DriveViews
     private lateinit var links: AppLinks
+    private lateinit var radioStartup: RadioStartup
+    private lateinit var bluetoothCalls: BluetoothCalls
+    private var startupRadioPending = false
+    private var startupRadioDeadline = 0L
+    private val callPermissions = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { showBluetoothCalls() }
     private lateinit var radioPhone: RadioAndPhoneStore
     private lateinit var phoneContacts: PhoneContactsViewModel
     private var phonePanel: PhonePanel? = null
@@ -97,6 +102,7 @@ class WebDashboardActivity : ComponentActivity() {
     private val tick = object : Runnable {
         override fun run() {
             updateStatus()
+            tryStartupRadio()
             if (homeVisible) maps.rememberDisplay()
             val minute = System.currentTimeMillis() / 60_000
             if (minute != guideMinute && (expandedRadioPanel != null || (homeVisible && links.tab == MediaTab.RADIO))) {
@@ -112,6 +118,13 @@ class WebDashboardActivity : ComponentActivity() {
         ui = DriveViews(this)
         links = AppLinks(this)
         radioPhone = RadioAndPhoneStore(this)
+        radioStartup = RadioStartup(this)
+        bluetoothCalls = BluetoothCalls(this)
+        if (radioStartup.reserve()) {
+            startupRadioPending = true
+            startupRadioDeadline = android.os.SystemClock.elapsedRealtime() + 30_000
+            links.tab = MediaTab.RADIO
+        }
         radioGuide = ViewModelProvider(this)[RadioGuideViewModel::class.java]
         phoneContacts = ViewModelProvider(this)[PhoneContactsViewModel::class.java]
         radio = InternetRadio(this, ::changeRadioStation, ::updateRadio)
@@ -284,6 +297,7 @@ class WebDashboardActivity : ComponentActivity() {
     override fun onStop() { WebSessionStorage.persist(); updateRendering?.cancel(); updateRendering = null; contactsRendering?.cancel(); guideRendering?.cancel(); super.onStop() }
 
     override fun onPause() {
+        startupRadioPending = false
         resumed = false
         handler.removeCallbacks(tick)
         gps.stop()
@@ -345,7 +359,25 @@ class WebDashboardActivity : ComponentActivity() {
         youtube?.pause()
     }
 
+    override fun dispatchTouchEvent(event: android.view.MotionEvent): Boolean {
+        if (event.actionMasked == android.view.MotionEvent.ACTION_DOWN) startupRadioPending = false
+        return super.dispatchTouchEvent(event)
+    }
+
+    private fun tryStartupRadio() {
+        if (!startupRadioPending || !resumed) return
+        if (!homeVisible || links.tab != MediaTab.RADIO || android.os.SystemClock.elapsedRealtime() > startupRadioDeadline) {
+            startupRadioPending = false; return
+        }
+        if (getSystemService(android.net.ConnectivityManager::class.java).activeNetwork == null) return
+        startupRadioPending = false
+        val station = selectedRadioStation() ?: return
+        if (RadioCatalogue.officialPlayer(station) != null) message("SNRT nécessite son lecteur officiel · démarrage automatique indisponible")
+        else selectRadio(station, openOfficial = false)
+    }
+
     private fun showMediaSources() {
+        startupRadioPending = false
         val selected = links.tab
         page("Media", ui.line(true).apply {
             MediaTab.entries.forEach { source ->
@@ -472,6 +504,10 @@ class WebDashboardActivity : ComponentActivity() {
             maxLines = 3
             setPadding(ui.dp(8), ui.dp(8), ui.dp(8), ui.dp(8))
         })
+        row("Radio au démarrage · ${if (radioStartup.enabled) "Activée" else "Désactivée"}") {
+            radioStartup.enabled = !radioStartup.enabled; startupRadioPending = false; showSettings()
+        }
+        row("Appels Bluetooth", ::showBluetoothCalls)
         row("Stations radio Internet", ::manageRadioStations)
         row("Catalogue des radios du Maroc") { showMoroccoRadios() }
         row("Application Radio externe") { chooseApp(MediaTab.RADIO) }
@@ -591,6 +627,7 @@ class WebDashboardActivity : ComponentActivity() {
         category = { category -> radioPhone.radioCategory = category; radioPhone.favoritesOnly = false; updateRadio() })
 
     private fun playRadio(station: RadioStation) {
+        startupRadioPending = false
         selectRadio(station, openOfficial = true)
     }
 
@@ -609,6 +646,7 @@ class WebDashboardActivity : ComponentActivity() {
     }
 
     private fun changeRadioStation(direction: Int) {
+        startupRadioPending = false
         val queue = RadioQueue.active(availableRadioStations(), radioPhone.favoritesOnly, radioPhone.radioCategory)
         RadioQueue.neighbor(queue, selectedRadioStation()?.url, direction)?.let { selectRadio(it, openOfficial = false) }
     }
@@ -735,12 +773,27 @@ class WebDashboardActivity : ComponentActivity() {
     }
 
     private fun showPhone() {
+        startupRadioPending = false
+        val direct = bluetoothCalls.current()
+        val nativeDirect = !bluetoothCalls.hasSelection() && bluetoothCalls.accounts().isEmpty() && links.bluetoothCallIntent("123") != null
         val hasPhoneApp = links.phoneApp() != null
         val receivesNumber = links.dialIntent("123") != null
         val panel = PhonePanel(this, radioPhone.phoneDraft, radioPhone.phoneFavorites, phoneAppLabel(),
             { radioPhone.phoneDraft = it }, { number ->
                 when {
                     DialNumber.normalize(number) == null -> message("Saisis un numéro valide")
+                    direct != null -> {
+                        radio.pause()
+                        bluetoothCalls.call(number, direct.handle)?.let(::message)
+                    }
+                    nativeDirect -> {
+                        if (!bluetoothCalls.authorized() || bluetoothCalls.hasSelection() || bluetoothCalls.accounts().isNotEmpty()) showBluetoothCalls()
+                        else {
+                            val intent = links.bluetoothCallIntent(number)
+                            if (intent == null) message("Commande d’appel BT Phone indisponible pour ce numéro")
+                            else { radio.pause(); if (!links.start(intent)) message("Appel non transmis à BT Phone") }
+                        }
+                    }
                     !hasPhoneApp -> choosePhoneApp(::showPhone)
                     receivesNumber -> if (!links.dial(number)) message("Composeur indisponible. Choisis une application téléphone.")
                     else -> {
@@ -760,13 +813,57 @@ class WebDashboardActivity : ComponentActivity() {
                 AlertDialog.Builder(this).setTitle("Supprimer ${favorite.name} ?").setPositiveButton("Supprimer") { _, _ ->
                     radioPhone.removePhoneFavorite(favorite.number); showPhone()
                 }.setNegativeButton("Annuler", null).show()
-            }, dialLabel = when { !hasPhoneApp -> "Choisir téléphone Bluetooth"; receivesNumber -> "Préparer l’appel"; else -> "Copier et ouvrir" },
+            }, dialLabel = when { direct != null || (nativeDirect && bluetoothCalls.authorized()) -> "Appeler via Bluetooth"; nativeDirect -> "Autoriser les appels Bluetooth"; !hasPhoneApp -> "Choisir téléphone Bluetooth"; receivesNumber -> "Préparer l’appel"; else -> "Copier et ouvrir" },
+            bluetoothStatus = when { !bluetoothCalls.authorized() -> "Appels Bluetooth · Autoriser"; direct != null -> "Appels Bluetooth · HFP disponible"; else -> "Appels Bluetooth · Vérifier" },
+            configureBluetooth = ::showBluetoothCalls,
             requestContacts = { contactsPermission.launch(Manifest.permission.READ_CONTACTS) },
             refreshContacts = { phoneContacts.start() })
         page("Téléphone", panel)
         phonePanel = panel
         panel.render(phoneContacts.state.value)
         if (resumed) phoneContacts.start()
+    }
+
+    private fun showBluetoothCalls() {
+        startupRadioPending = false
+        val accounts = bluetoothCalls.accounts()
+        val current = bluetoothCalls.current()
+        page("Appels Bluetooth", ui.line(true).apply {
+            addView(ui.label(when {
+                !bluetoothCalls.authorized() -> "Autorise l’accès aux comptes d’appel pour vérifier la liaison HFP du téléphone."
+                accounts.isEmpty() && links.bluetoothCallIntent("123") != null -> "BT Phone annonce une commande d’appel standard. Le bouton vert transmettra le numéro à l’application du boîtier."
+                accounts.isEmpty() -> "Aucun compte Bluetooth HFP compatible accessible. Connecte le mobile dans BT Phone, puis vérifie à nouveau. Certaines versions Incarlink nécessitent une interface constructeur."
+                current == null -> "Choisis le téléphone Bluetooth à utiliser."
+                else -> "Compte HFP disponible : ${current.label}. Le bouton vert du clavier transmet l’appel à ce compte."
+            }, 16, Palette.muted).apply { maxLines = 5 }, LinearLayout.LayoutParams(-1, -2))
+            if (!bluetoothCalls.authorized()) addView(ui.action("Autoriser les appels Bluetooth", "phone", iconColor = Palette.green) {
+                callPermissions.launch(BluetoothCalls.permissions)
+            }, LinearLayout.LayoutParams(-1, ui.dp(56)))
+            if (bluetoothCalls.hasSelection()) addView(ui.action("Compte HFP automatique") {
+                bluetoothCalls.clearSelection(); showBluetoothCalls()
+            }, LinearLayout.LayoutParams(-1, ui.dp(56)))
+            accounts.forEach { account ->
+                addView(ui.action(account.label, "phone", account == current, Palette.green) {
+                    bluetoothCalls.choose(account); showBluetoothCalls()
+                }, LinearLayout.LayoutParams(-1, ui.dp(56)))
+            }
+            addView(ui.action("Vérifier à nouveau") { showBluetoothCalls() }, LinearLayout.LayoutParams(-1, ui.dp(56)))
+            addView(ui.action("Copier diagnostic Bluetooth") {
+                val app = links.phoneApp()
+                val data = org.json.JSONObject().put("schema",1).put("androidApi",android.os.Build.VERSION.SDK_INT)
+                    .put("manufacturer",android.os.Build.MANUFACTURER).put("model",android.os.Build.MODEL)
+                    .put("phonePackage",app?.component?.packageName ?: org.json.JSONObject.NULL)
+                    .put("phoneVersion",app?.let { runCatching { packageManager.getPackageInfo(it.component.packageName,0).versionName }.getOrNull() } ?: org.json.JSONObject.NULL)
+                    .put("dialIntentSupported",links.dialIntent("123") != null)
+                    .put("oemCallIntentSupported",links.bluetoothCallIntent("123") != null)
+                    .put("callPermissions",bluetoothCalls.authorized())
+                    .put("hfpAccountCount",if(bluetoothCalls.authorized())accounts.size else org.json.JSONObject.NULL)
+                    .put("hfpSelected",current != null)
+                getSystemService(android.content.ClipboardManager::class.java).setPrimaryClip(android.content.ClipData.newPlainText("AutoDrive Bluetooth",data.toString(2)))
+                message("Diagnostic copié · aucun numéro ou identifiant Bluetooth inclus")
+            }, LinearLayout.LayoutParams(-1, ui.dp(56)))
+            addView(ui.action("Ouvrir BT Phone") { if (!links.openPhone()) choosePhoneApp(::showBluetoothCalls) }, LinearLayout.LayoutParams(-1, ui.dp(56)))
+        }, back = ::showPhone)
     }
 
     private fun addPhoneFavorite(number: String) {

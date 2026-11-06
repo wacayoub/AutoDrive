@@ -112,8 +112,8 @@ class RadioGuideAndroidTest {
         RadioAndPhoneStore(context).apply { lastStation = aswat; selectedUrl = aswat.url }
         launcher.edit().putString("tab", "RADIO").commit()
         cache.writeText("""[
-          {"name":"Radio Aswat","url":"${aswat.url}","logo":""},
-          {"name":"HIT RADIO","url":"https://hitradio-maroc.ice.infomaniak.ch/hitradio-maroc-128.mp3","logo":""}
+          {"name":"Radio Aswat","url":"${aswat.url}","logo":"","tags":""},
+          {"name":"HIT RADIO","url":"https://hitradio-maroc.ice.infomaniak.ch/hitradio-maroc-128.mp3","logo":"","tags":""}
         ]""")
         try { block() } finally {
             if (oldCache == null) cache.delete() else cache.writeBytes(oldCache)

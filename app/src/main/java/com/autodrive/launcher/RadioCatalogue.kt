@@ -4,7 +4,12 @@ import java.net.URI
 import java.text.Normalizer
 import java.util.Locale
 
-internal enum class RadioCategory { ALL, SNRT, QURAN }
+internal enum class RadioCategory(val title: String, val description: String) {
+    ALL("Toutes", "Afficher toutes les radios"), SNRT("SNRT", "Afficher les radios SNRT"),
+    QURAN("القرآن", "Afficher les radios du Coran"), MUSIC("Musique", "Afficher les radios de musique"),
+    NEWS("Infos / Débats", "Afficher les radios d’information"), SPORT("Sport", "Afficher les radios de sport"),
+    OTHER("Autres", "Afficher les autres radios")
+}
 
 /** Small editorial selection, sourced from SNRT Live and MP3Quran's public Arabic radio API.
  * SNRT entries are official web players, explicitly not direct MP3/HLS feeds.
@@ -42,16 +47,24 @@ internal object RadioCatalogue {
     fun matches(station: RadioStation, category: RadioCategory): Boolean = when (category) {
         RadioCategory.ALL -> true
         RadioCategory.SNRT -> entry(station)?.category == category
-        RadioCategory.QURAN -> entry(station)?.category == category || station.url == featured[3].url
+        RadioCategory.QURAN -> entry(station)?.category == category || station.url == featured[3].url || station.tags.any { searchKey(it) in setOf("quran", "coran", "القران", "قران") }
+        RadioCategory.MUSIC -> station.tags.any { searchKey(it) in musicTags } || key(station.url) == "hitradio-maroc.ice.infomaniak.ch/hitradio-maroc-128.mp3"
+        RadioCategory.NEWS -> station.tags.any { searchKey(it) in newsTags }
+        RadioCategory.SPORT -> station.tags.any { searchKey(it) in setOf("sport", "sports", "football") } || key(station.url) == "radiomars.ice.infomaniak.ch/radiomars-128.mp3"
+        RadioCategory.OTHER -> listOf(RadioCategory.SNRT, RadioCategory.QURAN, RadioCategory.MUSIC, RadioCategory.NEWS, RadioCategory.SPORT).none { matches(station, it) }
     }
+    private val musicTags = setOf("music", "musique", "pop", "rock", "hits", "top40", "chaabi", "rai", "rap", "hiphop", "dance", "jazz", "arabicmusic")
+    private val newsTags = setOf("news", "talk", "information", "infos", "actualites", "اخبار", "debats")
+    fun parseTags(raw: String): Set<String> = raw.take(2048).split(',').asSequence()
+        .map { it.trim().take(60) }.filter { it.isNotEmpty() }.take(24).toSet()
     fun subtitle(station: RadioStation): String? = when (entry(station)?.category) {
         RadioCategory.SNRT -> "SNRT · lecteur officiel"
         RadioCategory.QURAN -> "القرآن الكريم · MP3Quran"
-        else -> null
+        else -> listOf(RadioCategory.MUSIC, RadioCategory.NEWS, RadioCategory.SPORT).filter { matches(station, it) }.joinToString(" · ") { it.title }.ifEmpty { null }
     }
     fun search(station: RadioStation, query: String): Boolean {
         val extra = entry(station)?.let { "${it.aliases} ${if (it.category == RadioCategory.QURAN) "Coran Quran قرآن القراء المقرئين" else ""}" }.orEmpty()
-        return searchKey("${station.name} $extra").contains(searchKey(query))
+        return searchKey("${station.name} ${station.tags.joinToString(" ")} $extra").contains(searchKey(query))
     }
     fun searchKey(text: String): String = Normalizer.normalize(text.lowercase(Locale.ROOT), Normalizer.Form.NFD)
         .replace(Regex("\\p{M}"), "").replace('ى', 'ي').filter { it.isLetterOrDigit() && it != 'ـ' }

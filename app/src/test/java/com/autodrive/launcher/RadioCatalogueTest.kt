@@ -44,4 +44,18 @@ class RadioCatalogueTest {
         assertEquals(1, RadioQueue.active(favorite, true, RadioCategory.QURAN).size)
         assertNull(RadioCatalogue.officialPlayer(RadioStation("SNRT impostor", "https://example.invalid/radio")))
     }
+    @Test fun genreTagsSurvivePolishingAndFilterTheTransportQueue() {
+        val music = RadioStation("Ma musique", "https://radio.example/music", tags = setOf("pop", "music"))
+        val talk = RadioStation("Débats", "https://radio.example/talk", tags = setOf("news", "talk"))
+        val sport = RadioStation("Stade", "https://radio.example/sport", tags = setOf("sports"))
+        val unknown = RadioStation("Ma radio", "https://radio.example/unknown")
+        val all = listOf(music, talk, sport, unknown)
+        assertEquals(listOf(music), RadioQueue.active(all, false, RadioCategory.MUSIC))
+        assertEquals(listOf(talk), RadioQueue.active(all, false, RadioCategory.NEWS))
+        assertEquals(listOf(sport), RadioQueue.active(all, false, RadioCategory.SPORT))
+        assertEquals(listOf(unknown), RadioQueue.active(all, false, RadioCategory.OTHER))
+        assertEquals(music.tags, RadioCatalogue.polish(music).tags)
+        assertEquals(setOf("pop", "talk"), RadioCatalogue.parseTags(" pop, talk, pop, , "))
+        assertTrue(RadioCatalogue.search(music, "pop"))
+    }
 }

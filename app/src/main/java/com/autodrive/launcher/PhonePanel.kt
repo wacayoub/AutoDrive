@@ -18,7 +18,7 @@ import android.widget.ListView
 internal class PhonePanel(context: Context, initialNumber: String, private val favorites: List<PhoneFavorite>, appLabel: String,
     changed: (String) -> Unit, dial: (String) -> Unit, chooseApp: () -> Unit, openApp: () -> Unit,
     private val saveFavorite: (String) -> Unit, private val removeFavorite: (PhoneFavorite) -> Unit,
-    dialLabel: String = "Préparer l’appel", private val requestContacts: () -> Unit = {}, private val refreshContacts: () -> Unit = {}) : LinearLayout(context) {
+    dialLabel: String = "Préparer l’appel", bluetoothStatus: String? = null, configureBluetooth: () -> Unit = {}, private val requestContacts: () -> Unit = {}, private val refreshContacts: () -> Unit = {}) : LinearLayout(context) {
     private val ui = DriveViews(context)
     private var contactsState = PhoneContactsState()
     private var showingFavorites = favorites.isNotEmpty()
@@ -88,6 +88,10 @@ internal class PhonePanel(context: Context, initialNumber: String, private val f
                 }, LayoutParams(0, ui.dp(48), 1f))
                 addView(ui.action("", "settings", run = chooseApp).apply { contentDescription = "Choisir l’application téléphone" }, LayoutParams(ui.dp(48), ui.dp(48)))
             })
+            if (bluetoothStatus != null) addView(ui.action(bluetoothStatus, run = configureBluetooth).apply {
+                contentDescription = "Appels Bluetooth"
+                (getChildAt(0) as android.widget.TextView).apply { textSize = 13f; maxLines = 2 }
+            }, LayoutParams(-1, ui.dp(48)))
             addView(contactTabs, LayoutParams(-1, ui.dp(48)).apply { if (!shortLandscape) topMargin = ui.dp(4) })
             addView(search, LayoutParams(-1, ui.dp(48)))
             addView(contactBody, LayoutParams(-1, ui.dp(if (shortLandscape) 144 else 188)))

@@ -128,9 +128,9 @@ class RadioAuditTest {
         val launcher = context.getSharedPreferences("launcher", 0)
         val oldTab = launcher.getString("tab", null)
         cache.writeText("""[
-          {"name":"HIT test","url":"$hitUrl","logo":"https://hitradio.ma/small-logo-hitradio.png"},
-          {"name":"Mars test","url":"$marsUrl","logo":""},
-          {"name":"Erreur test","url":"https://example.invalid/live.mp3","logo":""}
+          {"name":"HIT test","url":"$hitUrl","logo":"https://hitradio.ma/small-logo-hitradio.png","tags":"music"},
+          {"name":"Mars test","url":"$marsUrl","logo":"","tags":""},
+          {"name":"Erreur test","url":"https://example.invalid/live.mp3","logo":"","tags":""}
         ]""")
         prefs.edit().clear().putString("stations", """[{"name":"HIT test","url":"$hitUrl"}]""")
             .putString("selected", hitUrl).commit()

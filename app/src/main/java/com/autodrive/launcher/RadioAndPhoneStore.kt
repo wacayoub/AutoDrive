@@ -15,7 +15,7 @@ internal object DialNumber {
     }
 }
 
-internal data class RadioStation(val name: String, val url: String, val favorite: Boolean = false, val logoUrl: String? = null) {
+internal data class RadioStation(val name: String, val url: String, val favorite: Boolean = false, val logoUrl: String? = null, val tags: Set<String> = emptySet()) {
     override fun toString() = name
     companion object {
         fun defaultLogo(url: String): String? = if (url == "https://hitradio-maroc.ice.infomaniak.ch/hitradio-maroc-128.mp3")
@@ -39,7 +39,7 @@ internal class RadioAndPhoneStore(context: Context) {
             val row = saved.optJSONObject(i) ?: return@mapNotNull null
             val url = RadioStation.validUrl(row.optString("url")) ?: return@mapNotNull null
             val name = row.optString("name").trim().take(60).takeIf { it.isNotEmpty() } ?: return@mapNotNull null
-            RadioStation(name, url, row.optBoolean("favorite"), RadioStation.validUrl(row.optString("logo")))
+            RadioStation(name, url, row.optBoolean("favorite"), RadioStation.validUrl(row.optString("logo")), RadioCatalogue.parseTags(row.optString("tags")))
         }.distinctBy { it.url }.take(200)
     }
     var selectedUrl: String?
@@ -50,10 +50,10 @@ internal class RadioAndPhoneStore(context: Context) {
             val row = JSONObject(prefs.getString("last_station", null) ?: return null)
             val url = RadioStation.validUrl(row.optString("url")) ?: return null
             val name = row.optString("name").trim().take(60).takeIf { it.isNotEmpty() } ?: return null
-            RadioStation(name, url, logoUrl = RadioStation.validUrl(row.optString("logo")))
+            RadioStation(name, url, logoUrl = RadioStation.validUrl(row.optString("logo")), tags = RadioCatalogue.parseTags(row.optString("tags")))
         }.getOrNull()
         set(value) {
-            val row = value?.let { JSONObject().put("name", it.name).put("url", it.url).put("logo", it.logoUrl.orEmpty()).toString() }
+            val row = value?.let { JSONObject().put("name", it.name).put("url", it.url).put("logo", it.logoUrl.orEmpty()).put("tags", it.tags.joinToString(",")).toString() }
             prefs.edit().putString("last_station", row).apply()
         }
     var favoritesOnly: Boolean
@@ -82,7 +82,7 @@ internal class RadioAndPhoneStore(context: Context) {
         if (selectedUrl == url) selectedUrl = null
     }
     private fun writeStations(stations: List<RadioStation>) = prefs.edit().putString("stations", JSONArray(stations.map {
-        JSONObject().put("name", it.name).put("url", it.url).put("favorite", it.favorite).put("logo", it.logoUrl.orEmpty())
+        JSONObject().put("name", it.name).put("url", it.url).put("favorite", it.favorite).put("logo", it.logoUrl.orEmpty()).put("tags", it.tags.joinToString(","))
     }).toString()).apply()
     val phoneFavorites: List<PhoneFavorite> get() {
         val saved = read("phone_favorites")

@@ -85,6 +85,20 @@ internal class AppLinks(private val activity: Activity) {
 
     fun dial(number: String = "") = dialIntent(number)?.let(::start) ?: false
 
+    /** Only an actual public CALL handler in the factory Bluetooth package; no generic dialer. */
+    fun bluetoothCallIntent(number: String): Intent? {
+        val normalized = DialNumber.normalize(number)?.takeIf { it.matches(Regex("\\+?[0-9]{3,20}")) } ?: return null
+        val selected = phoneApp()?.component ?: return null
+        if (selected.packageName != OEM_PHONE.packageName) return null
+        val info = runCatching { packages.getApplicationInfo(selected.packageName, PackageManager.ApplicationInfoFlags.of(0)) }.getOrNull() ?: return null
+        if (info.flags and android.content.pm.ApplicationInfo.FLAG_SYSTEM == 0) return null
+        val intent = Intent(Intent.ACTION_CALL, Uri.fromParts("tel",normalized,null)).setPackage(selected.packageName)
+        val handler = packages.resolveActivity(intent, PackageManager.ResolveInfoFlags.of(PackageManager.MATCH_DEFAULT_ONLY.toLong()))?.activityInfo ?: return null
+        return intent.takeIf { handler.packageName == selected.packageName && handler.exported && handler.enabled && handler.applicationInfo.enabled &&
+            (handler.permission == null || activity.checkSelfPermission(handler.permission) == PackageManager.PERMISSION_GRANTED) }
+    }
+
+
     fun phoneApp(available: List<Launchable> = apps()): Launchable? {
         association(PHONE)?.let { saved -> return available.firstOrNull { it.component == saved } }
         return available.firstOrNull { it.component == OEM_PHONE }

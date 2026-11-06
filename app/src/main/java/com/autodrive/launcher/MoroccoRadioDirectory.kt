@@ -17,13 +17,13 @@ internal class MoroccoRadioDirectory(context: Context) {
         (0 until rows.length()).mapNotNull { i ->
             val row = rows.optJSONObject(i) ?: return@mapNotNull null
             RadioStation.validUrl(row.optString("url"))?.let { RadioStation(row.optString("name").take(60), it,
-                logoUrl = RadioStation.validUrl(row.optString("logo")) ?: RadioStation.defaultLogo(it)) }
+                logoUrl = RadioStation.validUrl(row.optString("logo")) ?: RadioStation.defaultLogo(it), tags = RadioCatalogue.parseTags(row.optString("tags"))) }
         }.filter { it.name.isNotBlank() }.map(RadioCatalogue::polish).distinctBy { it.url }.take(300)
     }.getOrDefault(emptyList())
 
     fun needsRefresh(): Boolean = runCatching {
         !cache.exists() || System.currentTimeMillis() - cache.lastModified() > 24 * 60 * 60 * 1000L ||
-            JSONArray(cache.readText()).let { rows -> (0 until rows.length()).any { rows.optJSONObject(it)?.has("logo") != true } }
+            JSONArray(cache.readText()).let { rows -> (0 until rows.length()).any { rows.optJSONObject(it)?.let { !it.has("logo") || !it.has("tags") } != false } }
     }.getOrDefault(true)
 
     fun fetch(): List<RadioStation> {
@@ -48,7 +48,7 @@ internal class MoroccoRadioDirectory(context: Context) {
                 val result = parse(text)
                 check(result.isNotEmpty()) { "No compatible stations" }
                 val temporary = File(cache.parentFile, cache.name + ".tmp")
-                temporary.writeText(JSONArray(result.map { JSONObject().put("name", it.name).put("url", it.url).put("logo", it.logoUrl.orEmpty()) }).toString())
+                temporary.writeText(JSONArray(result.map { JSONObject().put("name", it.name).put("url", it.url).put("logo", it.logoUrl.orEmpty()).put("tags", it.tags.joinToString(",")) }).toString())
                 check(temporary.renameTo(cache)) { "Directory cache update failed" }
                 return result
             } catch (error: Exception) { lastError = error }
@@ -70,9 +70,9 @@ internal class MoroccoRadioDirectory(context: Context) {
                 if (row.optString("countrycode") != "MA" || row.optInt("lastcheckok") != 1) return@mapNotNull null
                 val url = RadioStation.validUrl(row.optString("url_resolved")) ?: return@mapNotNull null
                 val name = row.optString("name").trim().take(60).takeIf { it.isNotEmpty() } ?: return@mapNotNull null
-                RadioStation(name, url, logoUrl = RadioStation.validUrl(row.optString("favicon")) ?: RadioStation.defaultLogo(url))
+                RadioStation(name, url, logoUrl = RadioStation.validUrl(row.optString("favicon")) ?: RadioStation.defaultLogo(url), tags = RadioCatalogue.parseTags(row.optString("tags")))
             }.groupBy { it.url }.values.map { duplicates ->
-                RadioCatalogue.polish(duplicates.first().copy(logoUrl = duplicates.firstNotNullOfOrNull { it.logoUrl }))
+                RadioCatalogue.polish(duplicates.first().copy(logoUrl = duplicates.firstNotNullOfOrNull { it.logoUrl }, tags = duplicates.flatMap { it.tags }.distinct().take(24).toSet()))
             }
         }
     }

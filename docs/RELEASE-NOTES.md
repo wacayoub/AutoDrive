@@ -1,10 +1,9 @@
-AutoDrive 1.12.2 réduit la barre Home / Shorts / You dans YouTube.
+AutoDrive 1.13.0 ajoute le démarrage radio et améliore la radio et le téléphone.
 
-- Icônes de navigation réduites de 24 à 18 pixels CSS.
-- Libellés réduits de 11 à 10 pixels CSS.
-- Barre de 49 pixels CSS bordure comprise, au lieu de 57 dans la page mobile testée. Les trois zones tactiles gardent une hauteur de 48 pixels CSS.
-- Home, Shorts et You restent les commandes du site YouTube. Le lecteur et ses commandes conservent leur présentation.
-
-Cette adaptation vise uniquement la barre de navigation du site mobile dans le panneau YouTube. Elle ne remplace pas le site par l’application Android. Une évolution du site peut nécessiter une adaptation ultérieure.
+- Radio : lecture de la dernière station native au premier lancement d’AutoDrive après chaque boot Android, ou après cette installation. Activée par défaut ; réglage Radio au démarrage. Une réouverture dans le même boot ne relance pas une radio arrêtée. AutoDrive doit être lancé au boot par Android ou par l’autodémarrage du boîtier ; aucun service de boot permanent n’est ajouté.
+- Attente réseau bornée à 30 secondes avant la première tentative. Une interaction ou la sortie de l’application annule l’attente. Les lecteurs web SNRT ne sont pas ouverts automatiquement.
+- Catégories : Toutes, SNRT, Coran, Musique, Infos / Débats, Sport, Autres et Favoris. Les catégories utilisent les tags de l’annuaire et les quelques classifications déjà identifiées ; elles restent disponibles dans le catalogue sauvegardé. La ligne défile horizontalement ; les favoris restent accessibles à droite.
+- Phone → Appels Bluetooth : autorisations et sélection du compte HFP disponible. Le bouton vert transmet le numéro par Telecom au compte choisi, si le système expose cette interface. Un BT Phone constructeur qui annonce une activité publique CALL compatible peut aussi recevoir l’appel explicitement. Aucun compte SIM n’est choisi comme solution automatique de remplacement.
+- Si ces interfaces sont absentes, l’écran le signale et propose BT Phone et un diagnostic à copier. Cette version ne promet pas un appel Bluetooth fonctionnel sur un firmware qui ne fournit aucune commande compatible. Les appels réels, le micro et l’audio du propriétaire restent à vérifier sur le boîtier.
 
 Settings → Mises à jour → Rechercher → OK. Android conserve sa confirmation finale d’installation. Faire une mise à jour normale, sans désinstallation, pour conserver les réglages. Aucun appareil du propriétaire n’est installé ou modifié par le développement.

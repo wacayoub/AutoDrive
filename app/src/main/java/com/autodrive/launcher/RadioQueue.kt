@@ -6,7 +6,7 @@ internal object RadioQueue {
         return (catalogue + saved).distinctBy { it.url }.map { station ->
             val personal = savedByUrl[station.url]
             station.copy(name = personal?.name ?: station.name, favorite = personal?.favorite ?: station.favorite,
-                logoUrl = personal?.logoUrl ?: station.logoUrl)
+                logoUrl = personal?.logoUrl ?: station.logoUrl, tags = station.tags.ifEmpty { personal?.tags.orEmpty() })
         }
     }
     fun active(stations: List<RadioStation>, favoritesOnly: Boolean, category: RadioCategory = RadioCategory.ALL) =

@@ -29,9 +29,13 @@ internal class RadioStationList(context: Context, private val artwork: RadioArtw
     private var emptyMessage = "Aucune radio disponible"
     private lateinit var filters: LinearLayout
     private lateinit var listView: AbsListView
-    private val allButton = ui.action("Toutes") { mode(false) }.apply { contentDescription = "Afficher toutes les radios" }
-    private val snrtButton = ui.action("SNRT") { category(RadioCategory.SNRT) }.apply { contentDescription = "Afficher les radios SNRT" }
-    private val quranButton = ui.action("القرآن") { category(RadioCategory.QURAN) }.apply { contentDescription = "Afficher les radios du Coran" }
+    private val categoryButtons = RadioCategory.entries.associateWith { value ->
+        ui.action(value.title) { if (value == RadioCategory.ALL) mode(false) else category(value) }.apply {
+            contentDescription = value.description
+            (getChildAt(0) as android.widget.TextView).textSize = 13f
+        }
+    }
+    private val allButton get() = categoryButtons.getValue(RadioCategory.ALL)
     private val favoritesButton = ui.action("☆ Favoris") { mode(true) }.apply { contentDescription = "Afficher les radios favorites" }
     private val refreshButton = ui.action("↻", run = refresh).apply { contentDescription = "Actualiser les radios" }
     private val empty = ui.label("Chargement des radios…", 13, Palette.muted).apply { gravity = Gravity.CENTER; maxLines = 3 }
@@ -56,11 +60,18 @@ internal class RadioStationList(context: Context, private val artwork: RadioArtw
     init {
         orientation = VERTICAL
         filters = ui.line().apply {
-            addView(allButton, LayoutParams(0, ui.dp(48), 1f).apply { marginEnd = ui.dp(3) })
-            addView(snrtButton, LayoutParams(0, ui.dp(48), 1f).apply { marginEnd = ui.dp(3) })
-            addView(quranButton, LayoutParams(0, ui.dp(48), 1f).apply { marginEnd = ui.dp(3) })
-            addView(favoritesButton, LayoutParams(0, ui.dp(48), 1f).apply { marginEnd = ui.dp(3) })
+            addView(android.widget.HorizontalScrollView(context).apply {
+                isHorizontalScrollBarEnabled = true
+                contentDescription = "Catégories radio · balayage horizontal"
+                addView(ui.line().apply {
+                    categoryButtons.forEach { (value, button) ->
+                        addView(button, LayoutParams(ui.dp(if (value == RadioCategory.NEWS) 116 else 86), ui.dp(48)).apply { marginEnd = ui.dp(3) })
+                    }
+                })
+            }, LayoutParams(0, ui.dp(48), 1f))
+            addView(favoritesButton, LayoutParams(ui.dp(108), ui.dp(48)).apply { marginStart = ui.dp(3) })
         }
+
         val search = if (expanded) EditText(context).apply {
             hint = "Rechercher une radio"; contentDescription = "Rechercher une radio"
             setSingleLine(true); setTextColor(Palette.text); setHintTextColor(Palette.muted)
@@ -115,10 +126,12 @@ internal class RadioStationList(context: Context, private val artwork: RadioArtw
         statusText = playbackStatus
         (allButton.getChildAt(0) as android.widget.TextView).apply { text = "Toutes ${stations.size}"; textSize = 13f }
         (favoritesButton.getChildAt(0) as android.widget.TextView).apply { text = "★ Favoris ${stations.count { it.favorite }}"; textSize = 13f }
-        for ((button, selected) in listOf(allButton to (!favorites && category == RadioCategory.ALL),
-            snrtButton to (!favorites && category == RadioCategory.SNRT), quranButton to (!favorites && category == RadioCategory.QURAN), favoritesButton to favorites)) {
+        val choices = categoryButtons.map { (value, button) -> button to (!favorites && category == value) } + (favoritesButton to favorites)
+        for ((button, selected) in choices) {
+            val newlySelected = selected && !button.isSelected
             button.isSelected = selected
             button.background = ui.shape(if (selected) 0xFF244E73.toInt() else Palette.raised, 12, if (selected) Palette.blue else Palette.border)
+            if (newlySelected && button !== favoritesButton) button.post { button.requestRectangleOnScreen(android.graphics.Rect(0,0,button.width,button.height), false) }
         }
         refreshButton.isEnabled = !loading; refreshButton.alpha = if (loading) .4f else 1f
         emptyMessage = when {

@@ -45,14 +45,23 @@ class RadioCatalogueAndroidTest {
         val tab = launcher.getString("tab", null)
         val cache = File(context.filesDir, "morocco-radio-directory.json")
         val oldCache = cache.takeIf { it.exists() }?.readBytes()
-        cache.writeText("""[{"name":"HIT RADIO","url":"${MoroccoRadioDirectory.starter.first().url}","logo":""}]""")
+        cache.writeText("""[{"name":"HIT RADIO","url":"${MoroccoRadioDirectory.starter.first().url}","logo":"","tags":"music,pop"},{"name":"Radio Mars","url":"https://radiomars.ice.infomaniak.ch/radiomars-128.mp3","logo":"","tags":"sports"},{"name":"Débats test","url":"https://example.invalid/talk.mp3","logo":"","tags":"news,talk"}]""")
         prefs.edit().clear().commit(); launcher.edit().putString("tab", "RADIO").commit()
         val activity = instrumentation.startActivitySync(Intent(context, WebDashboardActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as WebDashboardActivity
         fun views() = descendants(activity.window.decorView)
         fun click(label: String) = views().single { it.isShown && it.contentDescription == label }.performClick()
         fun grid() = views().filterIsInstance<GridView>().single()
         try {
-            instrumentation.runOnMainSync { click("Media"); click("Catalogue des radios"); click("Afficher les radios SNRT") }
+            instrumentation.runOnMainSync { click("Media"); click("Catalogue des radios"); click("Afficher les radios de musique") }
+            await { grid().count == 1 }
+            instrumentation.runOnMainSync {
+                assertEquals("HIT RADIO", (grid().adapter.getItem(0) as RadioStation).name)
+                click("Afficher les radios de sport")
+                assertEquals("Radio Mars", (grid().adapter.getItem(0) as RadioStation).name)
+                click("Afficher les radios d’information")
+                assertEquals("Débats test", (grid().adapter.getItem(0) as RadioStation).name)
+                click("Afficher les radios SNRT")
+            }
             await { grid().count == 4 }
             instrumentation.runOnMainSync {
                 assertEquals(RadioCategory.SNRT, RadioAndPhoneStore(context).radioCategory)

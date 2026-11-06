@@ -52,8 +52,8 @@ class RadioControlsRegressionTest {
             JSONObject().put("name", "HIT RADIO").put("url", hit))
         prefs.edit().clear().putString("stations", saved.toString()).putString("selected", hit).commit()
         launcher.edit().putString("tab", "RADIO").commit()
-        cache.writeText(JSONArray(listOf(JSONObject().put("name", "HIT RADIO").put("url", hit).put("logo", "https://hitradio.ma/small-logo-hitradio.png"),
-            JSONObject().put("name", "Radio Mars").put("url", mars).put("logo", ""))).toString())
+        cache.writeText(JSONArray(listOf(JSONObject().put("name", "HIT RADIO").put("url", hit).put("logo", "https://hitradio.ma/small-logo-hitradio.png").put("tags", "music"),
+            JSONObject().put("name", "Radio Mars").put("url", mars).put("logo", "").put("tags", "sports"))).toString())
         val activity = instrumentation.startActivitySync(Intent(context, WebDashboardActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as WebDashboardActivity
         fun views() = descendants(activity.window.decorView)
         fun hasTitle(name: String) = views().any { it.contentDescription == "Station choisie : $name" }
