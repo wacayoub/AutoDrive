@@ -16,7 +16,8 @@ La même identité de signature est conservée pour permettre les mises à jour 
 
 ## Tableau de bord
 
-- Version **1.12.1** : la barre Radio / YouTube / IPTV est retirée de l’accueil. Le bouton **Media** ouvre le choix de source et le catalogue des radios ; le panneau droit récupère toute la hauteur de cette barre.
+- Version **1.12.2** : barre YouTube **Home / Shorts / You** plus compacte, avec icônes et libellés réduits et cibles tactiles conservées.
+- Depuis **1.12.1** : la barre Radio / YouTube / IPTV est retirée de l’accueil. Le bouton **Media** ouvre le choix de source et le catalogue des radios ; le panneau droit récupère toute la hauteur de cette barre.
 - Depuis **1.12.0** : panneaux Maps et YouTube agrandis grâce aux marges et barres réduites. En 800 × 480 / densité 160, leur surface utile augmente respectivement d’environ 14 % et 18 %. Les raccourcis et onglets conservent des cibles tactiles de 48 dp minimum.
 - Depuis **1.11.1** : options d’affichage Maps mémorisées après redémarrage (trafic, satellite/relief, autres cases reconnues et zoom initial), avec recentrage au démarrage après avoir choisi « Votre position ». Les relances sont bornées lorsque le site reste inactif au chargement. Autorisation de localisation du site conservée après accord Android ; aucun compte ou parcours n’est copié. [Fonctionnement et limites](docs/MAPS-DISPLAY-MEMORY.md).
 

@@ -1,10 +1,10 @@
-AutoDrive 1.12.1 retire les icônes au-dessus de YouTube.
+AutoDrive 1.12.2 réduit la barre Home / Shorts / You dans YouTube.
 
-- Suppression de la barre Radio / YouTube / IPTV sur l’accueil.
-- Le panneau droit récupère cette hauteur : YouTube commence au même niveau que Maps.
-- Le bouton Media permet désormais de choisir Radio, YouTube ou IPTV. Le catalogue des radios reste accessible dans ce menu.
-- Les panneaux web et leurs pages sont conservés lors des changements de source et du retour à l’accueil. Aucun nouveau bouton sur l’accueil.
+- Icônes de navigation réduites de 24 à 18 pixels CSS.
+- Libellés réduits de 11 à 10 pixels CSS.
+- Barre de 49 pixels CSS bordure comprise, au lieu de 57 dans la page mobile testée. Les trois zones tactiles gardent une hauteur de 48 pixels CSS.
+- Home, Shorts et You restent les commandes du site YouTube. Le lecteur et ses commandes conservent leur présentation.
 
-Maps et YouTube conservent leur intégration web actuelle. Les réglages Maps restent mémorisés.
+Cette adaptation vise uniquement la barre de navigation du site mobile dans le panneau YouTube. Elle ne remplace pas le site par l’application Android. Une évolution du site peut nécessiter une adaptation ultérieure.
 
 Settings → Mises à jour → Rechercher → OK. Android conserve sa confirmation finale d’installation. Faire une mise à jour normale, sans désinstallation, pour conserver les réglages. Aucun appareil du propriétaire n’est installé ou modifié par le développement.

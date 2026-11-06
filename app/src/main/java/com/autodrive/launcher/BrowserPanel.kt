@@ -145,6 +145,7 @@ internal class BrowserPanel(
 
                 override fun onPageCommitVisible(view: WebView, url: String?) {
                     if (maps) view.evaluateJavascript(MapWebPreference.script, null)
+                    if (!maps && YouTubeDisplay.accepts(url)) view.evaluateJavascript(YouTubeDisplay.compactNavigation, null)
                 }
 
                 override fun onPageFinished(view: WebView, url: String?) {
@@ -152,6 +153,7 @@ internal class BrowserPanel(
                     progress.visibility = GONE
                     // Apply the owner's Maps web preference without changing attribution or map data.
                     if (maps) view.evaluateJavascript(MapWebPreference.script, null)
+                    if (!maps && YouTubeDisplay.accepts(url)) view.evaluateJavascript(YouTubeDisplay.compactNavigation, null)
                     if (maps) view.evaluateJavascript(MapDisplayScript.install(mapMemory!!.read(), canLocate()), null)
                     mapPageReady = maps && MapDisplayPolicy.onMaps(url)
                 }
