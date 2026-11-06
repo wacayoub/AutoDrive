@@ -1,5 +1,7 @@
 # Navigation integration and licensing audit
 
+> 1.14.0 : le mode par défaut ouvre Google Maps Android par intent officiel, dans son propre écran. L’hébergement dans le panneau reste non validé. Les sites web sont désormais un choix explicite. Voir [Applications installées](INSTALLED-APPLICATIONS.md).
+
 Reviewed 4 November 2026 for AutoDrive on an Incarlink Max X15-SLM927-72 Android 13 box that runs the launcher locally and presents its output on a Toyota in-dash display.
 
 ## Additional native-hosting research — 6 November 2026

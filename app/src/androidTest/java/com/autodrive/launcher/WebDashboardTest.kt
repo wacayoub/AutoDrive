@@ -14,6 +14,19 @@ import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class WebDashboardTest {
+    // These are optional-web-mode regressions, not claims of native app hosting.
+    private var originalInstalledMode: Boolean? = null
+    @org.junit.Before fun useExplicitWebMode() {
+        val prefs = InstrumentationRegistry.getInstrumentation().targetContext.getSharedPreferences("launcher", 0)
+        originalInstalledMode = if (prefs.contains("installed_apps")) prefs.getBoolean("installed_apps", true) else null
+        prefs.edit().putBoolean("installed_apps", false).commit()
+    }
+    @org.junit.After fun restoreMode() {
+        val edit = InstrumentationRegistry.getInstrumentation().targetContext.getSharedPreferences("launcher", 0).edit()
+        originalInstalledMode?.let { edit.putBoolean("installed_apps", it) } ?: edit.remove("installed_apps")
+        edit.commit()
+    }
+
     @Test fun homePagesAndPanelLifecycle() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext

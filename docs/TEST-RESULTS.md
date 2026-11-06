@@ -1,3 +1,16 @@
+## 1.14.0 — applications Android installées (6 novembre 2026)
+
+- Compilation debug, APK de tests et lint : **BUILD SUCCESSFUL**. **39 tests JVM réussis** ; lint **0 erreur, 61 avertissements, 1 indication**. Les avertissements ne sont pas présentés comme corrigés.
+- Émulateur AOSP Android 13, 800 × 480 : suite de régression **41 cas signalés par le runner**, dont **40 réussis et 1 ignoré** (Maps officiel non installé), 120,599 s. Radio, catégories, lecteur et commandes, appels simulés/permissions/absence HFP, grille Apps, mises à jour, mode web explicite et sessions de test couverts. Le test live du guide Aswat n’est pas inclus ; aucune validation des programmes réels n’est déduite de ce passage.
+- Nouveau parcours installé : aucun WebView sur l’accueil par défaut ; application de test réellement lancée, retour Home sans relance automatique ; association YouTube conservée et choix supprimé signalé sans substitution web. **Horloge** est le composant installé utilisé comme témoin Android : ce test ne valide pas la lecture YouTube ni un compte Google réel.
+- Affichage vérifié en 800 × 480 aux densités **160 et 213** : actions et quatre raccourcis dans leurs panneaux, cibles d’au moins 48 dp et libellés d’action sans ellipse. **3 scénarios réussis et 1 ignoré** à chaque densité (runner : 4 cas). Captures ci-dessous : absence réelle de Maps et choix YouTube volontairement indisponible dans la fixture.
+- APK candidat **release non débogable**, certificat stable vérifié : nouveau parcours Media → YouTube ouvrant réellement Horloge, retour sans boucle et changement par le vrai dialogue Réglages **Applications Android → Sites web → Applications Android**, avec recréation de l’activité et passage **0 → 2 → 0 WebViews**. **4 scénarios réussis et 1 ignoré**, 9,708 s (runner : 5 cas). Aucun composant de carte/vidéo natif n’est prétendu embarqué.
+- **Non testés sur Incarlink** : lancement de son Maps et YouTube choisis, guidage et lecture vidéo, authentification Google réelle, appels Bluetooth et démarrage système. Le test de lancement Maps est ignoré dans cet AVD car le package officiel est absent. L’absence de Maps est bien testée séparément : état manquant, retour false, aucun site ni application tierce lancé à sa place.
+- Aucun appareil du propriétaire n’a reçu d’installation. Émulateur utilisé explicitement : `emulator-5568`, propriété qemu vérifiée avant les mutations.
+
+![État applications absentes — 800 × 480, densité 160](../deliverables/installed-apps-1.14.0-800x480.png)
+![Même état — 800 × 480, densité 213](../deliverables/installed-apps-1.14.0-density213.png)
+
 # AutoDrive validation
 
 ## Version 1.13.0 — radio startup, genres and conditional Bluetooth calls

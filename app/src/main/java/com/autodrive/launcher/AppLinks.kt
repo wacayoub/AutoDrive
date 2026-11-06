@@ -18,6 +18,17 @@ internal class AppLinks(private val activity: Activity) {
     private val packages = activity.packageManager
     private val preferences = activity.getSharedPreferences("launcher", Activity.MODE_PRIVATE)
 
+    // Installed applications are the default, including upgrades from the web dashboard.
+    // Web mode is an explicit opt-in; it is never a missing-app fallback.
+    var installedApps: Boolean
+        get() = preferences.getBoolean("installed_apps", true)
+        set(value) { preferences.edit().putBoolean("installed_apps", value).apply() }
+
+    fun mapsApp(): Launchable? = apps().firstOrNull { it.component.packageName == MAPS }
+
+    fun openStore(packageName: String): Boolean =
+        start(Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=$packageName")).setPackage("com.android.vending"))
+
     var tab: MediaTab
         get() = MediaTab.entries.firstOrNull { it.name == preferences.getString("tab", null) }
             ?: MediaTab.YOUTUBE

@@ -1,6 +1,6 @@
 # AutoDrive
 
-Lanceur Android 13 natif Kotlin pour Incarlink Max X15-SLM927-72, adapté au paysage 800 × 480 et au portrait sur téléphone. Carte Google et page d’accueil YouTube dans deux panneaux web officiels ; quatre raccourcis : Phone, Media, Apps, Settings.
+Lanceur Android 13 natif Kotlin pour Incarlink Max X15-SLM927-72, adapté au paysage 800 × 480 et au portrait sur téléphone. Depuis 1.14.0, Google Maps et l’application YouTube installée s’ouvrent par défaut dans leur propre écran Android. Le mode web à deux panneaux reste un choix explicite dans Réglages. Quatre raccourcis : Phone, Media, Apps, Settings.
 
 **[Télécharger la dernière version](https://github.com/wacayoub/AutoDrive/releases/latest/download/AutoDrive.apk)** · [Versions et contrôles SHA-256](https://github.com/wacayoub/AutoDrive/releases) · [Tests](docs/TEST-RESULTS.md)
 
@@ -15,6 +15,9 @@ La même identité de signature est conservée pour permettre les mises à jour 
 ![Mises à jour dans la version 1.4.0 installée](deliverables/updates-1.4.0-800x480.png)
 
 ## Tableau de bord
+
+- **1.14.0 — applications installées** : Google Maps officiel et application YouTube configurable, ouverture directe depuis Media → YouTube, comptes gérés dans leurs applications. Retour à AutoDrive sans relance automatique. Pas de substitution web si une application manque. [Mode installé et limites](docs/INSTALLED-APPLICATIONS.md).
+- Les descriptions historiques des panneaux web ci-dessous concernent le mode **Sites web** choisi explicitement dans Réglages.
 
 - Version **1.13.0** : radio au premier lancement après boot (désactivable), catégories Musique / Infos / Sport / Autres, et configuration des appels Bluetooth directs via compte HFP compatible ou commande CALL publique du BT Phone constructeur. [Fonctionnement, autorisations et limites](docs/RADIO-STARTUP-BLUETOOTH.md).
 - Depuis **1.12.2** : barre YouTube **Home / Shorts / You** plus compacte, avec icônes et libellés réduits et cibles tactiles conservées.
@@ -37,12 +40,12 @@ La même identité de signature est conservée pour permettre les mises à jour 
 - Version **1.6.1** : liste Radio directement dans l’accueil avec logos disponibles, station active surlignée, filtres Maroc/Favoris et liste agrandie avec recherche. Les boutons précédente/suivante parcourent maintenant tout le catalogue chargé ou les favoris sélectionnés, même avec une seule station enregistrée auparavant. La pause fonctionne aussi pendant la connexion. [Audit et corrections Radio](docs/RADIO-AUDIT.md).
 - Radio Internet native : catalogue marocain Radio Browser mémorisé, favoris et écoute audio. HIT RADIO est disponible par défaut ; les flux et logos restent soumis à leur disponibilité réelle. Aucun logo n’est inventé : une image absente ou inaccessible est remplacée par les initiales de la station.
 - **Phone** propose un clavier corrigé, les contacts accessibles sur le poste et six favoris. BT Phone est prioritaire en mode Automatique lorsqu’il est détecté. Les appels et le carnet Bluetooth privé restent gérés par l’application d’origine ; [audit et limites](docs/PHONE-INCARLINK-AUDIT.md). [Fonctionnement Radio et Téléphone](docs/RADIO-PHONE.md).
-- Depuis **1.5.1**, la carte Google Maps interactive reste directement dans l’accueil, comme en 1.4.2. Le raccourci natif plein écran de 1.5.0 est retiré. Recherche et zoom restent dans le panneau web ; YouTube reste visible à côté en paysage.
+- En mode **Sites web**, la carte Google Maps interactive est dans l’accueil. Recherche et zoom restent dans le panneau web ; YouTube reste visible à côté en paysage.
 - Thème **Bleu profond** renforcé, compteur centré et icônes colorées (Téléphone vert, YouTube rouge, IPTV cyan). Les onglets média ont une petite surface de 40 × 32 dp, avec une cible tactile d’au moins 48 dp. Leur nom reste accessible aux lecteurs d’écran et par appui long.
 - Maps suit le mode jour/nuit Android. La nuit, un traitement visuel du panneau complet assombrit aussi les tuiles et conserve des libellés contrastés. Il s’agit d’une adaptation d’affichage du navigateur, pas du thème natif Google Maps. L’invitation connue « Ouvrir l’appli » est masquée sur les pages Maps, sans supprimer les mentions Google ni les commandes de carte.
 - Maps et YouTube s’ouvrent directement sur leurs sites officiels. Recherche de lieux, déplacement et zoom de carte, recherche YouTube et lecture vidéo ont été observés sur émulateur.
 - Portrait : panneaux superposés et libellés complets. Paysage : deux panneaux côte à côte. La saisie au clavier donne la place nécessaire à la page utilisée.
-- **Settings → Application YouTube** permet de choisir l’application installée pour une ouverture externe explicite. Le panneau YouTube garde sa page web. IPTV et l’option Radio externe lancent les applications choisies dans Settings.
+- **Settings → Application YouTube** permet de choisir l’application installée. En mode installé, elle remplace le site ; en mode Sites web, le panneau conserve sa page web et l’ouverture de l’application reste externe. IPTV et l’option Radio externe lancent les applications choisies dans Settings.
 - Le compteur utilise la localisation Android, avec `--` lorsque la vitesse n’est pas disponible. Aucune vitesse, instruction de navigation ou ETA n’est inventée.
 
 ![Capture réelle du tableau de bord de jour](deliverables/dashboard-1.5.1-800x480.png)
@@ -61,7 +64,7 @@ La même identité de signature est conservée pour permettre les mises à jour 
 
 ![Capture réelle en mode nuit Android](deliverables/dashboard-1.5.1-night-800x480.png)
 
-Les panneaux ne sont pas des activités natives Google Maps/YouTube intégrées, ni Android Auto. Le guidage vocal complet peut demander l’application Maps. Les recommandations et la connexion au compte YouTube dépendent du service ; le navigateur intégré ne copie pas les comptes des applications installées. Voir [l’audit web](docs/WEB-DASHBOARD-AUDIT.md) et [l’audit navigation](docs/NAVIGATION-AUDIT.md).
+En mode installé, les activités Google Maps/YouTube s’ouvrent dans leur propre écran. Elles ne sont pas intégrées aux panneaux et ne constituent pas Android Auto. En mode web, le guidage vocal complet peut demander l’application Maps. Les recommandations et la connexion au compte YouTube dépendent du service ; le navigateur intégré ne copie pas les comptes des applications installées. Voir [l’audit web](docs/WEB-DASHBOARD-AUDIT.md) et [l’audit navigation](docs/NAVIGATION-AUDIT.md).
 
 ## Compiler
 

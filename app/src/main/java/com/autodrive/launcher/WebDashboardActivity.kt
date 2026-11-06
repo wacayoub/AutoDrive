@@ -27,7 +27,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-/** Browser-based dashboard; no native app embedding is claimed. */
+/** Installed-app dashboard with an explicit optional web mode; no native hosting is claimed. */
 class WebDashboardActivity : ComponentActivity() {
     private lateinit var ui: DriveViews
     private lateinit var links: AppLinks
@@ -55,7 +55,7 @@ class WebDashboardActivity : ComponentActivity() {
     private lateinit var gps: GpsMonitor
     private lateinit var root: FrameLayout
     private lateinit var homeView: LinearLayout
-    private lateinit var maps: BrowserPanel
+    private var maps: BrowserPanel? = null
     private var youtube: BrowserPanel? = null
     private var renderedMediaTab: MediaTab? = null
     private lateinit var mediaContent: FrameLayout
@@ -83,7 +83,7 @@ class WebDashboardActivity : ComponentActivity() {
     private val compact get() = resources.configuration.screenWidthDp < 600
     private val handler = Handler(Looper.getMainLooper())
     private val permission = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
-        maps.onLocationPermissionResult()
+        maps?.onLocationPermissionResult()
         if (resumed) gps.start()
         updateStatus()
     }
@@ -103,7 +103,7 @@ class WebDashboardActivity : ComponentActivity() {
         override fun run() {
             updateStatus()
             tryStartupRadio()
-            if (homeVisible) maps.rememberDisplay()
+            if (homeVisible) maps?.rememberDisplay()
             val minute = System.currentTimeMillis() / 60_000
             if (minute != guideMinute && (expandedRadioPanel != null || (homeVisible && links.tab == MediaTab.RADIO))) {
                 guideMinute = minute; updateRadio()
@@ -151,14 +151,14 @@ class WebDashboardActivity : ComponentActivity() {
                 insets
             }
         }
-        maps = BrowserPanel(this, "https://www.google.com/maps/@?api=1&map_action=map", true, ::requestGps, ::openExternal,
+        if (!links.installedApps) maps = BrowserPanel(this, "https://www.google.com/maps/@?api=1&map_action=map", true, ::requestGps, ::openExternal,
             openAccountBrowser = { links.openInBrowser(Uri.parse("https://www.google.com/maps/")) }) { mapFocused = true }
         homeView = dashboard()
         setContentView(root)
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 if (!homeVisible) { (pageBack ?: ::showHome).invoke(); return }
-                val consumed = if (mapFocused) maps.back() else youtube?.back() == true
+                val consumed = if (mapFocused) maps?.back() == true else youtube?.back() == true
                 if (!consumed && !getSystemService(RoleManager::class.java).isRoleHeld(RoleManager.ROLE_HOME)) finish()
             }
         })
@@ -219,9 +219,11 @@ class WebDashboardActivity : ComponentActivity() {
             mapPane = FrameLayout(this@WebDashboardActivity).apply {
                 background = ui.shape(Palette.surface, 18, Palette.border)
                 setPadding(ui.dp(1), ui.dp(1), ui.dp(1), ui.dp(1))
-                maps.background = ui.shape(android.graphics.Color.BLACK, 16)
-                maps.clipToOutline = true
-                addView(maps, FrameLayout.LayoutParams(-1, -1))
+                maps?.let { panel ->
+                    panel.background = ui.shape(android.graphics.Color.BLACK, 16)
+                    panel.clipToOutline = true
+                    addView(panel, FrameLayout.LayoutParams(-1, -1))
+                }
             }
             addView(mapPane, panelParams(if (portrait) .46f else .52f))
             panelGap = View(this@WebDashboardActivity)
@@ -310,12 +312,12 @@ class WebDashboardActivity : ComponentActivity() {
     override fun onDestroy() {
         if (isChangingConfigurations && updateOffer?.isShowing == true) updates.offerAgainAfterRecreation()
         updateOffer?.dismiss()
-        installJob?.cancel(); directoryJob?.cancel(); radio.close(); radioArtwork.close(); maps.release(); youtube?.release(); super.onDestroy()
+        installJob?.cancel(); directoryJob?.cancel(); radio.close(); radioArtwork.close(); maps?.release(); youtube?.release(); super.onDestroy()
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
         outState.putBoolean("install_source_pending", installSourcePending)
-        outState.putBundle("maps", maps.save() ?: mapState)
+        outState.putBundle("maps", maps?.save() ?: mapState)
         outState.putBundle("youtube", youtube?.save() ?: youtubeState)
         super.onSaveInstanceState(outState)
     }
@@ -347,16 +349,48 @@ class WebDashboardActivity : ComponentActivity() {
     }
 
     private fun startPanels() {
-        maps.start(mapState)
+        maps?.start(mapState)
         mapState = null
+        if (links.installedApps) {
+            refreshMapsApp()
+            if (links.tab == MediaTab.YOUTUBE) renderedMediaTab = null
+        }
         select(links.tab)
     }
 
     private fun stopPanels() {
-        mapState = maps.save() ?: mapState
-        maps.pause()
+        mapState = maps?.save() ?: mapState
+        maps?.pause()
         youtubeState = youtube?.save() ?: youtubeState
         youtube?.pause()
+    }
+
+    private fun refreshMapsApp() {
+        mapPane.removeAllViews()
+        mapPane.addView(InstalledAppPanel(this, "Google Maps", links.mapsApp(), links,
+            "Google Maps non installé ou désactivé", "nav", ::openInstalledMaps,
+            install = { if (!links.openStore(AppLinks.MAPS)) message("Google Play indisponible") }),
+            FrameLayout.LayoutParams(-1, -1))
+    }
+
+    private fun openInstalledMaps() {
+        startupRadioPending = false
+        if (!links.openMaps()) { refreshMapsApp(); message("Google Maps non installé ou indisponible") }
+    }
+
+    private fun openInstalledYouTube() {
+        startupRadioPending = false
+        if (!links.openYouTube()) {
+            renderedMediaTab = null
+            if (homeVisible) select(MediaTab.YOUTUBE)
+            message("Choisis une application YouTube installée")
+            chooseApp(MediaTab.YOUTUBE)
+        }
+    }
+
+    private fun openInstalledMedia(tab: MediaTab) {
+        val app = links.forTab(tab, links.apps())
+        if (app == null) chooseApp(tab) else if (!links.open(app)) message("Application indisponible")
     }
 
     override fun dispatchTouchEvent(event: android.view.MotionEvent): Boolean {
@@ -389,6 +423,8 @@ class WebDashboardActivity : ComponentActivity() {
                 addView(ui.action(source.title, icon, selected == source, Palette.shortcut(icon)) {
                     links.tab = source
                     showHome()
+                    if (links.installedApps && source == MediaTab.YOUTUBE) openInstalledYouTube()
+                    else if (source == MediaTab.IPTV) openInstalledMedia(source)
                 }.apply {
                     isSelected = selected == source
                     stateDescription = if (isSelected) "Source actuelle" else null
@@ -411,7 +447,14 @@ class WebDashboardActivity : ComponentActivity() {
         youtube?.pause()
         mediaContent.removeAllViews()
         renderedMediaTab = tab
-        if (tab == MediaTab.YOUTUBE) {
+        if (tab == MediaTab.YOUTUBE && links.installedApps) {
+            val app = links.forTab(tab, links.apps())
+            mediaContent.addView(InstalledAppPanel(this, "YouTube", app, links,
+                if (links.association(tab.name) == null) "Application non installée ou non choisie" else "Application choisie indisponible",
+                "youtube", ::openInstalledYouTube, { chooseApp(tab) }, {
+                    if (!links.openStore(AppLinks.YOUTUBE)) message("Google Play indisponible")
+                }), FrameLayout.LayoutParams(-1, -1))
+        } else if (tab == MediaTab.YOUTUBE) {
             val panel = youtube ?: BrowserPanel(this, "https://m.youtube.com/", false, {}, ::openExternal,
                 nativeYouTube = { uri -> links.openYouTube(uri) },
                 openAccountBrowser = { links.openInBrowser(Uri.parse("https://www.youtube.com/")) }) { mapFocused = false }
@@ -485,11 +528,22 @@ class WebDashboardActivity : ComponentActivity() {
         row("GPS · autorisations", ::requestGps)
         row("Comptes Google · panneaux et applications", ::showGoogleAccounts)
         row("Mises à jour · ${updates.source.versionName}", ::showUpdates)
-        row("Recentrage Maps au démarrage · ${if (maps.followsLocationOnStart()) "Activé" else "Désactivé"}") {
-            maps.setFollowOnStart(!maps.followsLocationOnStart()); showSettings()
+        row("Affichage Maps / YouTube · ${if (links.installedApps) "Applications Android" else "Sites web"}") {
+            AlertDialog.Builder(this@WebDashboardActivity).setTitle("Maps et YouTube")
+                .setSingleChoiceItems(arrayOf("Applications Android · plein écran", "Sites web · deux panneaux"),
+                    if (links.installedApps) 0 else 1) { dialog, index ->
+                    val installed = index == 0
+                    dialog.dismiss()
+                    if (installed != links.installedApps) { links.installedApps = installed; recreate() }
+                }.setNegativeButton("Annuler", null).show()
         }
-        row("Réinitialiser l’affichage Maps") { mapState = null; maps.loadHome(resetMapDisplay = true); showHome() }
-        row("Revenir à l’accueil YouTube") { youtubeState = null; youtube?.loadHome(); links.tab = MediaTab.YOUTUBE; showHome() }
+        if (!links.installedApps) {
+            row("Recentrage Maps au démarrage · ${if (maps?.followsLocationOnStart() == true) "Activé" else "Désactivé"}") {
+                maps?.let { it.setFollowOnStart(!it.followsLocationOnStart()) }; showSettings()
+            }
+            row("Réinitialiser l’affichage Maps") { mapState = null; maps?.loadHome(resetMapDisplay = true); showHome() }
+            row("Revenir à l’accueil YouTube") { youtubeState = null; youtube?.loadHome(); links.tab = MediaTab.YOUTUBE; showHome() }
+        } else row("Ouvrir Google Maps", ::openInstalledMaps)
         val youtubeApp = links.forTab(MediaTab.YOUTUBE, links.apps())
         val youtubeLabel = youtubeApp?.label ?: if (links.association(MediaTab.YOUTUBE.name) == null)
             "Choisir une application" else "Application enregistrée indisponible"
@@ -500,9 +554,10 @@ class WebDashboardActivity : ComponentActivity() {
                 chooseApp(MediaTab.YOUTUBE)
             }
         }
-        addView(ui.label("Ce choix s’applique à l’application installée. Le panneau YouTube garde son fonctionnement actuel.", 13, Palette.muted).apply {
-            maxLines = 3
-            setPadding(ui.dp(8), ui.dp(8), ui.dp(8), ui.dp(8))
+        addView(ui.label(if (links.installedApps)
+            "Les applications gardent leurs propres comptes et réglages. Elles s’ouvrent dans leur écran Android ; aucun widget natif n’est simulé."
+            else "Le panneau utilise le site YouTube. L’application installée s’ouvre séparément.", 13, Palette.muted).apply {
+            maxLines = 4; setPadding(ui.dp(8), ui.dp(8), ui.dp(8), ui.dp(8))
         })
         row("Radio au démarrage · ${if (radioStartup.enabled) "Activée" else "Désactivée"}") {
             radioStartup.enabled = !radioStartup.enabled; startupRadioPending = false; showSettings()
@@ -522,7 +577,7 @@ class WebDashboardActivity : ComponentActivity() {
             } catch (_: android.content.ActivityNotFoundException) { message("Sélection du lanceur indisponible") }
         }
         row("Paramètres Android") { links.start(Intent(Settings.ACTION_SETTINGS)) }
-        addView(ui.label("Version web : les sites Google restent intacts. Le guidage vocal peut demander l’application Maps. La connexion Google peut nécessiter le navigateur externe.", 14, Palette.muted).apply {
+        if (!links.installedApps) addView(ui.label("Version web : les sites Google restent intacts. Le guidage vocal peut demander l’application Maps. La connexion Google peut nécessiter le navigateur externe.", 14, Palette.muted).apply {
             maxLines = 6
             setPadding(ui.dp(8), ui.dp(12), ui.dp(8), ui.dp(8))
         })
@@ -582,11 +637,13 @@ class WebDashboardActivity : ComponentActivity() {
             if (tab == MediaTab.YOUTUBE) "${it.label}\n${it.component.packageName}" else it.label
         }.toTypedArray()) { _, index ->
                 links.saveAssociation(tab.name, apps[index].component)
+                renderedMediaTab = null
                 if (homeVisible) select(tab) else showSettings()
             }
         if (tab == MediaTab.YOUTUBE) dialog.setNeutralButton("Effacer le choix") { _, _ ->
             links.saveAssociation(tab.name, null)
-            if (!homeVisible) showSettings()
+            renderedMediaTab = null
+            if (homeVisible) select(tab) else showSettings()
         }
         dialog.setNegativeButton("Annuler", null).show()
     }
@@ -752,7 +809,7 @@ class WebDashboardActivity : ComponentActivity() {
     }
 
     private fun showGoogleAccounts() = page("Comptes Google", ui.line(true).apply {
-        addView(ui.label("Le panneau intégré, le navigateur et les applications installées ont des connexions séparées. Une connexion dans Chrome ou YouTube ne connecte pas le panneau. Les panneaux gardent leur page pendant les changements d’onglet. Si Google refuse la connexion dans le panneau, utilise son application ou ton navigateur.", 16, Palette.muted).apply {
+        addView(ui.label(if (links.installedApps) "Connecte-toi directement dans Google Maps ou l’application YouTube choisie. AutoDrive ne lit ni ne transfère leurs comptes. Les anciennes connexions des sites web sont distinctes de celles des applications." else "Le panneau intégré, le navigateur et les applications installées ont des connexions séparées. Une connexion dans Chrome ou YouTube ne connecte pas le panneau. Les panneaux gardent leur page pendant les changements d’onglet. Si Google refuse la connexion dans le panneau, utilise son application ou ton navigateur.", 16, Palette.muted).apply {
             maxLines = 10; setPadding(ui.dp(8), ui.dp(8), ui.dp(8), ui.dp(12))
         })
         addView(ui.action("Maps dans le navigateur") { if (!links.openInBrowser(Uri.parse("https://www.google.com/maps/"))) message("Aucun navigateur compatible disponible") })
