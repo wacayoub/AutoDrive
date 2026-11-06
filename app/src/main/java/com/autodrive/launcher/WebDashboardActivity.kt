@@ -155,7 +155,7 @@ class WebDashboardActivity : ComponentActivity() {
     }
 
     private fun dashboard() = ui.line(true).apply {
-        setPadding(ui.dp(12), ui.dp(7), ui.dp(12), ui.dp(10))
+        setPadding(ui.dp(4), ui.dp(4), ui.dp(4), ui.dp(4))
         val header = ui.line(compact)
         val headerRow = if (compact) ui.line().apply {
             addView(ui.icon("brand", Palette.blue), LinearLayout.LayoutParams(ui.dp(30), ui.dp(30)))
@@ -179,12 +179,12 @@ class WebDashboardActivity : ComponentActivity() {
                 gravity = Gravity.CENTER
                 addView(ui.line().apply {
                     gravity = Gravity.CENTER
-                    speed = ui.label("--", 30, bold = true)
+                    speed = ui.label("--", 24, bold = true)
                     addView(speed)
                     addView(ui.label(" km/h", 12, Palette.muted))
                 }, LinearLayout.LayoutParams(-1, 0, 1f))
                 status = ui.label("GPS indisponible", 10, Palette.muted).apply { gravity = Gravity.CENTER }
-                addView(status, LinearLayout.LayoutParams(-1, ui.dp(13)))
+                addView(status, LinearLayout.LayoutParams(-1, ui.dp(12)))
             }, LinearLayout.LayoutParams(0, -1, 1f))
             separator()
             addView(ui.line().apply {
@@ -198,25 +198,25 @@ class WebDashboardActivity : ComponentActivity() {
                 addView(clock, LinearLayout.LayoutParams(ui.dp(92), -1))
             }, LinearLayout.LayoutParams(0, -1, 1f))
         }
-        header.addView(headerRow, LinearLayout.LayoutParams(if (compact) -1 else 0, if (compact) ui.dp(40) else -1,
+        header.addView(headerRow, LinearLayout.LayoutParams(if (compact) -1 else 0, if (compact) ui.dp(34) else -1,
             if (compact) 0f else 1f))
-        if (compact) header.addView(status, LinearLayout.LayoutParams(-1, ui.dp(20)))
-        addView(header.also(keyboardChrome::add), LinearLayout.LayoutParams(-1, ui.dp(if (compact) 60 else 50)))
-        with(ui) { gap(8) }
+        if (compact) header.addView(status, LinearLayout.LayoutParams(-1, ui.dp(14)))
+        addView(header.also(keyboardChrome::add), LinearLayout.LayoutParams(-1, ui.dp(if (compact) 48 else 42)))
+        with(ui) { gap(4) }
         addView(ui.line(portrait).apply {
             mapPane = FrameLayout(this@WebDashboardActivity).apply {
                 background = ui.shape(Palette.surface, 18, Palette.border)
-                setPadding(ui.dp(2), ui.dp(2), ui.dp(2), ui.dp(2))
+                setPadding(ui.dp(1), ui.dp(1), ui.dp(1), ui.dp(1))
                 maps.background = ui.shape(android.graphics.Color.BLACK, 16)
                 maps.clipToOutline = true
                 addView(maps, FrameLayout.LayoutParams(-1, -1))
             }
             addView(mapPane, panelParams(if (portrait) .46f else .52f))
             panelGap = View(this@WebDashboardActivity)
-            addView(panelGap, if (portrait) LinearLayout.LayoutParams(1, ui.dp(10)) else LinearLayout.LayoutParams(ui.dp(10), 1))
+            addView(panelGap, if (portrait) LinearLayout.LayoutParams(1, ui.dp(6)) else LinearLayout.LayoutParams(ui.dp(6), 1))
             mediaPane = ui.line(true).apply {
                 background = ui.shape(Palette.surface, 18, Palette.border)
-                setPadding(ui.dp(4), ui.dp(2), ui.dp(4), ui.dp(4))
+                setPadding(ui.dp(2), ui.dp(1), ui.dp(2), ui.dp(2))
                 addView(ui.line().apply {
                     gravity = Gravity.CENTER
                     MediaTab.entries.forEach { tab ->
@@ -244,7 +244,7 @@ class WebDashboardActivity : ComponentActivity() {
                         })
                     }
                 }.also(keyboardChrome::add))
-                with(ui) { gap(2) }
+                with(ui) { gap(1) }
                 mediaContent = FrameLayout(this@WebDashboardActivity).apply {
                     background = ui.shape(android.graphics.Color.BLACK, 12)
                     clipToOutline = true
@@ -253,7 +253,7 @@ class WebDashboardActivity : ComponentActivity() {
             }
             addView(mediaPane, panelParams(if (portrait) .54f else .48f))
         }, LinearLayout.LayoutParams(-1, 0, 1f))
-        with(ui) { gap(10) }
+        with(ui) { gap(4) }
         addView(ui.line().apply {
             val items = listOf(
                 Triple("Phone", "phone", { showPhone() }),
@@ -281,7 +281,7 @@ class WebDashboardActivity : ComponentActivity() {
                 }
                 addView(button, LinearLayout.LayoutParams(0, -1, 1f))
             }
-        }.also(keyboardChrome::add), LinearLayout.LayoutParams(-1, ui.dp(if (compact) 62 else 54)))
+        }.also(keyboardChrome::add), LinearLayout.LayoutParams(-1, ui.dp(if (compact) 52 else 48)))
     }
 
     private fun panelParams(weight: Float) = if (portrait) LinearLayout.LayoutParams(-1, 0, weight)

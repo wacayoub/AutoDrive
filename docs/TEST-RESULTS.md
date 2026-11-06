@@ -1,5 +1,20 @@
 # AutoDrive validation
 
+## Version 1.12.0 — larger dashboard panels
+
+Validated 6 November 2026, `com.autodrive.launcher`, version code 29. This is a native dashboard spacing change; Maps and YouTube retain their existing web integration.
+
+- **38 JVM tests passed**. Debug/test APKs and a release-variant candidate assembled. Android lint: **0 errors, 54 warnings and 1 hint**.
+- Measured actual WebView bounds before and after on the same AOSP Android 13 / 800 × 480 / density-160 emulator. Maps increased from **394 × 337 to 406 × 372 px** (**13.75% more area**). YouTube increased from **359 × 285 to 374 × 322 px** (**17.70% more area**). These measure the complete browser viewport, not provider map tiles or the video rectangle alone.
+- Reused dashboard lifecycle instrumentation passed separately at **800 × 480 / density 160**, **800 × 480 / density 213**, and **600 × 1376 / density 240 portrait**. All four unique shortcuts and three media tabs retain at least 48 dp touch targets, labels are not ellipsized, both provider panels fit within the visible display, landscape stays side by side, portrait stays stacked, and Settings/Back and media switches retain their existing behavior.
+- Actual browser bounds at density 213: Maps **404 × 338 px**, YouTube **369 × 271 px**. Portrait: Maps **584 × 544 px**, YouTube **582 × 566 px**. There is no density-independent promise of a fixed percentage gain on other screens.
+- Captures were taken after allowing live pages to load and visually inspected: [800 × 480](../deliverables/dashboard-1.12.0-800x480.png), [density 213](../deliverables/dashboard-1.12.0-density213.png), [portrait](../deliverables/dashboard-1.12.0-portrait.png). Satellite/traffic and the YouTube anonymous Home page are actual provider content. GPS readings are from the emulator, not the owner's vehicle. Provider branding and controls were not removed by this change.
+- An initial optional screenshot export tried to write through the instrumentation-package context, which runs under the target app's process and could not write that other package's private directory. The exporter now uses target-private storage on debug builds. A local Gradle invocation initially lacked ANDROID_HOME; setting the known SDK path fixed the build. Neither issue required production changes.
+
+- **11 related instrumented checks passed together in 43.819 seconds**, covering dashboard lifecycle, retained panels, Maps display memory/preferences and YouTube app choice. The non-debuggable release candidate then installed in place on the asserted emulator with the established signing identity; its dashboard/layout/lifecycle test passed in **5.529 seconds**.
+
+Physical Incarlink density, safe insets and touch behavior remain unverified. No owner device was installed or changed.
+
 ## Version 1.11.1 — confirmed, bounded Maps restoration
 
 Validated 6 November 2026, `com.autodrive.launcher`, version code 28. [Display memory implementation and limits](MAPS-DISPLAY-MEMORY.md).

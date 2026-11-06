@@ -24,7 +24,7 @@ class WebDashboardTest {
         fun web(): List<WebView> = all().filterIsInstance<WebView>()
         fun click(description: String) { all().first { it.contentDescription == description }.performClick() }
         try {
-            SystemClock.sleep(1500)
+            SystemClock.sleep(if (InstrumentationRegistry.getArguments().getString("captureDashboard") == "true") 20_000 else 1500)
             instrumentation.runOnMainSync {
                 assertEquals(2, web().size)
                 assertTrue(web().any { it.url?.startsWith("https://www.google.com/maps") == true })
@@ -59,6 +59,22 @@ class WebDashboardTest {
                     assertTrue("Portrait panels must be stacked", videoLocation[1] > mapLocation[1] + map.height)
                     assertTrue("Portrait map must use full width", map.width >= activity.window.decorView.width * .85f)
                 } else assertTrue("Landscape panels must be side by side", videoLocation[0] > mapLocation[0] + map.width)
+                val bounds = android.graphics.Rect().also(activity.window.decorView::getWindowVisibleDisplayFrame)
+                for (panel in listOf(map, video)) {
+                    val position = IntArray(2).also(panel::getLocationOnScreen)
+                    assertTrue("Panel must fit the visible display", position[0] >= bounds.left && position[1] >= bounds.top &&
+                        position[0] + panel.width <= bounds.right && position[1] + panel.height <= bounds.bottom)
+                }
+                if (InstrumentationRegistry.getArguments().getString("captureDashboard") == "true") {
+                    val dimensions = org.json.JSONObject().put("density", activity.resources.displayMetrics.density)
+                        .put("maps", org.json.JSONObject().put("width", map.width).put("height", map.height))
+                        .put("youtube", org.json.JSONObject().put("width", video.width).put("height", video.height))
+                    context.openFileOutput("dashboard-size.json", 0).use { it.write(dimensions.toString().toByteArray()) }
+                    val image = instrumentation.uiAutomation.takeScreenshot()
+                    try { context.openFileOutput("dashboard-size.png", 0).use {
+                        image.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
+                    } } finally { image.recycle() }
+                }
                 click("Radio")
                 assertEquals(1, web().size)
                 assertTrue(all().single { it.contentDescription == "Radio" }.isSelected)

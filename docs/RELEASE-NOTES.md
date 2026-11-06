@@ -1,14 +1,11 @@
-AutoDrive 1.11.1 mémorise l’affichage du panneau Google Maps après redémarrage.
+AutoDrive 1.12.0 agrandit les deux panneaux de l’accueil.
 
-- Mémorisation des cases d’affichage reconnues : trafic, transports, vélo, satellite, relief, feux de forêt et commandes de mouvement de la carte.
-- Après avoir touché Votre position, le recentrage sera demandé au prochain démarrage si la localisation Android est disponible. Une ancienne coordonnée ne remplace pas une position actuelle.
-- Démarrage à froid : brève attente avant le recentrage, puis au plus trois tentatives espacées si la commande reste inactive. La restauration s’arrête dès l’activation ou dès une action manuelle sur la carte.
-- Zoom initial retransmis au site ; Google peut adapter le cadrage lors du recentrage. Vue manuelle mémorisée quand le recentrage est désactivé. Aucune reprise automatique d’un trajet.
-- Autorisation de site conservée après accord Android. Une première demande de position attend désormais le résultat de permission au lieu d’être immédiatement refusée.
-- Réglages : Recentrage Maps au démarrage et Réinitialiser l’affichage Maps. Aucun bouton ajouté sur la carte.
+- Maps : environ 14 % de surface utile supplémentaire en 800 × 480 / densité 160.
+- YouTube : environ 18 % de surface utile supplémentaire dans la même configuration.
+- Marges, en-tête et barre inférieure plus compacts ; les deux panneaux gardent leurs proportions 52/48 en paysage.
+- Les quatre raccourcis Phone, Media, Apps et Settings et les trois onglets média restent accessibles, avec des zones tactiles d’au moins 48 dp.
+- La mémorisation de l’affichage Maps introduite en 1.11.1 reste présente.
 
-Après cette mise à jour, choisis tes options une dernière fois et touche Votre position pour les enregistrer. Les choix perdus par une ancienne version ne sont pas récupérables rétroactivement. Ce correctif concerne l’affichage web ; il ne promet pas de corriger la connexion d’un compte Google ni le GPS matériel du boîtier.
+Maps et YouTube restent les panneaux web existants ; cette mise à jour ne transforme pas YouTube en application Android intégrée. Les gains dépendent de la résolution, de la densité et des marges système.
 
-Android conserve sa confirmation finale d’installation. Les réglages sont conservés par une mise à jour normale, sans désinstallation. Aucun appareil du propriétaire n’est installé ou modifié par le développement.
-
-Depuis 1.9.1 : Settings → Mises à jour → Rechercher → OK. AutoDrive télécharge, vérifie et ouvre l’installation Android. Pas de désinstallation.
+Settings → Mises à jour → Rechercher → OK. Android conserve sa confirmation finale d’installation. Faire une mise à jour normale, sans désinstallation, pour conserver les réglages. Aucun appareil du propriétaire n’est installé ou modifié par le développement.
