@@ -368,8 +368,7 @@ class WebDashboardActivity : ComponentActivity() {
     private fun refreshMapsApp() {
         mapPane.removeAllViews()
         mapPane.addView(InstalledAppPanel(this, "Google Maps", links.mapsApp(), links,
-            "Google Maps non installé ou désactivé", "nav", ::openInstalledMaps,
-            install = { if (!links.openStore(AppLinks.MAPS)) message("Google Play indisponible") }),
+            "Google Maps non installé ou désactivé", "nav", ::openInstalledMaps),
             FrameLayout.LayoutParams(-1, -1))
     }
 
@@ -451,9 +450,7 @@ class WebDashboardActivity : ComponentActivity() {
             val app = links.forTab(tab, links.apps())
             mediaContent.addView(InstalledAppPanel(this, "YouTube", app, links,
                 if (links.association(tab.name) == null) "Application non installée ou non choisie" else "Application choisie indisponible",
-                "youtube", ::openInstalledYouTube, { chooseApp(tab) }, {
-                    if (!links.openStore(AppLinks.YOUTUBE)) message("Google Play indisponible")
-                }), FrameLayout.LayoutParams(-1, -1))
+                "youtube", ::openInstalledYouTube, { chooseApp(tab) }), FrameLayout.LayoutParams(-1, -1))
         } else if (tab == MediaTab.YOUTUBE) {
             val panel = youtube ?: BrowserPanel(this, "https://m.youtube.com/", false, {}, ::openExternal,
                 nativeYouTube = { uri -> links.openYouTube(uri) },

@@ -2,7 +2,17 @@
 
 Le mode par défaut est **Applications Android · plein écran**, également pour une mise à jour depuis une version web. AutoDrive n’installe pas Google Maps ni YouTube pour l’utilisateur. Aucun site, WebView, image de carte ou vidéo n’est chargé par les panneaux Maps/YouTube dans ce mode. Les cartes d’accueil sont des accès aux applications, explicitement libellés plein écran.
 
-## Utilisation
+## Correction en cours — panneaux natifs demandés
+
+La demande suivant 1.14.0 est l’ouverture automatique des **applications installées à l’intérieur des deux panneaux**, sans cartes d’ouverture ni boutons de magasin. La 1.14.0 publiée ne satisfait pas cette demande.
+
+Les boutons Google Play et leur code de lancement ont été retirés de la source. Ce changement ne réalise pas l’hébergement natif : les ouvertures externes restent externes et aucune ouverture automatique de deux tâches plein écran n’est ajoutée. Aucun site web n’est substitué au mode installé.
+
+Le rapport matériel déjà transmis identifie un Samsung SM-S918B ; il ne valide pas l’Incarlink. Le [diagnostic séparé 0.3](../native-maps-test/README.md), exécuté par le propriétaire sur le boîtier, est la prochaine vérification disponible. Un résultat de compatibilité ou de certificat positif ne suffira pas à prouver le fonctionnement : une intégration constructeur documentée et/ou un vrai essai natif réussi restent nécessaires. Les widgets AppWidget fournis par une application ne transforment pas automatiquement l’activité complète en widget ([Android AppWidgetHost](https://developer.android.com/develop/ui/views/appwidgets/host)).
+
+**Pas de nouvel APK stable publié pour présenter ce changement partiel comme une solution aux widgets.** La dernière release demeure 1.14.0. Aucun test sur boîtier, aucune permission système accordée ni installation sur un appareil propriétaire.
+
+## Utilisation de la release 1.14.0
 
 - Panneau Google Maps → Ouvrir Google Maps : lancement explicite du package officiel `com.google.android.apps.maps`. La recherche, le choix de destination, les couches, le zoom et la navigation sont ceux de l’application réelle, dans son écran. AutoDrive ne les reproduit pas dans un widget.
 - Settings → Application YouTube : sélectionner l’application déjà installée. Media → YouTube l’ouvre directement. Le panneau permet de l’ouvrir à nouveau ou de changer le choix. Le composant choisi est persistant ; une désinstallation ne provoque pas un changement silencieux d’application.

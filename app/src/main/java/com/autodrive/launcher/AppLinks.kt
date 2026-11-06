@@ -26,9 +26,6 @@ internal class AppLinks(private val activity: Activity) {
 
     fun mapsApp(): Launchable? = apps().firstOrNull { it.component.packageName == MAPS }
 
-    fun openStore(packageName: String): Boolean =
-        start(Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=$packageName")).setPackage("com.android.vending"))
-
     var tab: MediaTab
         get() = MediaTab.entries.firstOrNull { it.name == preferences.getString("tab", null) }
             ?: MediaTab.YOUTUBE

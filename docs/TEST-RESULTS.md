@@ -1,3 +1,11 @@
+## Correction non publiée — retrait des accès Google Play et audit widgets natifs
+
+Demande : afficher automatiquement les activités Android Maps/YouTube dans les panneaux de l’accueil. **Non réalisé** : la source 1.14.0 ouvrait ces applications à l’extérieur ; les rapports matériels transmis concernent le Samsung et aucune interface d’hébergement Incarlink supportée n’est vérifiée.
+
+Correction partielle de source : boutons de magasin supprimés de `InstalledAppPanel`, callbacks de lancement et helper `openStore` supprimés. Aucun basculement vers des sites web ni ouverture automatique de tâches externes ajouté. La release publique et le canal de mise à jour restent **1.14.0**, sans nouvelle publication d’APK pour cette correction partielle.
+
+Vérification après modification : `:app:testDebugUnitTest :app:assembleDebug :app:lintDebug` — **BUILD SUCCESSFUL**, 21 s. **39 tests JVM réussis**, 0 échec ; lint **0 erreur, 60 avertissements, 1 indication**. Recherche ciblée : aucune occurrence Google Play / openStore dans les trois fichiers de production concernés. Aucun nouveau test d’interface ni essai natif sur émulateur/boîtier effectué pour ce retrait d’actions. Aucun appareil installé ou modifié. Voir [l’état de l’intégration](INSTALLED-APPLICATIONS.md).
+
 ## 1.14.0 — applications Android installées (6 novembre 2026)
 
 - Compilation debug, APK de tests et lint : **BUILD SUCCESSFUL**. **39 tests JVM réussis** ; lint **0 erreur, 61 avertissements, 1 indication**. Les avertissements ne sont pas présentés comme corrigés.

@@ -16,7 +16,6 @@ internal class InstalledAppPanel(
     fallbackIcon: String,
     open: () -> Unit,
     configure: (() -> Unit)? = null,
-    install: (() -> Unit)? = null,
 ) : LinearLayout(context) {
     init {
         val ui = DriveViews(context)
@@ -38,8 +37,6 @@ internal class InstalledAppPanel(
         if (app != null) addView(ui.action("Ouvrir $title", selected = true, run = open),
             LayoutParams(-1, ui.dp(48)).apply { topMargin = ui.dp(4) })
         if (configure != null) addView(ui.action("Choisir $title", run = configure),
-            LayoutParams(-1, ui.dp(48)).apply { topMargin = ui.dp(4) })
-        if (app == null && install != null) addView(ui.action("Google Play · $title", run = install),
             LayoutParams(-1, ui.dp(48)).apply { topMargin = ui.dp(4) })
     }
 }
