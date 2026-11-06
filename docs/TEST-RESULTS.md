@@ -1,5 +1,18 @@
 # AutoDrive validation
 
+## Version 1.12.1 — remove the source bar above YouTube
+
+Validated 6 November 2026, `com.autodrive.launcher`, version code 30. Radio/YouTube/IPTV choices move to the existing **Media** shortcut; no source bar or reserved empty strip remains on the dashboard. The source page also exposes the existing radio catalogue.
+
+- **38 JVM tests passed**; debug/test APK and release-variant assembly passed. Lint: **0 errors, 54 warnings and 1 hint**.
+- Actual WebView measurements at **800 × 480 / density 160**: Maps stays **406 × 372 px**; YouTube grows from **374 × 322 to 374 × 371 px**, recovering **49 pixels of height**. At density 213: Maps **404 × 338**, YouTube **369 × 336 px**. At 600 × 1376 / density 240 portrait: Maps **584 × 544**, YouTube **582 × 640 px**.
+- Dashboard/lifecycle checks passed separately in all three configurations. They check removal of the native source bar, aligned browser tops in landscape, panel/display bounds, four unique shortcuts with usable targets and labels, selection through Media, remembered source choice, cancellation with Back, and retained WebViews on Settings/Back. [Landscape](../deliverables/dashboard-1.12.1-800x480.png), [density 213](../deliverables/dashboard-1.12.1-density213.png) and [portrait](../deliverables/dashboard-1.12.1-portrait.png) captures show actual provider pages and were visually inspected. GPS values are emulator readings, not vehicle measurements.
+- The initial **34-test combined run passed 32 checks and failed two** in 101.399 seconds. One was the new dashboard target-size assertion, which inspected a newly attached source page in the same UI loop before Android had laid it out. The test now yields to the real UI/layout loop before measuring; the corrected dashboard check passes at all three configurations and on the non-debuggable release candidate. Production sizing was not weakened. The other failure is the live Aswat programme fetch: its official HTTPS endpoint returned **HTTP 500**, independently confirmed from the host with the same request headers. This live-guide check remains **unvalidated in this version**, without a fabricated guide or insecure fallback. Thus **33 of the 34 distinct checks have successful validation across these runs**, rather than a claim that the full combined run passed.
+- Successful related checks include native radio-category navigation through **Media → Catalogue des radios**, previous/next radio transport, all twelve existing Quran-stream decode checks, retained web session data through the new Media/source round trip, Maps display preferences, phone, app drawer and updater checks. No new playback or account-login support is claimed.
+- The non-debuggable release candidate installed in place on the asserted emulator with the established update certificate; its dashboard/lifecycle check passed in **6.021 seconds**. Separately, actual Android input taps opened Media, chose Radio, IPTV and YouTube, verified each subsequent selected-source state, and returned with Android Back. The native source-page accessibility hierarchy confirms all four source/catalogue targets are fully within the 800 × 480 display and at least 48 pixels high at density 160. [Actual source selector](../deliverables/media-sources-1.12.1-800x480.png).
+
+Physical Incarlink layout and input remain unverified. Maps and YouTube retain their web integration. The live Aswat programme endpoint was unavailable during this validation. No owner device was installed or changed.
+
 ## Version 1.12.0 — larger dashboard panels
 
 Validated 6 November 2026, `com.autodrive.launcher`, version code 29. This is a native dashboard spacing change; Maps and YouTube retain their existing web integration.

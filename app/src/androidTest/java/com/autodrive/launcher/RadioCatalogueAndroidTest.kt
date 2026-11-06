@@ -52,7 +52,7 @@ class RadioCatalogueAndroidTest {
         fun click(label: String) = views().single { it.isShown && it.contentDescription == label }.performClick()
         fun grid() = views().filterIsInstance<GridView>().single()
         try {
-            instrumentation.runOnMainSync { click("Media"); click("Afficher les radios SNRT") }
+            instrumentation.runOnMainSync { click("Media"); click("Catalogue des radios"); click("Afficher les radios SNRT") }
             await { grid().count == 4 }
             instrumentation.runOnMainSync {
                 assertEquals(RadioCategory.SNRT, RadioAndPhoneStore(context).radioCategory)

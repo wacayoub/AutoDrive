@@ -39,18 +39,7 @@ class WebDashboardTest {
                     if (label == "Phone") assertEquals(Palette.green,
                         descendants(buttons.single()).filterIsInstance<DriveIcon>().single().color)
                 }
-                for (label in listOf("Radio", "YouTube", "IPTV")) {
-                    val button = all().single { it.isShown && it.contentDescription == label }
-                    val density = activity.resources.displayMetrics.density
-                    assertTrue("Tab target height: $label", button.height / density >= 48)
-                    assertTrue("Tab target width: $label", button.width / density >= 48)
-                    assertEquals(label, button.tooltipText)
-                    assertTrue("Icon-only tab: $label", descendants(button).none { it is android.widget.TextView })
-                    assertEquals(1, descendants(button).filterIsInstance<DriveIcon>().size)
-                    assertEquals(label == "YouTube", button.isSelected)
-                    // Fractional densities round dimensions to physical pixels.
-                    assertTrue("Compact tab surface", (button as ViewGroup).getChildAt(0).height / density <= 32.5f)
-                }
+                assertTrue("Source bar removed from home", all().none { it.isShown && it.contentDescription in listOf("Radio", "YouTube", "IPTV") })
                 val map = web().first { it.url?.contains("google.com/maps") == true }
                 val video = web().first { it.url?.contains("youtube.com") == true }
                 val mapLocation = IntArray(2).also(map::getLocationOnScreen)
@@ -58,7 +47,10 @@ class WebDashboardTest {
                 if (activity.resources.configuration.screenHeightDp > activity.resources.configuration.screenWidthDp) {
                     assertTrue("Portrait panels must be stacked", videoLocation[1] > mapLocation[1] + map.height)
                     assertTrue("Portrait map must use full width", map.width >= activity.window.decorView.width * .85f)
-                } else assertTrue("Landscape panels must be side by side", videoLocation[0] > mapLocation[0] + map.width)
+                } else {
+                    assertTrue("Landscape panels must be side by side", videoLocation[0] > mapLocation[0] + map.width)
+                    assertTrue("No source bar above video", kotlin.math.abs(videoLocation[1] - mapLocation[1]) <= activity.resources.displayMetrics.density * 2)
+                }
                 val bounds = android.graphics.Rect().also(activity.window.decorView::getWindowVisibleDisplayFrame)
                 for (panel in listOf(map, video)) {
                     val position = IntArray(2).also(panel::getLocationOnScreen)
@@ -75,20 +67,34 @@ class WebDashboardTest {
                         image.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
                     } } finally { image.recycle() }
                 }
-                click("Radio")
-                assertEquals(1, web().size)
-                assertTrue(all().single { it.contentDescription == "Radio" }.isSelected)
-                click("IPTV")
-                assertEquals(1, web().size)
-                assertTrue(all().single { it.contentDescription == "IPTV" }.isSelected)
-                click("YouTube")
-                assertEquals(2, web().size)
+                click("Media")
+                assertEquals(0, web().size)
+                assertTrue(all().single { it.contentDescription == "YouTube" }.isSelected)
+                click("Back")
+                assertTrue(web().any { it === map }); assertTrue(web().any { it === video })
+            }
+            // Source pages are newly attached views: let Android lay them out before checking targets.
+            for (source in listOf("Radio", "IPTV", "YouTube")) {
+                instrumentation.runOnMainSync { click("Media") }
+                instrumentation.waitForIdleSync()
+                instrumentation.runOnMainSync {
+                    for (title in listOf("Radio", "YouTube", "IPTV")) {
+                        val target = all().single { it.contentDescription == title }
+                        assertTrue("Source target: $title", target.height / activity.resources.displayMetrics.density >= 48)
+                    }
+                    click(source)
+                    assertEquals(if (source == "YouTube") 2 else 1, web().size)
+                    assertEquals(source, AppLinks(activity).tab.title)
+                }
+                instrumentation.waitForIdleSync()
+            }
+            instrumentation.runOnMainSync {
+                val beforeSettings = web().toList()
                 click("Settings")
                 assertEquals(0, web().size)
                 click("Back")
                 assertEquals(2, web().size)
-                org.junit.Assert.assertSame(map, web().first { it === map })
-                org.junit.Assert.assertSame(video, web().first { it === video })
+                beforeSettings.forEach { retained -> assertTrue(web().any { it === retained }) }
             }
         } finally {
             instrumentation.runOnMainSync { activity.finish() }

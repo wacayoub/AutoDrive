@@ -36,7 +36,8 @@ class RadioGuideAndroidTest {
         try {
             val model = ViewModelProvider(activity)[RadioGuideViewModel::class.java]
             await { model.state.value.phase == RadioGuidePhase.READY }
-            tap(activity.window.decorView, "Media") // The selected radio opens its full player, rather than switching to YouTube.
+            tap(activity.window.decorView, "Media")
+            tap(activity.window.decorView, "Catalogue des radios")
             await { views().any { it.contentDescription == "Programme" } }
             tap(activity.window.decorView, "Programme")
             await { views().filterIsInstance<ListView>().any { it.contentDescription == "Programme des émissions radio" && it.count > 0 } }

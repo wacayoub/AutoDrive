@@ -47,7 +47,9 @@ class RetainedWebPanelTest {
             click(activity.window.decorView, "Back")
             val web = descendants(activity.window.decorView).filterIsInstance<WebView>()
             assertTrue(web.any { it === map }); assertTrue(web.any { it === video })
+            click(activity.window.decorView, "Media")
             click(activity.window.decorView, "Radio")
+            click(activity.window.decorView, "Media")
             click(activity.window.decorView, "YouTube")
             assertTrue(descendants(activity.window.decorView).any { it === video })
         }

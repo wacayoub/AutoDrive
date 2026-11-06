@@ -61,7 +61,6 @@ class WebDashboardActivity : ComponentActivity() {
     private lateinit var status: android.widget.TextView
     private lateinit var clock: android.widget.TextView
     private val connectivityIcons = mutableMapOf<String, DriveIcon>()
-    private val tabs = mutableMapOf<MediaTab, android.view.View>()
     private val keyboardChrome = mutableListOf<android.view.View>()
     private var homeVisible = true
     private var resumed = false
@@ -217,34 +216,6 @@ class WebDashboardActivity : ComponentActivity() {
             mediaPane = ui.line(true).apply {
                 background = ui.shape(Palette.surface, 18, Palette.border)
                 setPadding(ui.dp(2), ui.dp(1), ui.dp(2), ui.dp(2))
-                addView(ui.line().apply {
-                    gravity = Gravity.CENTER
-                    MediaTab.entries.forEach { tab ->
-                        val icon = when (tab) {
-                            MediaTab.RADIO -> "radio"
-                            MediaTab.YOUTUBE -> "youtube"
-                            MediaTab.IPTV -> "tv"
-                        }
-                        val button = FrameLayout(this@WebDashboardActivity).apply {
-                            contentDescription = tab.title
-                            tooltipText = tab.title
-                            minimumWidth = ui.dp(48)
-                            minimumHeight = ui.dp(48)
-                            addView(View(this@WebDashboardActivity).apply {
-                                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
-                            }, FrameLayout.LayoutParams(ui.dp(40), ui.dp(32), Gravity.CENTER))
-                            addView(ui.icon(icon, Palette.shortcut(icon), 22).apply {
-                                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
-                            }, FrameLayout.LayoutParams(ui.dp(26), ui.dp(26), Gravity.CENTER))
-                        }
-                        tabs[tab] = button
-                        addView(button, LinearLayout.LayoutParams(ui.dp(52), ui.dp(48)).apply {
-                            marginStart = ui.dp(2)
-                            marginEnd = ui.dp(2)
-                        })
-                    }
-                }.also(keyboardChrome::add))
-                with(ui) { gap(1) }
                 mediaContent = FrameLayout(this@WebDashboardActivity).apply {
                     background = ui.shape(android.graphics.Color.BLACK, 12)
                     clipToOutline = true
@@ -257,7 +228,7 @@ class WebDashboardActivity : ComponentActivity() {
         addView(ui.line().apply {
             val items = listOf(
                 Triple("Phone", "phone", { showPhone() }),
-                Triple("Media", "media", { if (links.tab == MediaTab.RADIO) showMoroccoRadios() else select(links.tab) }),
+                Triple("Media", "media", { showMediaSources() }),
                 Triple("Apps", "apps", { showApps() }),
                 Triple("Settings", "settings", { showSettings() })
             )
@@ -374,6 +345,28 @@ class WebDashboardActivity : ComponentActivity() {
         youtube?.pause()
     }
 
+    private fun showMediaSources() {
+        val selected = links.tab
+        page("Media", ui.line(true).apply {
+            MediaTab.entries.forEach { source ->
+                val icon = when (source) {
+                    MediaTab.RADIO -> "radio"
+                    MediaTab.YOUTUBE -> "youtube"
+                    MediaTab.IPTV -> "tv"
+                }
+                addView(ui.action(source.title, icon, selected == source, Palette.shortcut(icon)) {
+                    links.tab = source
+                    showHome()
+                }.apply {
+                    isSelected = selected == source
+                    stateDescription = if (isSelected) "Source actuelle" else null
+                }, LinearLayout.LayoutParams(-1, ui.dp(56)).apply { topMargin = ui.dp(6) })
+            }
+            addView(ui.action("Catalogue des radios", "radio", iconColor = Palette.amber) { showMoroccoRadios() },
+                LinearLayout.LayoutParams(-1, ui.dp(56)).apply { topMargin = ui.dp(12) })
+        })
+    }
+
     private fun select(tab: MediaTab) {
         if (renderedMediaTab == tab && mediaContent.childCount > 0) {
             if (tab == MediaTab.YOUTUBE && resumed && homeVisible) youtube?.start()
@@ -386,15 +379,6 @@ class WebDashboardActivity : ComponentActivity() {
         youtube?.pause()
         mediaContent.removeAllViews()
         renderedMediaTab = tab
-        tabs.forEach { (value, button) ->
-            button.isSelected = value == tab
-            val frame = button as FrameLayout
-            val icon = frame.getChildAt(1) as DriveIcon
-            icon.style(color = Palette.shortcut(icon.name))
-            frame.getChildAt(0).background = ui.shape(if (value == tab) 0xFF244E73.toInt() else Palette.surface,
-                10, if (value == tab) Palette.blue else android.graphics.Color.TRANSPARENT)
-            ui.touch(button, android.graphics.Color.TRANSPARENT, 12) { select(value) }
-        }
         if (tab == MediaTab.YOUTUBE) {
             val panel = youtube ?: BrowserPanel(this, "https://m.youtube.com/", false, {}, ::openExternal,
                 nativeYouTube = { uri -> links.openYouTube(uri) },
