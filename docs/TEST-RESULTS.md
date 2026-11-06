@@ -8,6 +8,14 @@
 - **Non testés sur Incarlink** : lancement de son Maps et YouTube choisis, guidage et lecture vidéo, authentification Google réelle, appels Bluetooth et démarrage système. Le test de lancement Maps est ignoré dans cet AVD car le package officiel est absent. L’absence de Maps est bien testée séparément : état manquant, retour false, aucun site ni application tierce lancé à sa place.
 - Aucun appareil du propriétaire n’a reçu d’installation. Émulateur utilisé explicitement : `emulator-5568`, propriété qemu vérifiée avant les mutations.
 
+Publication vérifiée :
+
+- Code publié : `127adfa672aaf6c0889739efa1fadc769ccbcf07`, version **1.14.0 / code 33**. [Contrôles CI réussis](https://github.com/wacayoub/AutoDrive/actions/runs/42304348453) ; [build signé réussi](https://github.com/wacayoub/AutoDrive/actions/runs/42304371903).
+- [APK public](https://github.com/wacayoub/AutoDrive/releases/download/v1.14.0/AutoDrive.apk) téléchargé sans identifiant ; version courante GitHub et manifeste de mise à jour vérifiés. Taille : **11 510 621 octets**. SHA-256 : `c96fa2dbc65d45d0ac8dd8b0a81f7c201d224baa3974ded36d6fe0f283a37f69`.
+- Certificat stable vérifié : `1ef249ecb8d4af1bbd730a15aea2248acf5d578dffde2d637fd01b7e5f637efb`. Mise à jour en place sur le seul émulateur jetable réussie.
+- Ce fichier public exact a passé **4 scénarios et 1 ignoré**, **10,073 s** (runner : 5 cas). Le test d’ouverture du composant choisi a été renforcé après le commit de publication pour utiliser la **touche Android Back réelle** au premier retour, puis l’intent d’accueil AutoDrive au second retour ; aucun changement de code de production. Le test renforcé passait aussi sur le candidat, 3,208 s. Ces retours ne relancent pas l’application externe ; la sélection Media → YouTube fonctionne également.
+- Remise de l’émulateur dans son état de test : permissions téléphonie nouvellement accordées révoquées, lanceur AOSP rétabli, service de vérification système activé, dimensions/densité réinitialisées, réseau disponible puis émulateur arrêté. Aucun appareil du propriétaire touché.
+
 ![État applications absentes — 800 × 480, densité 160](../deliverables/installed-apps-1.14.0-800x480.png)
 ![Même état — 800 × 480, densité 213](../deliverables/installed-apps-1.14.0-density213.png)
 

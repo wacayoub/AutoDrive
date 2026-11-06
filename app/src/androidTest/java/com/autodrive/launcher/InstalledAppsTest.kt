@@ -32,7 +32,8 @@ class InstalledAppsTest {
         instrumentation.waitForIdleSync()
         instrumentation.runOnMainSync { click(activity, "Ouvrir YouTube") }
         awaitForeground(clock.component.packageName)
-        instrumentation.runOnMainSync { activity.startActivity(homeIntent()) }
+        // Actual Android Back from the external root activity, followed later by HOME intent re-entry.
+        instrumentation.sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_BACK)
         awaitForeground(context.packageName)
         instrumentation.waitForIdleSync()
         SystemClock.sleep(600)
