@@ -31,7 +31,8 @@ internal object MapDisplayScript {
               const id=e=>Object.keys(names).find(key=>names[key].some(name=>normalize(name)===label(e)));
               const checked=e=>e.getAttribute('aria-checked')==='true'?true:e.getAttribute('aria-checked')==='false'?false:null;
               const usable=e=>!e.disabled && e.getAttribute('aria-disabled')!=='true' && checked(e)!==null;
-              const state={userInteracted:false,lastGesture:0,followOnStart:config.followOnStart,restoring:true,attempted:{},locationAttempted:false};
+              const started=Date.now();
+              const state={userInteracted:false,lastGesture:0,followOnStart:config.followOnStart,restoring:true,attempted:{},requests:{},nextRequest:{},locationAttempted:false,locationAttempts:0,locationConfirmed:false,nextLocation:started+1500};
               window.__autoDriveMapDisplay=state;
               const gesture=event=>{
                 if(!event.isTrusted) return;
@@ -58,15 +59,23 @@ internal object MapDisplayScript {
                   if(state.attempted[key]) return;
                   const button=buttons.find(el=>id(el)===key && usable(el));
                   if(!button) return;
-                  state.attempted[key]=true;
-                  if(checked(button)!==wanted) button.click();
+                  if(checked(button)===wanted){state.attempted[key]=true;return;}
+                  if(Date.now()<started+700 || Date.now()<(state.nextRequest[key]||0) || (state.requests[key]||0)>=3)return;
+                  state.requests[key]=(state.requests[key]||0)+1;state.nextRequest[key]=Date.now()+2000;
+                  button.click();
                 });
-                if(config.followOnStart && config.canLocate && !state.locationAttempted){
-                  const button=buttons.find(el=>locationNames.some(name=>normalize(name)===label(el)) && usable(el));
-                  if(button){state.locationAttempted=true;if(checked(button)!==true)button.click();}
+                if(config.followOnStart && config.canLocate && !state.locationConfirmed){
+                  const button=buttons.find(el=>{const r=el.getBoundingClientRect();return locationNames.some(name=>normalize(name)===label(el)) && usable(el) &&
+                    r.width>0 && r.height>0 && r.x+r.width/2>0 && r.x+r.width/2<innerWidth && r.y+r.height/2>0 && r.y+r.height/2<innerHeight && getComputedStyle(el).visibility!=='hidden'});
+                  if(button){
+                    if(checked(button)===true){state.locationAttempted=true;state.locationConfirmed=true;}
+                    else if(Date.now()>=state.nextLocation && state.locationAttempts<3){
+                      state.locationAttempted=true;state.locationAttempts++;state.nextLocation=Date.now()+5000;button.click();
+                    }
+                  }
                 }
-                if(Object.keys(config.options).every(key=>state.attempted[key]) &&
-                    (!config.followOnStart || !config.canLocate || state.locationAttempted)){
+                if(Object.keys(config.options).every(key=>state.attempted[key] || ((state.requests[key]||0)>=3 && Date.now()>=state.nextRequest[key])) &&
+                    (!config.followOnStart || !config.canLocate || state.locationConfirmed || (state.locationAttempts>=3 && Date.now()>=state.nextLocation))){
                   clearInterval(state.timer);state.restoring=false;
                 }
               };

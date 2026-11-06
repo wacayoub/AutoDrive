@@ -16,7 +16,7 @@ La même identité de signature est conservée pour permettre les mises à jour 
 
 ## Tableau de bord
 
-- Version **1.11.0** : options d’affichage Maps mémorisées après redémarrage (trafic, satellite/relief, autres cases reconnues et zoom), avec recentrage au démarrage après avoir choisi « Votre position ». Autorisation de localisation du site conservée après accord Android ; aucun compte ou parcours n’est copié. [Fonctionnement et limites](docs/MAPS-DISPLAY-MEMORY.md).
+- Version **1.11.1** : options d’affichage Maps mémorisées après redémarrage (trafic, satellite/relief, autres cases reconnues et zoom initial), avec recentrage au démarrage après avoir choisi « Votre position ». Les relances sont bornées lorsque le site reste inactif au chargement. Autorisation de localisation du site conservée après accord Android ; aucun compte ou parcours n’est copié. [Fonctionnement et limites](docs/MAPS-DISPLAY-MEMORY.md).
 
 - Version **1.10.0** : filtres **SNRT / القرآن**, quatre accès aux lecteurs officiels SNRT et douze radios de récitateurs avec noms arabes et recherche bilingue. Noms de stations nettoyés, file de lecture stable, et **Apps en grille avec les vraies icônes installées**. SNRT passe par ses lecteurs officiels externes ; sa lecture native intégrée n’est pas disponible dans cette version. [Sources et limites](docs/RADIO-CATALOGUE.md).
 

@@ -43,7 +43,7 @@ class MapDisplayPersistenceTest {
         assertFalse(memory.read().viewUrl.orEmpty().contains("authuser"))
         instrumentation.runOnMainSync { panel.release() }
         panel = panel(activity);web = load(panel)
-        await { evaluate(web,"document.getElementById('traffic').getAttribute('aria-checked')") == "\"true\"" }
+        await { evaluate(web,"document.getElementById('traffic').getAttribute('aria-checked')==='true' && window.clicks.locate===1") == "true" }
         assertEquals("\"true\"",evaluate(web,"document.getElementById('satellite').getAttribute('aria-checked')"))
         // The fixture records calls, not a fabricated position. Actual provider GPS is checked separately.
         assertEquals("1",evaluate(web,"window.clicks.locate"))
@@ -91,6 +91,20 @@ class MapDisplayPersistenceTest {
         }
     }
 
+    @Test fun delayedProviderHandlersAreRetriedAndStopAfterConfirmation() = fixture { activity ->
+        val memory=MapDisplayMemory(context)
+        memory.capture("""{"schema":1,"url":"https://www.google.com/maps/@33.57,-7.58,14z","options":{"TRAFFIC":true},"followOnStart":true}""")
+        val panel=panel(activity);val web=load(panel)
+        evaluate(web,"window.acceptCommands=false;setTimeout(()=>window.acceptCommands=true,2600)")
+        await(10_000){evaluate(web,"document.getElementById('traffic').getAttribute('aria-checked')==='true' && document.getElementById('locate').getAttribute('aria-checked')==='true'")=="true"}
+        val clicks=evaluate(web,"window.clicks.locate")
+        assertTrue("Cold provider ignored first request, so it needed a bounded retry",clicks.toInt() in 2..3)
+        SystemClock.sleep(2000)
+        assertEquals("No more recenter clicks after the provider activates",clicks,evaluate(web,"window.clicks.locate"))
+        assertEquals("0",evaluate(web,"window.clicks.sharing"))
+        instrumentation.runOnMainSync{panel.release()}
+    }
+
     private fun fixture(block: (WebDashboardActivity) -> Unit) {
         val prefs = context.getSharedPreferences("maps_display",0)
         val before = prefs.getString("state",null)
@@ -103,26 +117,34 @@ class MapDisplayPersistenceTest {
     }
     private fun panel(activity: WebDashboardActivity): BrowserPanel {
         lateinit var panel: BrowserPanel
+        val blankReady=CountDownLatch(1)
         instrumentation.runOnMainSync {
             views(activity.window.decorView).filterIsInstance<BrowserPanel>().forEach { it.release() }
             panel=BrowserPanel(activity,"about:blank",true,{}, {}) {}
             activity.setContentView(FrameLayout(activity).apply { addView(panel,FrameLayout.LayoutParams(-1,-1)) })
             panel.start()
+            val web=views(panel).filterIsInstance<WebView>().single()
+            val real=web.webViewClient;clients[web]=real
+            web.webViewClient=object:WebViewClient(){
+                override fun onPageStarted(view:WebView,url:String?,icon:android.graphics.Bitmap?){real.onPageStarted(view,url,icon)}
+                override fun onPageFinished(view:WebView,url:String?){real.onPageFinished(view,url);if(url=="about:blank")blankReady.countDown()}
+            }
         }
+        check(blankReady.await(5,TimeUnit.SECONDS)){"Initial blank document did not settle"}
         return panel
     }
-    private fun load(panel: BrowserPanel, url: String = "https://www.google.com/maps/@33.57,-7.58,14z?authuser=private"): WebView {
+    private fun load(panel: BrowserPanel, url: String = "https://maps.google.com/maps/@33.57,-7.58,14z?authuser=private"): WebView {
         lateinit var web: WebView
         instrumentation.runOnMainSync {
             web=views(panel).filterIsInstance<WebView>().single()
             web.stopLoading()
             val real=clients.getOrPut(web){web.webViewClient}
-            // Native URL/origin checks must remain enabled. Serve this test-only document through
-            // a public request interceptor; loadDataWithBaseURL exposes a data: URL on this WebView.
+            // Native URL/origin checks remain enabled. Use another explicitly allowed Maps origin
+            // so the real www.google.com service worker cannot own this test navigation.
             web.webViewClient=object:WebViewClient(){
                 override fun shouldInterceptRequest(view:WebView,request:WebResourceRequest):WebResourceResponse? =
                     if(request.isForMainFrame && request.url.scheme=="https" && request.url.host==android.net.Uri.parse(url).host)
-                        WebResourceResponse("text/html","UTF-8",html.byteInputStream()) else null
+                        WebResourceResponse("text/html","UTF-8",html.byteInputStream()).apply{responseHeaders=mapOf("Cache-Control" to "no-store")} else null
                 override fun onPageStarted(view:WebView,page:String?,icon:android.graphics.Bitmap?){real.onPageStarted(view,page,icon)}
                 override fun onPageCommitVisible(view:WebView,page:String?){real.onPageCommitVisible(view,page)}
                 override fun onPageFinished(view:WebView,page:String?){real.onPageFinished(view,page)}
@@ -151,8 +173,8 @@ class MapDisplayPersistenceTest {
         try { instrumentation.sendPointerSync(down);instrumentation.sendPointerSync(up) } finally { down.recycle();up.recycle() }
         instrumentation.waitForIdleSync();SystemClock.sleep(100)
     }
-    private fun await(condition:()->Boolean) {
-        val deadline=SystemClock.uptimeMillis()+6_000
+    private fun await(timeout:Long=6_000,condition:()->Boolean) {
+        val deadline=SystemClock.uptimeMillis()+timeout
         while(SystemClock.uptimeMillis()<deadline){if(condition())return;SystemClock.sleep(50)}
         fail("Display fixture did not reach expected state")
     }
@@ -164,8 +186,8 @@ class MapDisplayPersistenceTest {
         <button id="locate" aria-label="Show your location" aria-checked="false">Locate</button>
         <button id="sharing" role="checkbox" aria-checked="false">Real-time location sharing</button>
         <style>button{display:block;width:230px;height:60px;margin:8px}</style>
-        <script>window.clicks={traffic:0,satellite:0,locate:0,sharing:0};
-        Object.keys(clicks).forEach(id=>document.getElementById(id).onclick=function(){clicks[id]++;this.setAttribute('aria-checked',this.getAttribute('aria-checked')!=='true')});
+        <script>window.clicks={traffic:0,satellite:0,locate:0,sharing:0};window.acceptCommands=true;
+        Object.keys(clicks).forEach(id=>document.getElementById(id).onclick=function(){clicks[id]++;if(!window.acceptCommands)return;this.setAttribute('aria-checked',this.getAttribute('aria-checked')!=='true')});
         window.fixtureReady=true;</script></body></html>
     """.trimIndent()
 }

@@ -1,8 +1,9 @@
-AutoDrive 1.11.0 mémorise l’affichage du panneau Google Maps après redémarrage.
+AutoDrive 1.11.1 mémorise l’affichage du panneau Google Maps après redémarrage.
 
 - Mémorisation des cases d’affichage reconnues : trafic, transports, vélo, satellite, relief, feux de forêt et commandes de mouvement de la carte.
 - Après avoir touché Votre position, le recentrage sera demandé au prochain démarrage si la localisation Android est disponible. Une ancienne coordonnée ne remplace pas une position actuelle.
-- Zoom conservé ; cadrage manuel mémorisé quand le recentrage est désactivé. Aucune reprise automatique d’un trajet.
+- Démarrage à froid : brève attente avant le recentrage, puis au plus trois tentatives espacées si la commande reste inactive. La restauration s’arrête dès l’activation ou dès une action manuelle sur la carte.
+- Zoom initial retransmis au site ; Google peut adapter le cadrage lors du recentrage. Vue manuelle mémorisée quand le recentrage est désactivé. Aucune reprise automatique d’un trajet.
 - Autorisation de site conservée après accord Android. Une première demande de position attend désormais le résultat de permission au lieu d’être immédiatement refusée.
 - Réglages : Recentrage Maps au démarrage et Réinitialiser l’affichage Maps. Aucun bouton ajouté sur la carte.
 

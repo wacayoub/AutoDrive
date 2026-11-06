@@ -29,6 +29,10 @@ class MapLiveAuditTest {
             instrumentation.runOnMainSync {
                 web = views(activity.window.decorView).filterIsInstance<BrowserPanel>().first().let { views(it).filterIsInstance<WebView>().single() }
             }
+            if(args.getString("coldCache")=="true"){
+                instrumentation.runOnMainSync{web.clearCache(true);web.reload()}
+                SystemClock.sleep(7_000)
+            }
             val action = args.getString("mapAction").orEmpty()
             if (action.isNotBlank()) {
                 for(step in action.split('|')) {
@@ -50,23 +54,40 @@ class MapLiveAuditTest {
                 }
                 click.await(3,TimeUnit.SECONDS);SystemClock.sleep(2_000)
             }
+            if(args.getString("expectRestored")=="true"){
+                // The live provider resolves GPS asynchronously; a fixed screenshot delay can
+                // precede the emulator's next fix. Wait for the real control, never set its state.
+                val deadline=SystemClock.uptimeMillis()+15_000
+                var active=false
+                while(!active && SystemClock.uptimeMillis()<deadline){
+                    val checked=CountDownLatch(1)
+                    instrumentation.runOnMainSync{
+                        web.evaluateJavascript("""
+                            [...document.querySelectorAll('button')].some(e=>['Recentrer la carte sur votre position','Show your location','Recenter map on your location'].includes(e.getAttribute('aria-label'))&&e.getAttribute('aria-checked')==='true')
+                        """.trimIndent()){active=it=="true";checked.countDown()}
+                    }
+                    check(checked.await(3,TimeUnit.SECONDS));if(!active)SystemClock.sleep(250)
+                }
+            }
             var result = ""
             val done = CountDownLatch(1)
             instrumentation.runOnMainSync {
                 web.evaluateJavascript("""
-                    JSON.stringify({url:location.href,title:document.title,replay:window.__autoDriveMapDisplay?{locationAttempted:window.__autoDriveMapDisplay.locationAttempted,attempted:window.__autoDriveMapDisplay.attempted}:null,controls:[...document.querySelectorAll('button,[role="button"],[role="menuitemcheckbox"],[role="radio"],[role="switch"]')]
+                    JSON.stringify({url:location.href,title:document.title,replay:window.__autoDriveMapDisplay?{locationAttempted:window.__autoDriveMapDisplay.locationAttempted,locationAttempts:window.__autoDriveMapDisplay.locationAttempts,locationConfirmed:window.__autoDriveMapDisplay.locationConfirmed,attempted:window.__autoDriveMapDisplay.attempted}:null,controls:[...document.querySelectorAll('button,[role="button"],[role="menuitemcheckbox"],[role="radio"],[role="switch"]')]
                     .filter(e=>e.getClientRects().length && getComputedStyle(e).visibility!=='hidden').slice(0,100).map(e=>({tag:e.tagName,role:e.getAttribute('role'),label:e.getAttribute('aria-label'),text:(e.textContent||'').trim().slice(0,100),pressed:e.getAttribute('aria-pressed'),checked:e.getAttribute('aria-checked'),title:e.getAttribute('title')}))})
                 """.trimIndent()) { result=it;done.countDown() }
             }
             check(done.await(5,TimeUnit.SECONDS))
             if(args.getString("expectRestored")=="true"){
                 val data=org.json.JSONObject(org.json.JSONTokener(result).nextValue() as String)
+                org.junit.Assert.assertTrue("Live audit must inspect the actual provider, not a local control fixture",data.optString("title").contains("Google Maps"))
                 val controls=data.getJSONArray("controls")
                 fun selected(suffix:String)=(0 until controls.length()).any{index->controls.getJSONObject(index).let{it.optString("text").endsWith(suffix)&&it.optString("checked")=="true"}}
                 org.junit.Assert.assertTrue("Live Google traffic selection restored",selected("Trafic")||selected("Traffic"))
                 org.junit.Assert.assertTrue("Live Google satellite selection restored",selected("Satellite"))
                 org.junit.Assert.assertTrue(data.getJSONObject("replay").getBoolean("locationAttempted"))
-                org.junit.Assert.assertTrue("Live Google current-location control active",(0 until controls.length()).any{index->controls.getJSONObject(index).let{
+                val locationControls=(0 until controls.length()).map{controls.getJSONObject(it)}.filter{it.optString("label").contains("location",true)||it.optString("label").contains("position",true)||it.optString("text").contains("position",true)}
+                org.junit.Assert.assertTrue("Live Google current-location control active: $locationControls",(0 until controls.length()).any{index->controls.getJSONObject(index).let{
                     it.optString("label") in setOf("Recentrer la carte sur votre position","Show your location","Recenter map on your location")&&it.optString("checked")=="true"
                 }})
             }

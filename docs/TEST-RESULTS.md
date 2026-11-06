@@ -1,6 +1,19 @@
 # AutoDrive validation
 
-## Version 1.11.0 — persistent Maps display and location permission
+## Version 1.11.1 — confirmed, bounded Maps restoration
+
+Validated 6 November 2026, `com.autodrive.launcher`, version code 28. [Display memory implementation and limits](MAPS-DISPLAY-MEMORY.md).
+
+- **38 JVM tests passed**; debug and instrumentation APKs assembled. Android lint completed with **0 errors, 54 warnings and 1 hint**.
+- **34 instrumented tests passed together in 120.122 seconds**, AOSP Android 13 / 800 × 480 / density 160. This includes the previous display-memory, radio, app drawer, phone, updater and retained-session checks, plus delayed provider handlers: initial display/location requests are ignored by the local fixture, later retries activate its real checkbox state, then requests stop after confirmation. Those fixture controls provide no map imagery or real GPS.
+- A release-variant candidate assembled successfully and uses the established update certificate. Unlike the initial one-click implementation, it confirms the provider's checked state, bounds retries to three, and cancels restoration on manual interaction. Location retries are spaced five seconds apart after an initial delay; all restoration expires after thirty seconds.
+- Earlier fixture attempts failed with a native `data:` URL or a Chrome error document on the live www.google.com origin. The corrected fixture uses test-only public request interception on the separately allowed maps.google.com origin with no-store, delegates the real BrowserPanel lifecycle, and waits for the initial blank document. Production origin restrictions remain enabled. Service-worker interference is a possible explanation for the www-origin conflict, not an established root cause.
+
+- Before publication, the **non-debuggable release candidate / code 28** was installed in place only on the asserted disposable emulator. Three independent force-stop/restart runs passed strict assertions against the **actual Google Maps page**: Traffic and Satellite checked true, the real current-location control checked true. Runs one and three also cleared the ordinary HTTP cache and reloaded (no cookies or account storage were cleared). The three live test durations were 17.545 seconds, 9.690 seconds and 19.564 seconds. Provider location was supplied by explicit emulator GPS test fixes at Casablanca, not a real vehicle measurement. No test set the provider checkbox state or injected a fabricated navigation result.
+
+The live provider audit is opt-in and separate from the 34-test combined suite. Google account login and Incarlink GPS remain unverified. Display restoration does not embed the native Maps Android application or Android Auto, nor restore account, sharing or trip state. No owner device was installed or changed.
+
+## Version 1.11.0 — initial display memory; prerelease after signed cold-start audit
 
 Validated 6 November 2026, `com.autodrive.launcher`, version code 27. [Display memory audit and limits](MAPS-DISPLAY-MEMORY.md).
 
@@ -12,6 +25,8 @@ Validated 6 November 2026, `com.autodrive.launcher`, version code 27. [Display m
 - A live Google Maps audit first confirmed its actual French checkbox labels/ARIA states and traffic URL behavior. Real injected touches then enabled **Traffic, Satellite and Your location** on the actual provider page. The native saved preferences contained the selections and zoom, without writing the followed GPS coordinates. After force-stop, a new process restored **actual Google checkbox states** for Traffic/Satellite and the actual current-location control was checked true. Its restore logic attempted each option once. These are observations of the real provider controls, not the synthetic fixtures.
 - The first live UI driver encountered repeated UiAutomator exits 137 while traversing Google's accessibility tree and a transient menu during reload. Live verification therefore locates provider controls using their DOM geometry and injects actual Android touch events through instrumentation. No Accessibility service or production automation permission is added. The opt-in audit class is not included in the normal 33-test suite.
 - [Actual restored dashboard](../deliverables/maps-restored-1.11.0-800x480.png) was visually inspected. Satellite imagery, provider traffic colors, Google attribution and the active blue position control remain provider-rendered. The disposable emulator used explicit GPS test fixes at Casablanca; this is **not validation of the owner's real GPS, traffic accuracy or physical vehicle**. No turn-by-turn navigation, ETA or account login was fabricated or claimed.
+
+The signed public code-27 APK passed the cross-update preference read, and Traffic/Satellite were restored. However, the stricter live current-location assertion failed on two cold starts before passing on a third, without changing source. Consequently v1.11.0 was marked **prerelease** and removed from stable latest discovery. This intermittent failure motivated 1.11.1: confirming provider activation and bounded retries instead of assuming one click completed the operation. The earlier debug success does not establish reliable signed cold-start recentering.
 
 No Android permission or SDK dependency was added. Google account login and owner-device GPS behavior remain unverified. Unsupported provider controls are not replayed, and sharing, account, consent and automatic-trip actions are excluded. No owner box or phone was installed or changed.
 
