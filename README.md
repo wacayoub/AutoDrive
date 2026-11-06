@@ -7,7 +7,7 @@ Lanceur Android 13 natif Kotlin pour Incarlink Max X15-SLM927-72, adapté au pay
 ## Installation et mises à jour
 
 1. Installe une première fois la version **1.4.0 ou ultérieure** depuis GitHub, en mise à jour de ton APK existant. Garde les données de l’application.
-2. Ensuite ouvre **Settings → Mises à jour** dans AutoDrive : **Rechercher**, **Télécharger**, puis **Installer**. Tu n’as plus à chercher ni transférer chaque APK manuellement.
+2. À partir de **1.9.1**, lorsqu’une nouvelle version est trouvée, touche **OK** : AutoDrive télécharge, vérifie le fichier et ouvre directement l’installation Android. Tu peux aussi utiliser **Settings → Mises à jour → Rechercher**. Sur une version antérieure, effectue encore une fois l’ancien parcours Télécharger / Installer pour recevoir cette amélioration.
 3. Android peut demander d’autoriser AutoDrive comme source d’installation et de confirmer la mise à jour. L’application ne contourne pas ces confirmations et n’installe rien silencieusement.
 
 La même identité de signature est conservée pour permettre les mises à jour et garder les préférences. Le fichier téléchargé est contrôlé : SHA-256, taille, nom de package, version croissante et certificat Android. [Fonctionnement et publication](docs/ONLINE-UPDATES.md).
@@ -15,6 +15,8 @@ La même identité de signature est conservée pour permettre les mises à jour 
 ![Mises à jour dans la version 1.4.0 installée](deliverables/updates-1.4.0-800x480.png)
 
 ## Tableau de bord
+
+- Version **1.9.1** : une confirmation **OK** enchaîne le téléchargement vérifié et l’ouverture de l’installateur Android. Pas de deuxième bouton Installer dans AutoDrive après le téléchargement ; si tu annules l’installateur, **Reprendre l’installation** reste disponible. [Mises à jour](docs/ONLINE-UPDATES.md).
 
 - Version **1.9.0** : lecteur Radio agrandi avec station/favori, infos réelles du flux et onglets **Stations / Programme**. La grille officielle d’Aswat est consultable sur sept jours, avec créneau prévu, suivant, source et cache hors connexion. Les autres stations restent signalées sans guide compatible intégré ; aucun programme n’est inventé. [Couverture et fonctionnement EPG](docs/RADIO-EPG.md).
 

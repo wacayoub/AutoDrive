@@ -17,15 +17,17 @@ import java.io.File
 
 internal enum class UpdatePhase { IDLE, CHECKING, AVAILABLE, DOWNLOADING, READY, CURRENT, ERROR }
 internal data class UpdateState(val phase: UpdatePhase = UpdatePhase.IDLE, val release: UpdateRelease? = null,
-    val progress: Int = 0, val message: String = "Rechercher une nouvelle version sur GitHub")
+    val progress: Int = 0, val message: String = "Rechercher une nouvelle version sur GitHub",
+    val installRequested: Boolean = false)
 
-internal class UpdateViewModel(application: Application) : AndroidViewModel(application) {
-    val source = GitHubUpdates(application)
+internal class UpdateViewModel(application: Application, val source: UpdateSource) : AndroidViewModel(application) {
+    constructor(application: Application) : this(application, GitHubUpdates(application))
     private val mutable = MutableStateFlow(UpdateState())
     val state = mutable.asStateFlow()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var job: Job? = null
     private var readyFile: File? = null
+    private var announcedVersion: Long? = null
     private val prefs = application.getSharedPreferences("online_updates", 0)
 
     fun autoCheck() {
@@ -54,21 +56,43 @@ internal class UpdateViewModel(application: Application) : AndroidViewModel(appl
         }
     }
 
-    fun download() {
+    /** One explicit OK authorizes download, verification, then a foreground installer handoff. */
+    fun downloadAndInstall() {
         if (job?.isActive == true) return
         val release = state.value.release ?: return
+        if (state.value.phase !in setOf(UpdatePhase.AVAILABLE, UpdatePhase.ERROR)) return
         job = scope.launch {
             mutable.value = UpdateState(UpdatePhase.DOWNLOADING, release, message = "Téléchargement de ${release.versionName}…")
             try {
                 readyFile = withContext(Dispatchers.IO) {
                     source.download(release) { value -> mutable.value = mutable.value.copy(progress = value) }
                 }
-                mutable.value = UpdateState(UpdatePhase.READY, release, 100, "Téléchargement vérifié. La mise à jour est prête.")
+                mutable.value = UpdateState(UpdatePhase.READY, release, 100,
+                    "Téléchargement vérifié. Confirmation de l’installation dans Android…", installRequested = true)
             } catch (error: Exception) {
                 if (error is CancellationException) throw error
                 mutable.value = UpdateState(UpdatePhase.ERROR, release, message = friendly(error))
             }
         }
+    }
+
+    fun takeAvailablePrompt(): UpdateRelease? {
+        val value = state.value
+        val release = value.release ?: return null
+        if (value.phase != UpdatePhase.AVAILABLE || announcedVersion == release.versionCode) return null
+        announcedVersion = release.versionCode
+        return release
+    }
+
+    fun offerAgainAfterRecreation() { announcedVersion = null }
+
+    /** Claim before opening any external Activity, so returning cannot reopen the installer. */
+    fun takeInstallRequest(): Boolean {
+        val value = state.value
+        if (value.phase != UpdatePhase.READY || !value.installRequested) return false
+        mutable.value = value.copy(installRequested = false,
+            message = "Mise à jour vérifiée. Si nécessaire, tu peux rouvrir l’installation.")
+        return true
     }
 
     suspend fun verifiedFile(): File {

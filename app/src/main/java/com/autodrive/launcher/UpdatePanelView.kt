@@ -12,8 +12,8 @@ internal class UpdatePanelView(context: Context, current: String, check: () -> U
     private val status = ui.label("", 18, bold = true).apply { maxLines = 4 }
     private val progress = ProgressBar(context, null, android.R.attr.progressBarStyleHorizontal).apply { max = 100 }
     private val checkButton = ui.action("Rechercher une mise à jour", run = check)
-    private val downloadButton = ui.action("Télécharger la mise à jour", run = download)
-    private val installButton = ui.action("Installer la mise à jour", run = install)
+    private val downloadButton = ui.action("Mettre à jour maintenant", run = download)
+    private val installButton = ui.action("Reprendre l’installation", run = install)
     init {
         orientation = VERTICAL
         setPadding(ui.dp(8), 0, ui.dp(8), ui.dp(8))

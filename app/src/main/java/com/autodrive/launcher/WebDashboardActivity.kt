@@ -73,6 +73,7 @@ class WebDashboardActivity : ComponentActivity() {
     private var updateRendering: Job? = null
     private var installJob: Job? = null
     private var installSourcePending = false
+    private var updateOffer: AlertDialog? = null
     private var pageBack: (() -> Unit)? = null
     private val portrait get() = resources.configuration.screenHeightDp > resources.configuration.screenWidthDp
     private val compact get() = resources.configuration.screenWidthDp < 600
@@ -115,6 +116,7 @@ class WebDashboardActivity : ComponentActivity() {
         radio = InternetRadio(this, ::changeRadioStation, ::updateRadio)
         radioArtwork = RadioArtwork(this)
         updates = ViewModelProvider(this)[UpdateViewModel::class.java]
+        installSourcePending = state?.getBoolean("install_source_pending") ?: false
         gps = GpsMonitor(this, ::updateStatus)
         mapState = state?.getBundle("maps")
         youtubeState = state?.getBundle("youtube")
@@ -292,12 +294,13 @@ class WebDashboardActivity : ComponentActivity() {
         if (phonePanel != null) phoneContacts.start()
         hideBars()
         updates.autoCheck()
+        advanceUpdate(updates.state.value)
     }
 
     override fun onStart() {
         super.onStart()
         updateRendering = CoroutineScope(Dispatchers.Main.immediate).launch {
-            updates.state.collect { updatePanel?.render(it) }
+            updates.state.collect { updatePanel?.render(it); advanceUpdate(it) }
         }
         contactsRendering = CoroutineScope(Dispatchers.Main.immediate).launch {
             phoneContacts.state.collect { phonePanel?.render(it) }
@@ -317,9 +320,14 @@ class WebDashboardActivity : ComponentActivity() {
         super.onPause()
     }
 
-    override fun onDestroy() { installJob?.cancel(); directoryJob?.cancel(); radio.close(); radioArtwork.close(); maps.release(); youtube?.release(); super.onDestroy() }
+    override fun onDestroy() {
+        if (isChangingConfigurations && updateOffer?.isShowing == true) updates.offerAgainAfterRecreation()
+        updateOffer?.dismiss()
+        installJob?.cancel(); directoryJob?.cancel(); radio.close(); radioArtwork.close(); maps.release(); youtube?.release(); super.onDestroy()
+    }
 
     override fun onSaveInstanceState(outState: Bundle) {
+        outState.putBoolean("install_source_pending", installSourcePending)
         outState.putBundle("maps", maps.save() ?: mapState)
         outState.putBundle("youtube", youtube?.save() ?: youtubeState)
         super.onSaveInstanceState(outState)
@@ -497,10 +505,30 @@ class WebDashboardActivity : ComponentActivity() {
     }
 
     private fun showUpdates() {
-        val panel = UpdatePanelView(this, updates.source.versionName, updates::check, updates::download, ::installUpdate)
+        val panel = UpdatePanelView(this, updates.source.versionName, updates::check, ::confirmUpdate, ::installUpdate)
         updatePanel = panel
         page("Mises à jour AutoDrive", panel, ::showSettings)
         panel.render(updates.state.value)
+    }
+
+    private fun advanceUpdate(value: UpdateState) {
+        if (!resumed || isFinishing || isDestroyed) return
+        if (value.phase == UpdatePhase.AVAILABLE && updateOffer == null && updates.takeAvailablePrompt() != null) confirmUpdate()
+        if (value.phase == UpdatePhase.READY && updates.takeInstallRequest()) installUpdate()
+    }
+
+    private fun confirmUpdate() {
+        val release = updates.state.value.release ?: return
+        if (updateOffer != null) return
+        updateOffer = AlertDialog.Builder(this)
+            .setTitle("Mise à jour ${release.versionName} disponible")
+            .setMessage("OK télécharge la mise à jour et ouvre directement l’installation Android après vérification. Tes réglages sont conservés.")
+            .setPositiveButton("OK") { _, _ -> showUpdates(); updates.downloadAndInstall() }
+            .setNegativeButton("Plus tard", null)
+            .create().also { dialog ->
+                dialog.setOnDismissListener { updateOffer = null }
+                dialog.show()
+            }
     }
 
     private fun installUpdate() {

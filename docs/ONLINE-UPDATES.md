@@ -1,6 +1,6 @@
 # GitHub and online updates
 
-AutoDrive is distributed through **wacayoub/AutoDrive** GitHub Releases. Install the updater-enabled version once; later versions can be checked, downloaded and offered to Android's installer from **Settings → Mises à jour**. APKs still exist internally, but the owner does not have to find, transfer or browse to them manually for each release.
+AutoDrive is distributed through **wacayoub/AutoDrive** GitHub Releases. From **1.9.1**, finding a newer compatible version displays an offer: **OK** starts the download, verifies the APK, then opens Android's installer without another in-app Install tap. **Plus tard** leaves it available under **Settings → Mises à jour → Mettre à jour maintenant**. Manual checking remains available. Older versions need their existing Download / Install sequence once to receive 1.9.1.
 
 Android controls permission to install from AutoDrive and the installation confirmation. The app does not use root, Accessibility or firmware privileges to bypass that UI. It installs only after an explicit user action. The exact permission/installer UI on the Incarlink requires hardware validation. [Android installer requirements](https://developer.android.com/reference/android/content/pm/PackageInstaller.SessionParams#setRequireUserAction(int))
 
@@ -14,6 +14,14 @@ Android controls permission to install from AutoDrive and the installation confi
 - Settings and user data are retained by a normal in-place package update. A different signing key is rejected. Preserve the signing key for future releases.
 
 The app checks at most once per day at foreground startup for each installed version. Checking and downloading can also be requested manually. It runs no permanent updater service, and it does not download or install silently in the background.
+
+The offer appears once for the available version during the retained application session. One OK authorizes both the verified download and installer handoff; finding a release alone never starts its download. If the owner changes applications while downloading, the completed request waits for AutoDrive to return to the foreground before opening any installation UI. The request is consumed before opening Android, preventing installer loops after cancellation or return. **Reprendre l’installation** explicitly reopens the verified file. Unknown-source permission, if needed, leads to Android's settings; after granting it and returning, installation continues automatically. Denial leaves the file ready for a later retry. A process kill can interrupt the in-memory workflow; no unattended background recovery is promised.
+
+Actual Android 13 emulator captures of the 1.9.1 implementation below use a deliberately lower **1.8.0 / code 23 test build** so the real signed public **1.9.0 / code 24** APK is a valid newer candidate. These are not a new 1.8.0 release, nor an owner-device installation.
+
+![One OK update offer](../deliverables/update-confirmation-1.9.1-800x480.png)
+
+![Android installer opened after the verified download](../deliverables/update-installer-1.9.1-800x480.png)
 
 ## Publishing later versions
 

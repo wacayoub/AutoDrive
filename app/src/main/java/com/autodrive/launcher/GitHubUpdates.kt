@@ -11,13 +11,21 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.security.MessageDigest
 
-internal class GitHubUpdates(private val context: Context) {
+internal interface UpdateSource {
+    val versionCode: Long
+    val versionName: String
+    fun latest(): UpdateRelease
+    fun download(release: UpdateRelease, progress: (Int) -> Unit): File
+    fun verify(file: File, release: UpdateRelease): File
+}
+
+internal class GitHubUpdates(private val context: Context) : UpdateSource {
     private val packages = context.packageManager
     val installed get() = packages.getPackageInfo(context.packageName, PackageManager.PackageInfoFlags.of(0))
-    val versionCode get() = installed.longVersionCode
-    val versionName get() = installed.versionName.orEmpty()
+    override val versionCode get() = installed.longVersionCode
+    override val versionName get() = installed.versionName.orEmpty()
 
-    fun latest(): UpdateRelease {
+    override fun latest(): UpdateRelease {
         File(context.filesDir, "updates").listFiles()?.forEach { file ->
             val code = Regex("AutoDrive-(\\d+)\\.apk").matchEntire(file.name)?.groupValues?.get(1)?.toLongOrNull()
             if (code != null && code <= versionCode) file.delete()
@@ -37,7 +45,7 @@ internal class GitHubUpdates(private val context: Context) {
             manifest.getString("sha256"), manifest.getLong("size")).also { it.validate() }
     }
 
-    fun download(release: UpdateRelease, progress: (Int) -> Unit): File {
+    override fun download(release: UpdateRelease, progress: (Int) -> Unit): File {
         release.validate()
         require(release.versionCode > versionCode) { "Cette version est déjà installée" }
         require(release.minSdk <= Build.VERSION.SDK_INT) { "Cette mise à jour nécessite un Android plus récent" }
@@ -76,7 +84,7 @@ internal class GitHubUpdates(private val context: Context) {
         } finally { temporary.delete() }
     }
 
-    fun verify(file: File, release: UpdateRelease): File {
+    override fun verify(file: File, release: UpdateRelease): File {
         release.validate()
         require(release.minSdk <= Build.VERSION.SDK_INT) { "Mise à jour incompatible avec Android" }
         require(file.isFile && file.length() == release.size) { "Fichier de mise à jour incomplet" }

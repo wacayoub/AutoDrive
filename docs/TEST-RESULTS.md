@@ -1,5 +1,17 @@
 # AutoDrive validation
 
+## Version 1.9.1 — one-confirmation update workflow
+
+Validated 6 November 2026, `com.autodrive.launcher`, version code 25. [Update workflow](ONLINE-UPDATES.md).
+
+- **28 JVM tests passed**, debug/test APK assembly passed, and Android lint completed with **0 errors, 51 warnings and 1 hint**. Existing APK validation of package, increasing version, Android compatibility, size, hash and matching signing certificates remains in the real download/installer path.
+- **27 instrumented tests passed together** on AOSP Android 13 / 800 × 480 (65.191 seconds): the previous 25 checks plus two controlled update-flow checks. They verify no download merely from finding a release, one offer per available version/session, duplicate-start protection, a retained ready-to-install request without a foreground consumer, single consumption to prevent installer loops, transport error without an install request, and successful explicit retry. Those controlled transport fixtures do not claim to validate APK authenticity.
+- A separate actual-UI test used this implementation with an intentionally lower **1.8.0 / code 23 emulator-only build**. Its update source remained the real public GitHub repository, with the genuine signed **1.9.0 / code 24** APK as the newer candidate. This test build was not published as 1.8.0. The initial automation attempt used title-case dialog buttons; AOSP exposes them uppercase. Case-insensitive button lookup fixed the test driver, without changing production behavior.
+- Actual touches selected **Plus tard**, reopened the offer through Settings, then pressed **OK**. The real APK downloaded and passed production checks, and Android's unknown-source authorization opened without a second AutoDrive Install tap. After enabling **Allow from this source** and returning, the actual system package installer opened automatically and offered to update AutoDrive. Its final installation confirmation was cancelled.
+- Returning after cancellation did not reopen the installer. **Reprendre l’installation** explicitly reopened it, and a second cancellation again did not loop. Captures were inspected: [offer](../deliverables/update-confirmation-1.9.1-800x480.png), [actual installer](../deliverables/update-installer-1.9.1-800x480.png). The implementation's background/foreground guard and retained pending request are covered by code review and the controlled state check; no real network download was deliberately completed while an external app stayed foregrounded in this run.
+
+No owner device was installed or changed. Android's final confirmation remains required. Process-kill recovery of an unfinished download, the Incarlink-specific permission/installer screens, and owner-device update behavior remain untested.
+
 ## Version 1.9.0 — radio studio and published radio programmes
 
 Validated 6 November 2026, `com.autodrive.launcher`, version code 24. [Source audit, coverage and guide semantics](RADIO-EPG.md).
