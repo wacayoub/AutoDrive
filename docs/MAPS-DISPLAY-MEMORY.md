@@ -33,6 +33,6 @@ Les écritures sont limitées aux changements de cet état privé. Les observati
 
 Les [résultats](TEST-RESULTS.md) distinguent les contrôles synthétiques de test, la persistance entre processus, la permission refusée et les essais sur la vraie page Google Maps. La connexion Google du propriétaire et le GPS matériel de l’Incarlink restent à valider sur le boîtier.
 
-Capture réelle après redémarrage de l’émulateur Android 13 / 800 × 480 : satellite, trafic et commande de position actifs. La position est fournie par le GPS de test de l’émulateur à Casablanca ; ce n’est pas une mesure sur le véhicule.
+Capture réelle de 1.11.0 après redémarrage d’AutoDrive sur émulateur Android 13 / 800 × 480 : satellite, trafic et commande de position actifs. Les vérifications répétées de 1.11.1 sont consignées dans les résultats de test. La position est fournie par le GPS de test de l’émulateur à Casablanca ; ce n’est pas une mesure sur le véhicule.
 
 ![Google Maps après restauration de l’affichage](../deliverables/maps-restored-1.11.0-800x480.png)
