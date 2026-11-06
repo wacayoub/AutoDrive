@@ -79,6 +79,7 @@ class WebDashboardActivity : ComponentActivity() {
     private val compact get() = resources.configuration.screenWidthDp < 600
     private val handler = Handler(Looper.getMainLooper())
     private val permission = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
+        maps.onLocationPermissionResult()
         if (resumed) gps.start()
         updateStatus()
     }
@@ -97,6 +98,7 @@ class WebDashboardActivity : ComponentActivity() {
     private val tick = object : Runnable {
         override fun run() {
             updateStatus()
+            if (homeVisible) maps.rememberDisplay()
             val minute = System.currentTimeMillis() / 60_000
             if (minute != guideMinute && (expandedRadioPanel != null || (homeVisible && links.tab == MediaTab.RADIO))) {
                 guideMinute = minute; updateRadio()
@@ -467,7 +469,10 @@ class WebDashboardActivity : ComponentActivity() {
         row("GPS · autorisations", ::requestGps)
         row("Comptes Google · panneaux et applications", ::showGoogleAccounts)
         row("Mises à jour · ${updates.source.versionName}", ::showUpdates)
-        row("Revenir à l’accueil Google Maps") { mapState = null; maps.loadHome(); showHome() }
+        row("Recentrage Maps au démarrage · ${if (maps.followsLocationOnStart()) "Activé" else "Désactivé"}") {
+            maps.setFollowOnStart(!maps.followsLocationOnStart()); showSettings()
+        }
+        row("Réinitialiser l’affichage Maps") { mapState = null; maps.loadHome(resetMapDisplay = true); showHome() }
         row("Revenir à l’accueil YouTube") { youtubeState = null; youtube?.loadHome(); links.tab = MediaTab.YOUTUBE; showHome() }
         val youtubeApp = links.forTab(MediaTab.YOUTUBE, links.apps())
         val youtubeLabel = youtubeApp?.label ?: if (links.association(MediaTab.YOUTUBE.name) == null)

@@ -16,6 +16,8 @@ La même identité de signature est conservée pour permettre les mises à jour 
 
 ## Tableau de bord
 
+- Version **1.11.0** : options d’affichage Maps mémorisées après redémarrage (trafic, satellite/relief, autres cases reconnues et zoom), avec recentrage au démarrage après avoir choisi « Votre position ». Autorisation de localisation du site conservée après accord Android ; aucun compte ou parcours n’est copié. [Fonctionnement et limites](docs/MAPS-DISPLAY-MEMORY.md).
+
 - Version **1.10.0** : filtres **SNRT / القرآن**, quatre accès aux lecteurs officiels SNRT et douze radios de récitateurs avec noms arabes et recherche bilingue. Noms de stations nettoyés, file de lecture stable, et **Apps en grille avec les vraies icônes installées**. SNRT passe par ses lecteurs officiels externes ; sa lecture native intégrée n’est pas disponible dans cette version. [Sources et limites](docs/RADIO-CATALOGUE.md).
 
 - Version **1.9.1** : une confirmation **OK** enchaîne le téléchargement vérifié et l’ouverture de l’installateur Android. Pas de deuxième bouton Installer dans AutoDrive après le téléchargement ; si tu annules l’installateur, **Reprendre l’installation** reste disponible. [Mises à jour](docs/ONLINE-UPDATES.md).

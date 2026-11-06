@@ -34,6 +34,11 @@ internal class BrowserPanel(
     private var browser: WebView? = null
     private var fullscreen: View? = null
     private var fullscreenCallback: WebChromeClient.CustomViewCallback? = null
+    private val mapMemory = if (maps) MapDisplayMemory(activity) else null
+    private var pendingLocation: Pair<String, GeolocationPermissions.Callback>? = null
+    private var capturePending = false
+    private var pageGeneration = 0
+    private var mapPageReady = false
     private val ui = DriveViews(activity)
     private val progress = ProgressBar(activity, null, android.R.attr.progressBarStyleHorizontal).apply {
         max = 100
@@ -132,6 +137,7 @@ internal class BrowserPanel(
                 }
 
                 override fun onPageStarted(view: WebView, url: String?, favicon: android.graphics.Bitmap?) {
+                    pageGeneration++; mapPageReady = false; clearPendingLocation()
                     account.visibility = GONE
                     error.visibility = GONE
                     progress.visibility = VISIBLE
@@ -146,6 +152,8 @@ internal class BrowserPanel(
                     progress.visibility = GONE
                     // Apply the owner's Maps web preference without changing attribution or map data.
                     if (maps) view.evaluateJavascript(MapWebPreference.script, null)
+                    if (maps) view.evaluateJavascript(MapDisplayScript.install(mapMemory!!.read(), canLocate()), null)
+                    mapPageReady = maps && MapDisplayPolicy.onMaps(url)
                 }
 
                 override fun onReceivedError(view: WebView, request: WebResourceRequest, failure: WebResourceError) {
@@ -160,6 +168,7 @@ internal class BrowserPanel(
                 }
 
                 override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
+                    clearPendingLocation(); pageGeneration++; mapPageReady = false; capturePending = false
                     hideFullscreen()
                     removeView(view)
                     view.destroy()
@@ -172,12 +181,16 @@ internal class BrowserPanel(
                 override fun onProgressChanged(view: WebView, value: Int) { progress.progress = value }
 
                 override fun onGeolocationPermissionsShowPrompt(origin: String, callback: GeolocationPermissions.Callback) {
-                    val uri = Uri.parse(origin)
-                    val trusted = maps && uri.scheme == "https" && uri.host in setOf("www.google.com", "maps.google.com", "google.com")
-                    val permitted = activity.checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
-                    if (trusted && !permitted) requestLocation()
-                    callback.invoke(origin, trusted && permitted, false)
+                    if (!maps || !MapDisplayPolicy.trustedOrigin(origin)) { callback.invoke(origin, false, false); return }
+                    if (locationPermitted()) callback.invoke(origin, true, true)
+                    else {
+                        clearPendingLocation()
+                        pendingLocation = origin to callback
+                        requestLocation()
+                    }
                 }
+
+                override fun onGeolocationPermissionsHidePrompt() { clearPendingLocation() }
 
                 override fun onShowCustomView(view: View, callback: CustomViewCallback) {
                     if (fullscreen != null) { callback.onCustomViewHidden(); return }
@@ -190,7 +203,9 @@ internal class BrowserPanel(
                 override fun onHideCustomView() { hideFullscreen() }
             }
             addView(web, 0, LayoutParams(-1, -1))
-            if (saved == null || web.restoreState(saved) == null) web.loadUrl(home)
+            if (maps && !locationPermitted()) listOf("https://www.google.com", "https://google.com", "https://maps.google.com")
+                .forEach { GeolocationPermissions.getInstance().clear(it) }
+            if (saved == null || web.restoreState(saved) == null) web.loadUrl(initialUrl())
         } catch (_: RuntimeException) {
             browser?.let { removeView(it); it.destroy() }
             browser = null
@@ -208,11 +223,50 @@ internal class BrowserPanel(
     private fun showError() { progress.visibility = GONE; error.visibility = VISIBLE }
     private fun showAccountNotice() { progress.visibility = GONE; error.visibility = GONE; account.visibility = VISIBLE }
 
-    fun loadHome() {
+    fun loadHome(resetMapDisplay: Boolean = false) {
+        pageGeneration++; mapPageReady = false
+        if (resetMapDisplay) mapMemory?.clear()
         account.visibility = GONE
         if (!hasNetwork()) { showError(); return }
         error.visibility = GONE
-        if (browser == null) start() else browser?.loadUrl(home)
+        if (browser == null) start() else browser?.loadUrl(initialUrl())
+    }
+
+    private fun initialUrl() = if (maps && MapDisplayPolicy.onMaps(home)) mapMemory!!.read().launchUrl() else home
+    private fun locationPermitted() = activity.checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+    private fun canLocate() = locationPermitted() && runCatching {
+        activity.getSystemService(android.location.LocationManager::class.java)?.isLocationEnabled == true
+    }.getOrDefault(false)
+
+    fun onLocationPermissionResult() {
+        val pending = pendingLocation ?: return
+        pendingLocation = null
+        val allowed = locationPermitted() && MapDisplayPolicy.trustedOrigin(pending.first)
+        pending.second.invoke(pending.first, allowed, allowed)
+    }
+    private fun clearPendingLocation() {
+        pendingLocation?.let { it.second.invoke(it.first, false, false) }
+        pendingLocation = null
+    }
+
+    /** Bounded display-only snapshots while visible; never reads cookies, accounts or site storage. */
+    fun rememberDisplay() {
+        val web = browser ?: return
+        if (!maps || !mapPageReady || capturePending || !MapDisplayPolicy.onMaps(web.url)) return
+        capturePending = true
+        val generation = pageGeneration
+        web.evaluateJavascript(MapDisplayScript.snapshot) { result ->
+            capturePending = false
+            if (result == null || browser !== web || pageGeneration != generation || !MapDisplayPolicy.onMaps(web.url) || result.length > 24_000) return@evaluateJavascript
+            val snapshot = runCatching { org.json.JSONTokener(result).nextValue() as? String }.getOrNull() ?: return@evaluateJavascript
+            mapMemory?.capture(snapshot)
+        }
+    }
+    fun followsLocationOnStart() = mapMemory?.read()?.followOnStart == true
+    fun setFollowOnStart(enabled: Boolean) {
+        mapMemory?.setFollow(enabled, browser?.url)
+        browser?.takeIf { MapDisplayPolicy.onMaps(it.url) }?.evaluateJavascript(
+            "if(window.__autoDriveMapDisplay) window.__autoDriveMapDisplay.followOnStart=$enabled;", null)
     }
 
     private fun hasNetwork() = activity.getSystemService(android.net.ConnectivityManager::class.java).activeNetwork != null
@@ -227,11 +281,13 @@ internal class BrowserPanel(
     }
 
     fun save(): Bundle? = browser?.let { web ->
+        rememberDisplay()
         WebSessionStorage.persist()
         Bundle().also { web.saveState(it) }
     }
 
     fun pause() {
+        rememberDisplay()
         hideFullscreen()
         // Retain the document, history and sessionStorage; stop ordinary HTML media while hidden.
         browser?.evaluateJavascript("document.querySelectorAll('video,audio').forEach(media => media.pause());", null)
@@ -240,10 +296,13 @@ internal class BrowserPanel(
     }
 
     fun release() {
+        pageGeneration++; mapPageReady = false
+        clearPendingLocation()
         WebSessionStorage.persist()
         hideFullscreen()
         browser?.let { removeView(it); it.stopLoading(); it.destroy() }
         browser = null
+        capturePending = false
     }
 
     private fun hideFullscreen() {

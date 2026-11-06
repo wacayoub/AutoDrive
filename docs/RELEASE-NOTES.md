@@ -1,11 +1,12 @@
-AutoDrive 1.10.0 enrichit Radio et transforme la page Apps.
+AutoDrive 1.11.0 mémorise l’affichage du panneau Google Maps après redémarrage.
 
-- Filtres Toutes / SNRT / القرآن / Favoris, conservés au redémarrage. Précédente/suivante suivent la catégorie choisie.
-- Quatre accès SNRT : Nationale, Amazighe, Chaîne Inter et Mohammed VI du Saint Coran. Ils ouvrent leurs lecteurs officiels par Android. La lecture native SNRT n’est pas annoncée : les anciens flux directs échouent et le nouveau service n’a pas fourni d’accès natif vérifié.
-- Douze radios de récitation MP3Quran : العفاسي، المعيقلي، السديس، الدوسري، الحصري، المنشاوي، عبد الباسط، الغامدي، الشريم، القزابري، الكوشي، العجمي. Le filtre Coran inclut aussi l’accès officiel Mohammed VI.
-- Noms de stations simplifiés, sans préfixes d’annuaire ni débits techniques ; recherche arabe et latine pour les récitateurs.
-- Correction de l’ordre de la file : sélectionner une station ne la déplace plus devant les autres.
-- Page Apps en grille avec icônes Android réelles, noms sur deux lignes et recherche.
+- Mémorisation des cases d’affichage reconnues : trafic, transports, vélo, satellite, relief, feux de forêt et commandes de mouvement de la carte.
+- Après avoir touché Votre position, le recentrage sera demandé au prochain démarrage si la localisation Android est disponible. Une ancienne coordonnée ne remplace pas une position actuelle.
+- Zoom conservé ; cadrage manuel mémorisé quand le recentrage est désactivé. Aucune reprise automatique d’un trajet.
+- Autorisation de site conservée après accord Android. Une première demande de position attend désormais le résultat de permission au lieu d’être immédiatement refusée.
+- Réglages : Recentrage Maps au démarrage et Réinitialiser l’affichage Maps. Aucun bouton ajouté sur la carte.
+
+Après cette mise à jour, choisis tes options une dernière fois et touche Votre position pour les enregistrer. Les choix perdus par une ancienne version ne sont pas récupérables rétroactivement. Ce correctif concerne l’affichage web ; il ne promet pas de corriger la connexion d’un compte Google ni le GPS matériel du boîtier.
 
 Android conserve sa confirmation finale d’installation. Les réglages sont conservés par une mise à jour normale, sans désinstallation. Aucun appareil du propriétaire n’est installé ou modifié par le développement.
 
