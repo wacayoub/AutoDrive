@@ -9,8 +9,8 @@ internal object RadioQueue {
                 logoUrl = personal?.logoUrl ?: station.logoUrl)
         }
     }
-    fun active(stations: List<RadioStation>, favoritesOnly: Boolean) =
-        if (favoritesOnly) stations.filter { it.favorite } else stations
+    fun active(stations: List<RadioStation>, favoritesOnly: Boolean, category: RadioCategory = RadioCategory.ALL) =
+        stations.filter { (!favoritesOnly || it.favorite) && RadioCatalogue.matches(it, category) }
 
     fun neighbor(queue: List<RadioStation>, currentUrl: String?, direction: Int): RadioStation? {
         if (queue.size < 2) return null

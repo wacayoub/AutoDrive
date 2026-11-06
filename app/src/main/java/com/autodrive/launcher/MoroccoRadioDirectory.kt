@@ -18,7 +18,7 @@ internal class MoroccoRadioDirectory(context: Context) {
             val row = rows.optJSONObject(i) ?: return@mapNotNull null
             RadioStation.validUrl(row.optString("url"))?.let { RadioStation(row.optString("name").take(60), it,
                 logoUrl = RadioStation.validUrl(row.optString("logo")) ?: RadioStation.defaultLogo(it)) }
-        }.filter { it.name.isNotBlank() }.distinctBy { it.url }.take(300)
+        }.filter { it.name.isNotBlank() }.map(RadioCatalogue::polish).distinctBy { it.url }.take(300)
     }.getOrDefault(emptyList())
 
     fun needsRefresh(): Boolean = runCatching {
@@ -72,7 +72,7 @@ internal class MoroccoRadioDirectory(context: Context) {
                 val name = row.optString("name").trim().take(60).takeIf { it.isNotEmpty() } ?: return@mapNotNull null
                 RadioStation(name, url, logoUrl = RadioStation.validUrl(row.optString("favicon")) ?: RadioStation.defaultLogo(url))
             }.groupBy { it.url }.values.map { duplicates ->
-                duplicates.first().copy(logoUrl = duplicates.firstNotNullOfOrNull { it.logoUrl })
+                RadioCatalogue.polish(duplicates.first().copy(logoUrl = duplicates.firstNotNullOfOrNull { it.logoUrl }))
             }
         }
     }

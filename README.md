@@ -16,6 +16,8 @@ La même identité de signature est conservée pour permettre les mises à jour 
 
 ## Tableau de bord
 
+- Version **1.10.0** : filtres **SNRT / القرآن**, quatre accès aux lecteurs officiels SNRT et douze radios de récitateurs avec noms arabes et recherche bilingue. Noms de stations nettoyés, file de lecture stable, et **Apps en grille avec les vraies icônes installées**. SNRT passe par ses lecteurs officiels externes ; sa lecture native intégrée n’est pas disponible dans cette version. [Sources et limites](docs/RADIO-CATALOGUE.md).
+
 - Version **1.9.1** : une confirmation **OK** enchaîne le téléchargement vérifié et l’ouverture de l’installateur Android. Pas de deuxième bouton Installer dans AutoDrive après le téléchargement ; si tu annules l’installateur, **Reprendre l’installation** reste disponible. [Mises à jour](docs/ONLINE-UPDATES.md).
 
 - Version **1.9.0** : lecteur Radio agrandi avec station/favori, infos réelles du flux et onglets **Stations / Programme**. La grille officielle d’Aswat est consultable sur sept jours, avec créneau prévu, suivant, source et cache hors connexion. Les autres stations restent signalées sans guide compatible intégré ; aucun programme n’est inventé. [Couverture et fonctionnement EPG](docs/RADIO-EPG.md).
@@ -42,6 +44,10 @@ La même identité de signature est conservée pour permettre les mises à jour 
 ![Radio Internet 1.8.0](deliverables/radio-1.8.0-800x480.png)
 
 ![Lecteur Radio 1.9.0 — capture réelle](deliverables/radio-studio-1.9.0-800x480.png)
+
+![Récitateurs 1.10.0 — capture réelle](deliverables/radio-quran-1.10.0-800x480.png)
+
+![Applications 1.10.0 — icônes installées sur l’émulateur](deliverables/apps-grid-1.10.0-800x480.png)
 
 ![Programme Aswat 1.9.0 — grille publiée](deliverables/radio-programme-1.9.0-800x480.png)
 

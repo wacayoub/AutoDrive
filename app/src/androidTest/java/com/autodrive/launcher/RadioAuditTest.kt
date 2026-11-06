@@ -37,11 +37,9 @@ class RadioAuditTest {
             waitFor(25_000) { views().filterIsInstance<TextView>().any { it.text.toString().startsWith("En lecture ·") } }
             instrumentation.runOnMainSync {
                 click("Station précédente"); assertTrue(title("HIT test"))
-                click("Station précédente"); assertTrue(title("Radio Aswat"))
-                click("Station précédente"); assertTrue(title("Erreur test"))
-                click("Station suivante"); assertTrue(title("Radio Aswat"))
+                click("Station précédente"); assertTrue(title("أحمد العجمي"))
                 click("Station suivante"); assertTrue(title("HIT test"))
-                repeat(4) { click("Station suivante") }
+                repeat(20) { click("Station suivante") }
                 assertTrue(title("HIT test"))
             }
             waitFor(25_000) { views().filterIsInstance<TextView>().any { it.text.toString().startsWith("En lecture ·") } }
@@ -50,7 +48,7 @@ class RadioAuditTest {
                 click("Afficher les radios favorites")
                 assertFalse(views().single { it.contentDescription == "Station suivante" }.isEnabled)
                 assertTrue(views().filterIsInstance<TextView>().any { it.text.toString().contains("Ajoute des favoris") })
-                click("Afficher les radios du Maroc")
+                click("Afficher toutes les radios")
             }
             waitFor { views().any { it.isShown && it.contentDescription == "Ajouter Mars test aux favoris" } }
             instrumentation.runOnMainSync {

@@ -1,12 +1,12 @@
-AutoDrive 1.9.1 simplifie les mises à jour en ligne.
+AutoDrive 1.10.0 enrichit Radio et transforme la page Apps.
 
-- Une nouvelle version détectée propose OK / Plus tard.
-- Un appui sur OK lance le téléchargement, vérifie taille, SHA-256, version et signature, puis ouvre directement l’installation Android.
-- Plus besoin de toucher un deuxième bouton Installer dans AutoDrive après le téléchargement.
-- Si le téléchargement se termine pendant qu’AutoDrive est en arrière-plan, l’installation attend son retour au premier plan.
-- Après annulation dans Android, l’installateur ne se rouvre pas en boucle ; Reprendre l’installation permet de réessayer.
-- Si Android demande d’autoriser AutoDrive comme source d’installation, le parcours reprend au retour des réglages après autorisation.
+- Filtres Toutes / SNRT / القرآن / Favoris, conservés au redémarrage. Précédente/suivante suivent la catégorie choisie.
+- Quatre accès SNRT : Nationale, Amazighe, Chaîne Inter et Mohammed VI du Saint Coran. Ils ouvrent leurs lecteurs officiels par Android. La lecture native SNRT n’est pas annoncée : les anciens flux directs échouent et le nouveau service n’a pas fourni d’accès natif vérifié.
+- Douze radios de récitation MP3Quran : العفاسي، المعيقلي، السديس، الدوسري، الحصري، المنشاوي، عبد الباسط، الغامدي، الشريم، القزابري، الكوشي، العجمي. Le filtre Coran inclut aussi l’accès officiel Mohammed VI.
+- Noms de stations simplifiés, sans préfixes d’annuaire ni débits techniques ; recherche arabe et latine pour les récitateurs.
+- Correction de l’ordre de la file : sélectionner une station ne la déplace plus devant les autres.
+- Page Apps en grille avec icônes Android réelles, noms sur deux lignes et recherche.
 
 Android conserve sa confirmation finale d’installation. Les réglages sont conservés par une mise à jour normale, sans désinstallation. Aucun appareil du propriétaire n’est installé ou modifié par le développement.
 
-Pour recevoir cette amélioration depuis une version antérieure, utiliser encore une fois Settings → Mises à jour → Rechercher → Télécharger → Installer. Les prochaines mises à jour suivront le nouveau parcours OK.
+Depuis 1.9.1 : Settings → Mises à jour → Rechercher → OK. AutoDrive télécharge, vérifie et ouvre l’installation Android. Pas de désinstallation.

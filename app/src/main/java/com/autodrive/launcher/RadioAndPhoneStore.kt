@@ -59,6 +59,9 @@ internal class RadioAndPhoneStore(context: Context) {
     var favoritesOnly: Boolean
         get() = prefs.getBoolean("favorites_only", false)
         set(value) { prefs.edit().putBoolean("favorites_only", value).apply() }
+    var radioCategory: RadioCategory
+        get() = runCatching { RadioCategory.valueOf(prefs.getString("category", null).orEmpty()) }.getOrDefault(RadioCategory.ALL)
+        set(value) { prefs.edit().putString("category", value.name).apply() }
     var phoneDraft: String
         get() = prefs.getString("phone_draft", "").orEmpty()
         set(value) { prefs.edit().putString("phone_draft", value.take(80)).apply() }

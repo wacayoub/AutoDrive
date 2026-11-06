@@ -14,6 +14,9 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.datasource.DefaultDataSource
+import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 
 @OptIn(UnstableApi::class)
@@ -44,6 +47,9 @@ internal class InternetRadio(private val context: Context, private val step: (In
     }
     fun play(value: RadioStation) {
         if (RadioStation.validUrl(value.url) == null) return
+        if (RadioCatalogue.officialPlayer(value) != null) {
+            close(); station = value; failure = "Lecture depuis le site officiel SNRT"; changed(); return
+        }
         station = value
         failure = null
         if (session == null) session = MediaSession(context, "AutoDriveRadio").apply {
@@ -57,6 +63,8 @@ internal class InternetRadio(private val context: Context, private val step: (In
             isActive = true
         }
         val player = engine ?: ExoPlayer.Builder(context)
+            .setMediaSourceFactory(DefaultMediaSourceFactory(DefaultDataSource.Factory(context,
+                DefaultHttpDataSource.Factory().setUserAgent("AutoDrive/" + context.packageManager.getPackageInfo(context.packageName, 0).versionName))))
             .setTrackSelector(DefaultTrackSelector(context).apply {
                 parameters = buildUponParameters().setTrackTypeDisabled(C.TRACK_TYPE_VIDEO, true).build()
             })

@@ -452,9 +452,9 @@ class WebDashboardActivity : ComponentActivity() {
         })
     }
 
-    private fun showApps() = page("Applications du boîtier", ui.line(true).apply {
-        links.apps().forEach { app -> addView(ui.action(app.label) { if (!links.open(app)) message("Application indisponible") }) }
-    })
+    private fun showApps() = page("Applications du boîtier", AppDrawerView(this, links.apps(), links::icon) {
+        if (!links.open(it)) message("Application indisponible")
+    }, scroll = false)
 
     private fun showSettings() {
         updatePanel = null
@@ -567,8 +567,9 @@ class WebDashboardActivity : ComponentActivity() {
     }
 
     private fun availableRadioStations() = RadioQueue.merge(
-        (radioCatalogue.ifEmpty { MoroccoRadioDirectory.starter }) + listOfNotNull(radioPhone.lastStation) +
-            MoroccoRadioDirectory.starter.filter { RadioGuideSource.forStation(it) == RadioGuideSource.ASWAT }, radioPhone.stations)
+        (radioCatalogue.ifEmpty { MoroccoRadioDirectory.starter }) +
+            MoroccoRadioDirectory.starter.filter { RadioGuideSource.forStation(it) == RadioGuideSource.ASWAT } + RadioCatalogue.featured,
+        radioPhone.stations).let { (it + listOfNotNull(radioPhone.lastStation)).distinctBy { station -> station.url } }.map(RadioCatalogue::polish)
 
     private fun selectedRadioStation(): RadioStation? {
         val all = availableRadioStations()
@@ -581,36 +582,46 @@ class WebDashboardActivity : ComponentActivity() {
         val stations = availableRadioStations()
         val station = selectedRadioStation()
         if (expandedRadioPanel != null || (homeVisible && links.tab == MediaTab.RADIO)) radioGuide.select(station)
-        radio.setCanSkip(RadioQueue.active(stations, radioPhone.favoritesOnly).size > 1)
+        radio.setCanSkip(RadioQueue.active(stations, radioPhone.favoritesOnly, radioPhone.radioCategory).size > 1)
         for (panel in listOfNotNull(radioPanel.takeIf { homeVisible && links.tab == MediaTab.RADIO }, expandedRadioPanel)) panel.render(station, radio,
-            stations, radioPhone.favoritesOnly, radioLoading, radioDirectoryError, radioGuide.state.value)
+            stations, radioPhone.favoritesOnly, radioLoading, radioDirectoryError, radioGuide.state.value, category = radioPhone.radioCategory)
     }
 
     private fun createRadioPanel(expanded: Boolean) = InternetRadioPanel(this, radioArtwork, expanded,
         { showMoroccoRadios() }, { loadRadioDirectory(true) }, {
-            radioPhone.favoritesOnly = it; updateRadio()
+            radioPhone.favoritesOnly = it; radioPhone.radioCategory = RadioCategory.ALL; updateRadio()
         }, ::playRadio, { station ->
             if (!radioPhone.saveStation(station.copy(favorite = !station.favorite))) message("Bibliothèque pleine · retire une station enregistrée dans Réglages")
             updateRadio()
         }, { changeRadioStation(-1) }, {
             selectedRadioStation()?.let { selected ->
-                if (radio.station?.url != selected.url) playRadio(selected) else radio.toggle()
+                if (RadioCatalogue.officialPlayer(selected) != null || radio.station?.url != selected.url) playRadio(selected) else radio.toggle()
             }
         }, { changeRadioStation(1) }, refreshGuide = { radioGuide.select(selectedRadioStation(), force = true) },
-        openGuideSource = { source -> if (!links.start(Intent(Intent.ACTION_VIEW, Uri.parse(source.page)))) message("Aucun navigateur disponible") })
+        openGuideSource = { source -> if (!links.start(Intent(Intent.ACTION_VIEW, Uri.parse(source.page)))) message("Aucun navigateur disponible") },
+        category = { category -> radioPhone.radioCategory = category; radioPhone.favoritesOnly = false; updateRadio() })
 
     private fun playRadio(station: RadioStation) {
+        selectRadio(station, openOfficial = true)
+    }
+
+    private fun selectRadio(station: RadioStation, openOfficial: Boolean) {
         // Keep user edits/favorites while enriching old saved rows with newly available artwork.
         val selected = availableRadioStations().firstOrNull { it.url == station.url } ?: station
         // Listening must not fill (or depend on the capacity of) the user's saved/favorite library.
         radioPhone.lastStation = selected
         radioPhone.selectedUrl = selected.url
-        radio.play(selected)
+        val official = RadioCatalogue.officialPlayer(selected)
+        if (official != null) {
+            radio.close(); updateRadio()
+            if (openOfficial && !links.start(Intent(Intent.ACTION_VIEW, Uri.parse(official))))
+                message("Aucun lecteur ou navigateur disponible pour SNRT Live")
+        } else radio.play(selected)
     }
 
     private fun changeRadioStation(direction: Int) {
-        val queue = RadioQueue.active(availableRadioStations(), radioPhone.favoritesOnly)
-        RadioQueue.neighbor(queue, selectedRadioStation()?.url, direction)?.let(::playRadio)
+        val queue = RadioQueue.active(availableRadioStations(), radioPhone.favoritesOnly, radioPhone.radioCategory)
+        RadioQueue.neighbor(queue, selectedRadioStation()?.url, direction)?.let { selectRadio(it, openOfficial = false) }
     }
 
     private fun showMoroccoRadios(refresh: Boolean = false) {

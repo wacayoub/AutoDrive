@@ -14,11 +14,11 @@ import java.time.format.DateTimeFormatter
 internal class InternetRadioPanel(context: Context, private val artwork: RadioArtwork, private val expanded: Boolean,
     browse: () -> Unit, refresh: () -> Unit, mode: (Boolean) -> Unit, select: (RadioStation) -> Unit,
     favorite: (RadioStation) -> Unit, previous: () -> Unit, toggle: () -> Unit, next: () -> Unit,
-    refreshGuide: () -> Unit = {}, openGuideSource: (RadioGuideSource) -> Unit = {}) : LinearLayout(context) {
+    refreshGuide: () -> Unit = {}, openGuideSource: (RadioGuideSource) -> Unit = {}, category: (RadioCategory) -> Unit = {}) : LinearLayout(context) {
     private val ui = DriveViews(context)
     private val studio = expanded && resources.configuration.screenWidthDp >= 720 && resources.configuration.screenHeightDp >= 450
     private val logo = RadioLogoView(context)
-    private val title = ui.label("Radio Internet", if (studio) 21 else 17, bold = true).apply { maxLines = if (studio) 2 else 1 }
+    private val title = ui.label("Radio Internet", if (studio) 21 else 17, bold = true).apply { maxLines = if (studio) 2 else 1; textDirection = View.TEXT_DIRECTION_FIRST_STRONG }
     private val status = ui.label("Prêt à écouter", if (studio) 12 else 11, Palette.muted).apply { maxLines = 2 }
     private val track = ui.label("", 15, Palette.text).apply { maxLines = 2; visibility = View.GONE }
     private val format = ui.label("", 11, Palette.muted).apply { visibility = View.GONE }
@@ -32,7 +32,7 @@ internal class InternetRadioPanel(context: Context, private val artwork: RadioAr
     private var favoritesOnly = false
     private val favoritesButton = ui.action("☆") { mode(!favoritesOnly) }.apply { contentDescription = "Afficher les radios favorites" }
     private val stationFavorite = ui.action("☆") { selectedStation?.let(favorite) }.apply { contentDescription = "Favori de la station choisie" }
-    private val list = RadioStationList(context, artwork, expanded, select, favorite, mode, refresh)
+    private val list = RadioStationList(context, artwork, expanded, select, favorite, mode, refresh, category)
     private val programmes = RadioProgrammeView(context, refreshGuide, openGuideSource)
     private val pages = FrameLayout(context)
     private val stationsTab = ui.action("Stations", selected = true) { showProgrammes(false) }
@@ -45,13 +45,15 @@ internal class InternetRadioPanel(context: Context, private val artwork: RadioAr
     private val guideProgress = ProgressBar(context, null, android.R.attr.progressBarStyleHorizontal).apply {
         max = 100; progressTintList = android.content.res.ColorStateList.valueOf(Palette.blue)
     }
+    private val guideHeading = ui.label("SELON LA GRILLE", 11, Palette.cyan, bold = true)
+    private val guideLink = ui.label("Programme ›", 13, Palette.cyan)
     private val guideCard = ui.line(true).apply {
         setPadding(ui.dp(10), ui.dp(8), ui.dp(10), ui.dp(8))
-        addView(ui.label("SELON LA GRILLE", 11, Palette.cyan, bold = true), LayoutParams(-1, ui.dp(24)))
+        addView(guideHeading, LayoutParams(-1, ui.dp(24)))
         addView(guideNow, LayoutParams(-1, 0, 1f))
         addView(guideProgress, LayoutParams(-1, ui.dp(4)))
         addView(guideNext, LayoutParams(-1, 0, 1f))
-        addView(ui.label("Programme ›", 13, Palette.cyan), LayoutParams(-1, ui.dp(24)))
+        addView(guideLink, LayoutParams(-1, ui.dp(24)))
         contentDescription = "Ouvrir le programme de la station"
         ui.touch(this, Palette.surface, 14, Palette.border) { showProgrammes(true) }
     }
@@ -136,9 +138,9 @@ internal class InternetRadioPanel(context: Context, private val artwork: RadioAr
     }
 
     fun render(station: RadioStation?, player: InternetRadio, stations: List<RadioStation>, favorites: Boolean, loading: Boolean, error: Boolean,
-        guideState: RadioGuideState = RadioGuideState(), now: Instant = Instant.now()) {
+        guideState: RadioGuideState = RadioGuideState(), now: Instant = Instant.now(), category: RadioCategory = RadioCategory.ALL) {
         selectedStation = station; favoritesOnly = favorites
-        favoritesButton.contentDescription = if (favorites) "Afficher les radios du Maroc" else "Afficher les radios favorites"
+        favoritesButton.contentDescription = if (favorites) "Afficher toutes les radios" else "Afficher les radios favorites"
         (favoritesButton.getChildAt(0) as android.widget.TextView).apply { text = if (favorites) "★" else "☆"; setTextColor(Palette.amber) }
         favoritesButton.tooltipText = if (favorites) "Afficher toutes les radios" else "Favoris · ${stations.count { it.favorite }}"
         favoritesButton.background = ui.shape(if (favorites) 0xFF244E73.toInt() else Palette.raised, 12, if (favorites) Palette.blue else Palette.border)
@@ -146,6 +148,7 @@ internal class InternetRadioPanel(context: Context, private val artwork: RadioAr
         stationFavorite.contentDescription = if (station?.favorite == true) "Retirer la station choisie des favoris" else "Ajouter la station choisie aux favoris"
         stationFavorite.isEnabled = station != null
         title.text = station?.name ?: "Radio Internet"; title.contentDescription = "Station choisie : ${station?.name.orEmpty()}"
+        title.tooltipText = station?.name
         if (station != null) logo.bind(station, artwork)
         val playbackStatus = when {
             loading && stations.size < 2 && !player.requestedPlayback -> "Chargement des radios…"
@@ -153,19 +156,20 @@ internal class InternetRadioPanel(context: Context, private val artwork: RadioAr
             else -> player.status
         }
         val titleFromStream = player.trackTitle?.takeIf { player.playing && player.station?.url == station?.url }
-        status.text = if (station == null) "Choisis une radio dans la liste" else
+        val officialPlayer = RadioCatalogue.officialPlayer(station) != null
+        status.text = if (officialPlayer) "Lecteur officiel · SNRT" else if (station == null) "Choisis une radio dans la liste" else
             if (!studio && titleFromStream != null) "En lecture · $titleFromStream" else playbackStatus
         status.tooltipText = status.text
-        track.text = titleFromStream ?: if (player.playing) "Titre du flux non fourni" else "Infos du flux à l’écoute"
+        track.text = if (officialPlayer) "Écouter sur SNRT Live" else titleFromStream ?: if (player.playing) "Titre du flux non fourni" else "Infos du flux à l’écoute"
         track.visibility = if (studio) View.VISIBLE else View.GONE
         format.text = player.audioInfo
         format.visibility = if (studio && player.playing && !player.audioInfo.isNullOrBlank()) View.VISIBLE else View.GONE
         playIcon.style(name = if (player.requestedPlayback) "pause" else "play")
-        playButton.contentDescription = if (player.requestedPlayback) "Mettre la radio en pause" else "Écouter la radio"
+        playButton.contentDescription = if (officialPlayer) "Ouvrir le lecteur officiel SNRT" else if (player.requestedPlayback) "Mettre la radio en pause" else "Écouter la radio"
         playButton.isEnabled = station != null; playButton.alpha = if (station != null) 1f else .4f
-        val queue = RadioQueue.active(stations, favorites)
+        val queue = RadioQueue.active(stations, favorites, category)
         for (button in listOf(previousButton, nextButton)) { button.isEnabled = queue.size > 1; button.alpha = if (queue.size > 1) 1f else .4f }
-        list.render(stations, favorites, station?.url, player.station?.url?.takeIf { player.playing }, playbackStatus, loading, error)
+        list.render(stations, favorites, station?.url, player.station?.url?.takeIf { player.playing }, playbackStatus, loading, error, category)
         val matching = guideState.takeIf { it.source == RadioGuideSource.forStation(station) } ?: RadioGuideState()
         programmes.render(matching, now)
         val current = matching.guide?.current(now); val nextProgramme = matching.guide?.next(now)
@@ -181,6 +185,20 @@ internal class InternetRadioPanel(context: Context, private val artwork: RadioAr
             "Ensuite · ${it.start.atZone(MoroccoRadioTime.zoneAt(it.start)).format(DateTimeFormatter.ofPattern(day, java.util.Locale.FRENCH))}\n${it.programme.title}"
         }
             ?: if (matching.guide != null) "Horaires annoncés par la radio, sous réserve de changement." else "Consulte le site de la station pour ses émissions."
+        val hasGuide = matching.source == RadioGuideSource.ASWAT
+        guideHeading.text = if (hasGuide) "SELON LA GRILLE" else "SOURCE AUDIO"
+        guideLink.visibility = if (hasGuide) View.VISIBLE else View.GONE
+        guideCard.isClickable = hasGuide; guideCard.isFocusable = hasGuide
+        if (!hasGuide) {
+            val quran = station?.let { RadioCatalogue.matches(it, RadioCategory.QURAN) } == true
+            guideNow.text = when { officialPlayer -> "SNRT Live"; quran -> "MP3Quran"; else -> "Radio Internet" }
+            guideNext.text = when {
+                officialPlayer -> "Le bouton de lecture ouvre le lecteur officiel."
+                quran -> "القرآن الكريم\nراديو التلاوات"
+                else -> "Le programme est proposé dans son onglet lorsqu’une grille est disponible."
+            }
+            guideCard.contentDescription = "Source audio : ${guideNow.text}"
+        } else guideCard.contentDescription = "Ouvrir le programme de la station"
     }
 
     fun setTyping(typing: Boolean) {
