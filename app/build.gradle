@@ -9,8 +9,8 @@ android {
         applicationId 'com.autodrive.launcher'
         minSdk 33
         targetSdk 35
-        versionCode providers.gradleProperty('autodriveVersionCode').getOrElse('23').toInteger()
-        versionName providers.gradleProperty('autodriveVersionName').getOrElse('1.8.0')
+        versionCode providers.gradleProperty('autodriveVersionCode').getOrElse('24').toInteger()
+        versionName providers.gradleProperty('autodriveVersionName').getOrElse('1.9.0')
         testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
     }
     signingConfigs {
@@ -36,6 +36,7 @@ kotlin { jvmToolchain(17) }
 dependencies {
     implementation 'androidx.activity:activity:1.10.1'
     implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2'
+    implementation 'org.jsoup:jsoup:1.24.1'
     implementation 'androidx.media3:media3-exoplayer-hls:1.8.1'
     implementation 'androidx.media3:media3-ui:1.8.1'
     testImplementation 'junit:junit:4.13.2'

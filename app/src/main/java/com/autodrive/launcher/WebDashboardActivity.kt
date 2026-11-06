@@ -36,6 +36,9 @@ class WebDashboardActivity : ComponentActivity() {
     private var phonePanel: PhonePanel? = null
     private var contactsRendering: Job? = null
     private lateinit var radio: InternetRadio
+    private lateinit var radioGuide: RadioGuideViewModel
+    private var guideRendering: Job? = null
+    private var guideMinute = -1L
     private var radioPanel: InternetRadioPanel? = null
     private var expandedRadioPanel: InternetRadioPanel? = null
     private lateinit var radioArtwork: RadioArtwork
@@ -93,6 +96,10 @@ class WebDashboardActivity : ComponentActivity() {
     private val tick = object : Runnable {
         override fun run() {
             updateStatus()
+            val minute = System.currentTimeMillis() / 60_000
+            if (minute != guideMinute && (expandedRadioPanel != null || (homeVisible && links.tab == MediaTab.RADIO))) {
+                guideMinute = minute; updateRadio()
+            }
             if (resumed) handler.postDelayed(this, 1_000)
         }
     }
@@ -103,6 +110,7 @@ class WebDashboardActivity : ComponentActivity() {
         ui = DriveViews(this)
         links = AppLinks(this)
         radioPhone = RadioAndPhoneStore(this)
+        radioGuide = ViewModelProvider(this)[RadioGuideViewModel::class.java]
         phoneContacts = ViewModelProvider(this)[PhoneContactsViewModel::class.java]
         radio = InternetRadio(this, ::changeRadioStation, ::updateRadio)
         radioArtwork = RadioArtwork(this)
@@ -245,7 +253,7 @@ class WebDashboardActivity : ComponentActivity() {
         addView(ui.line().apply {
             val items = listOf(
                 Triple("Phone", "phone", { showPhone() }),
-                Triple("Media", "media", { select(MediaTab.YOUTUBE) }),
+                Triple("Media", "media", { if (links.tab == MediaTab.RADIO) showMoroccoRadios() else select(links.tab) }),
                 Triple("Apps", "apps", { showApps() }),
                 Triple("Settings", "settings", { showSettings() })
             )
@@ -294,9 +302,10 @@ class WebDashboardActivity : ComponentActivity() {
         contactsRendering = CoroutineScope(Dispatchers.Main.immediate).launch {
             phoneContacts.state.collect { phonePanel?.render(it) }
         }
+        guideRendering = CoroutineScope(Dispatchers.Main.immediate).launch { radioGuide.state.collect { updateRadio() } }
     }
 
-    override fun onStop() { WebSessionStorage.persist(); updateRendering?.cancel(); updateRendering = null; contactsRendering?.cancel(); super.onStop() }
+    override fun onStop() { WebSessionStorage.persist(); updateRendering?.cancel(); updateRendering = null; contactsRendering?.cancel(); guideRendering?.cancel(); super.onStop() }
 
     override fun onPause() {
         resumed = false
@@ -530,7 +539,8 @@ class WebDashboardActivity : ComponentActivity() {
     }
 
     private fun availableRadioStations() = RadioQueue.merge(
-        (radioCatalogue.ifEmpty { MoroccoRadioDirectory.starter }) + listOfNotNull(radioPhone.lastStation), radioPhone.stations)
+        (radioCatalogue.ifEmpty { MoroccoRadioDirectory.starter }) + listOfNotNull(radioPhone.lastStation) +
+            MoroccoRadioDirectory.starter.filter { RadioGuideSource.forStation(it) == RadioGuideSource.ASWAT }, radioPhone.stations)
 
     private fun selectedRadioStation(): RadioStation? {
         val all = availableRadioStations()
@@ -541,9 +551,11 @@ class WebDashboardActivity : ComponentActivity() {
 
     private fun updateRadio() {
         val stations = availableRadioStations()
+        val station = selectedRadioStation()
+        if (expandedRadioPanel != null || (homeVisible && links.tab == MediaTab.RADIO)) radioGuide.select(station)
         radio.setCanSkip(RadioQueue.active(stations, radioPhone.favoritesOnly).size > 1)
-        for (panel in listOfNotNull(radioPanel.takeIf { homeVisible && links.tab == MediaTab.RADIO }, expandedRadioPanel)) panel.render(selectedRadioStation(), radio,
-            stations, radioPhone.favoritesOnly, radioLoading, radioDirectoryError)
+        for (panel in listOfNotNull(radioPanel.takeIf { homeVisible && links.tab == MediaTab.RADIO }, expandedRadioPanel)) panel.render(station, radio,
+            stations, radioPhone.favoritesOnly, radioLoading, radioDirectoryError, radioGuide.state.value)
     }
 
     private fun createRadioPanel(expanded: Boolean) = InternetRadioPanel(this, radioArtwork, expanded,
@@ -556,7 +568,8 @@ class WebDashboardActivity : ComponentActivity() {
             selectedRadioStation()?.let { selected ->
                 if (radio.station?.url != selected.url) playRadio(selected) else radio.toggle()
             }
-        }, { changeRadioStation(1) })
+        }, { changeRadioStation(1) }, refreshGuide = { radioGuide.select(selectedRadioStation(), force = true) },
+        openGuideSource = { source -> if (!links.start(Intent(Intent.ACTION_VIEW, Uri.parse(source.page)))) message("Aucun navigateur disponible") })
 
     private fun playRadio(station: RadioStation) {
         // Keep user edits/favorites while enriching old saved rows with newly available artwork.

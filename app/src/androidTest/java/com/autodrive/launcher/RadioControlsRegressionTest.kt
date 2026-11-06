@@ -89,7 +89,7 @@ class RadioControlsRegressionTest {
             instrumentation.runOnMainSync {
                 val grid = views().filterIsInstance<GridView>().single()
                 assertEquals(if (activity.resources.configuration.screenWidthDp >= 600) 2 else 1, grid.numColumns)
-                assertEquals(201, grid.count)
+                assertEquals(202, grid.count)
                 assertTrue(views().any { it is RadioLogoView })
             }
             tap(activity.window.decorView, "Ajouter HIT RADIO aux favoris")
@@ -98,7 +98,7 @@ class RadioControlsRegressionTest {
             await { views().filterIsInstance<GridView>().single().count == 1 }
             instrumentation.runOnMainSync { assertFalse(views().single { it.contentDescription == "Station suivante" }.isEnabled) }
             tap(activity.window.decorView, "Afficher les radios du Maroc")
-            await { views().filterIsInstance<GridView>().single().count == 201 }
+            await { views().filterIsInstance<GridView>().single().count == 202 }
             tap(activity.window.decorView, "Écouter HIT RADIO")
             await { hasTitle("HIT RADIO") }
             val bitmap = instrumentation.uiAutomation.takeScreenshot()

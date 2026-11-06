@@ -77,6 +77,10 @@ internal class RadioArtwork(context: Context) {
         return null
     }
     private fun decode(bytes: ByteArray): Bitmap? {
+        // A known generic WordPress favicon is not station branding. Match its bytes, not its
+        // URL, so an eventual replacement by the broadcaster's real logo remains eligible.
+        if (bytes.size == 4119 && MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it.toInt() and 255) } ==
+            "6bdb369337ac2496761c6f063bffea0aa6a91d4662279c399071a468251f51f0") return null
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
         if (bounds.outWidth !in 1..8192 || bounds.outHeight !in 1..8192) return null

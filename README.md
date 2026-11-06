@@ -16,6 +16,8 @@ La même identité de signature est conservée pour permettre les mises à jour 
 
 ## Tableau de bord
 
+- Version **1.9.0** : lecteur Radio agrandi avec station/favori, infos réelles du flux et onglets **Stations / Programme**. La grille officielle d’Aswat est consultable sur sept jours, avec créneau prévu, suivant, source et cache hors connexion. Les autres stations restent signalées sans guide compatible intégré ; aucun programme n’est inventé. [Couverture et fonctionnement EPG](docs/RADIO-EPG.md).
+
 - Version **1.8.0** : grille Radio avec recherche/favoris, station et état toujours visibles, commandes média Android et changement de station indépendant de la capacité de la bibliothèque. Trois flux marocains officiels servent de liste de départ si l’annuaire est inaccessible. [Audit Radio](docs/RADIO-AUDIT.md).
 - Maps/YouTube conservent maintenant leur document lors des changements de page, d’onglet ou d’application. La connexion web ordinaire reste dans le même profil quand Google l’autorise ; une connexion externe reste séparée. La persistance d’un compte Google réel sur le boîtier reste à confirmer. [Audit sessions et limites](docs/WEB-SESSIONS.md).
 
@@ -37,7 +39,9 @@ La même identité de signature est conservée pour permettre les mises à jour 
 
 ![Radio Internet 1.8.0](deliverables/radio-1.8.0-800x480.png)
 
-![Catalogue Radio 1.8.0 — capture réelle](deliverables/radio-grid-1.8.0-800x480.png)
+![Lecteur Radio 1.9.0 — capture réelle](deliverables/radio-studio-1.9.0-800x480.png)
+
+![Programme Aswat 1.9.0 — grille publiée](deliverables/radio-programme-1.9.0-800x480.png)
 
 ![Téléphone 1.7.0 — contacts synthétiques sur émulateur](deliverables/phone-contacts-1.7.0-800x480.png)
 

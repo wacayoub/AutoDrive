@@ -61,8 +61,9 @@ internal class RadioStationList(context: Context, private val artwork: RadioArtw
             hint = "Rechercher une radio"; contentDescription = "Rechercher une radio"
             setSingleLine(true); setTextColor(Palette.text); setHintTextColor(Palette.muted)
             imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH or android.view.inputmethod.EditorInfo.IME_FLAG_NO_EXTRACT_UI
-            setOnEditorActionListener { _, action, _ ->
-                if (action == android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH) {
+            setOnEditorActionListener { _, action, event ->
+                if (action in setOf(android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH, android.view.inputmethod.EditorInfo.IME_ACTION_DONE) ||
+                    event?.keyCode in setOf(android.view.KeyEvent.KEYCODE_ENTER, android.view.KeyEvent.KEYCODE_NUMPAD_ENTER)) {
                     windowInsetsController?.hide(android.view.WindowInsets.Type.ime()); true
                 } else false
             }
@@ -150,7 +151,8 @@ internal class RadioStationList(context: Context, private val artwork: RadioArtw
         }
         fun bind(station: RadioStation, selected: Boolean, playing: Boolean) {
             logo.bind(station, artwork); name.text = station.name
-            state.text = if (playing) "En lecture" else if (selected) statusText else if (station.favorite) "Favori" else "Écouter"
+            state.text = if (playing) "En lecture" else if (selected) statusText else if (station.favorite) "Favori" else
+                if (RadioGuideSource.forStation(station) == RadioGuideSource.ASWAT) "EPG · grille publiée" else "Écouter"
             state.setTextColor(if (playing) Palette.green else Palette.muted)
             star.text = if (station.favorite) "★" else "☆"
         }

@@ -1,5 +1,20 @@
 # AutoDrive validation
 
+## Version 1.9.0 — radio studio and published radio programmes
+
+Validated 6 November 2026, `com.autodrive.launcher`, version code 24. [Source audit, coverage and guide semantics](RADIO-EPG.md).
+
+- **28 JVM tests passed**, debug and instrumentation APKs assembled, Android lint completed with **0 errors, 51 warnings and 1 hint**.
+- **25 instrumented tests passed in the final combined run** on AOSP Android 13 / 800 × 480 / density 160 (59.362 seconds), including the existing radio transport, actual HTTPS playback, MediaSession, phone, retained-panel, Maps/YouTube preferences and synthetic session checks.
+- The actual public Aswat HTTPS page returned **53 weekly slots across seven days**. Instrumentation verified parsing, private cache round-trip, native Programme rows, day changes/reset, disabling unsupported refresh, clearing the previous station's guide, and no automatic playback. These are published planning entries, **not confirmation of the programme actually broadcasting**.
+- Nine new JVM checks cover source matching, Arabic/French/English day labels, valid/invalid clock values, scoped parsing, deduplication, overnight and week transitions, gaps, overlaps, next programme, planned progress and stale/future data. A guide older than 24 hours remains readable but cannot supply a current/next prediction. Corrupt cache data is ignored.
+- Official Moroccan GMT rules effective 20 September 2026 were checked against the government communiqué linked in the audit. Initial calendar expectations using the previous GMT+1 rule were corrected. The implementation has an explicit current-rule fallback for old Android timezone databases; JVM and Android checks verify the same instant. It does not modify system time or settings.
+- An initial cache round-trip check exposed nanosecond precision lost by JSON epoch-millisecond serialization; fetched timestamps now use that same precision before storage. The final round-trip check passed.
+- Real keyboard events verified closing station search with Enter and reopening it; changing to Programme also closes the IME and restores transport controls. A known generic WordPress favicon is rejected by its exact byte hash, allowing station initials instead of unrelated branding; future replacement image bytes remain eligible.
+- Manual actual-touch checks selected Aswat from search, tuned its HTTPS stream and displayed the published guide. A force-stop/restart with Wi-Fi and mobile data disabled retained readable recorded programme entries. At density 213, previous/next, day navigation and Source remained completely within the 800 × 480 display, with at least 63 physical pixels of height (48 dp). Network settings and density were restored. Captures were inspected: [studio](../deliverables/radio-studio-1.9.0-800x480.png), [programme](../deliverables/radio-programme-1.9.0-800x480.png), [density 213](../deliverables/radio-programme-1.9.0-density213.png). Offline availability applies to the saved guide, not live audio.
+
+The guide is currently integrated for **Aswat only**. Other stations explicitly report unavailable programme integration. No Google account was used; owner account persistence remains unverified. Incarlink audio quality, physical media keys, actual broadcaster schedule accuracy, Bluetooth calls and owner-device behavior remain untested. No installation was performed on an owner device.
+
 
 ## Version 1.8.0 — radio controls/catalogue and retained web documents
 

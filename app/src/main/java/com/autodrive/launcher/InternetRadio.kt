@@ -37,6 +37,11 @@ internal class InternetRadio(private val context: Context, private val step: (In
         else -> "Prêt à écouter"
     }
     val trackTitle get() = engine?.mediaMetadata?.title?.toString()?.takeIf { it.isNotBlank() }
+    val audioInfo: String? get() = engine?.audioFormat?.let { format ->
+        val codec = when (format.sampleMimeType) { "audio/mpeg" -> "MP3"; "audio/mp4a-latm" -> "AAC"; else -> format.sampleMimeType?.removePrefix("audio/") }
+        listOfNotNull(codec, format.averageBitrate.takeIf { it > 0 }?.let { "${it / 1000} kb/s" },
+            format.sampleRate.takeIf { it > 0 }?.let { "${it / 1000.0} kHz" }).joinToString(" · ").takeIf { it.isNotBlank() }
+    }
     fun play(value: RadioStation) {
         if (RadioStation.validUrl(value.url) == null) return
         station = value

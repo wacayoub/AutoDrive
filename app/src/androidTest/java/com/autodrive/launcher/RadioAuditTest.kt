@@ -37,9 +37,11 @@ class RadioAuditTest {
             waitFor(25_000) { views().filterIsInstance<TextView>().any { it.text.toString().startsWith("En lecture ·") } }
             instrumentation.runOnMainSync {
                 click("Station précédente"); assertTrue(title("HIT test"))
+                click("Station précédente"); assertTrue(title("Radio Aswat"))
                 click("Station précédente"); assertTrue(title("Erreur test"))
+                click("Station suivante"); assertTrue(title("Radio Aswat"))
                 click("Station suivante"); assertTrue(title("HIT test"))
-                repeat(3) { click("Station suivante") }
+                repeat(4) { click("Station suivante") }
                 assertTrue(title("HIT test"))
             }
             waitFor(25_000) { views().filterIsInstance<TextView>().any { it.text.toString().startsWith("En lecture ·") } }

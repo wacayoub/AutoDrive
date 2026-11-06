@@ -1,6 +1,8 @@
-# Radio Internet et Téléphone — 1.8.0
+# Radio Internet et Téléphone — 1.9.0
 
 ## Radio
+
+Depuis 1.9.0, le lecteur agrandi comporte une vue de lecture et les onglets Stations / Programme. La grille hebdomadaire d’Aswat est importée depuis son site officiel et reste consultable en cache ; les autres radios ne reçoivent aucun horaire supposé. Les indications prévues restent distinctes des informations réelles du flux. [Guide, couverture EPG et limites](RADIO-EPG.md).
 
 Depuis 1.8.0, la liste agrandie utilise une grille en paysage, avec recherche et favoris. Les commandes de lecture et les filtres partagent leur ligne avec les informations de station pour laisser plus de place aux choix. L’accueil garde le nom et l’état de lecture visibles, une étoile pour le filtre favoris et une loupe pour la liste complète. La dernière station est mémorisée sans enregistrer automatiquement chaque écoute dans la bibliothèque. Trois flux officiels de départ (HIT, Mars, Aswat) restent disponibles comme choix si l’annuaire ne répond pas. Une session média Android reçoit les commandes standard pendant l’utilisation du lecteur ; les commandes Toyota physiques restent à vérifier. [Audit 1.8.0](RADIO-AUDIT.md).
 
