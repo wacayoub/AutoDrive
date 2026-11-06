@@ -1,5 +1,22 @@
 # AutoDrive validation
 
+
+## Version 1.7.0 — Incarlink phone audit and contact access
+
+Validated 6 November 2026, `com.autodrive.launcher`, version code 22. [Phone audit, manufacturer evidence and limitations](PHONE-INCARLINK-AUDIT.md).
+
+- **19 JVM tests passed**, debug/test APK assemblies passed, and Android lint completed with **0 errors, 38 warnings and 1 hint**. Only `READ_CONTACTS` and visibility of the audited Bluetooth-phone package were added to the manifest; no `CALL_PHONE`, call-log, privileged Bluetooth or default-dialer access was added.
+- **19 instrumented tests passed in the final combined run** on AOSP Android 13 at 800 × 480, density 160. Four new phone audit tests run with the 15 existing Radio/Phone/dashboard/YouTube/Maps/session tests. The final run was repeated after enforcing the user's requirement to avoid an automatic local/SIM-dialer fallback.
+- The phone checks cover all twelve keypad keys, cursor positions, reversed selection, replacement near the length limit, missing cursor selection, backspace, long-press plus/clear, persistent typed draft and actual keyboard events. A real injected touch pressed the `5` key; another touch on the number field opened the Android IME. The emulator's hardware-keyboard IME display was enabled for this check.
+- Real standard Contacts Provider fixtures with a clearly marked synthetic name and multiple phone numbers were inserted through instrumentation-only shell permission. They verify normalization, duplicate removal, search by name/formatted number, row selection into the keypad and automatic refresh after an actual provider update. All inserted raw-contact fixtures were deleted afterward. Production does not request `WRITE_CONTACTS`, seed contacts or ship this test data.
+- Denied, empty and unavailable contact states were checked. The denied repository fixture proves that no query is attempted without permission. Explicit application choice, missing choice and automatic preference for the manufacturer's known component were checked as routing policy. **The OEM APK was neither installed nor invoked on the emulator.** Explicitly choosing the AOSP dialer verifies a standard `tel:` handoff, not Bluetooth calling.
+
+- Additional actual-UI checks passed with emulator Wi-Fi and mobile data disabled: permission revoked without an automatic prompt, touch entry of `06555`, draft retention after force-stop/restart, and an honest empty-provider message after regranting Contacts. Network settings and density were restored afterward.
+- Visual inspection at density 213 initially found the bottom phone action partly clipped. A compact landscape arrangement now removes helper text and gaps while keeping each key/action at 48 dp. The final 800 × 480 / density 213 check verifies at least 63 physical pixels of visible height for the tested primary targets, and the actual capture shows the full action. No target was shrunk to fit.
+- Actual captures: [contact fixtures at density 160](../deliverables/phone-contacts-1.7.0-800x480.png), [empty-provider state at density 213](../deliverables/phone-1.7.0-density213.png). The emulator has no BT Phone installed, so it correctly asks to select a Bluetooth-phone application. These captures are not evidence of the owner's Bluetooth phonebook.
+
+The real Google account session remains unverified as documented for 1.6.2. Bluetooth connection, PBAP import, the OEM phonebook's exposure through Android Contacts, clipboard paste in BT Phone, remote-phone dialing, incoming calls, microphone, audio routing and steering-wheel buttons remain **untested on the owner's box**. No real call was placed and no installation was performed on the owner's Incarlink or Samsung.
+
 ## Version 1.6.2 — web cookie persistence
 
 Validated 6 November 2026, package `com.autodrive.launcher`, version code 21, on the local Android 13 emulator. [Session audit and important authentication boundaries](WEB-SESSIONS.md).

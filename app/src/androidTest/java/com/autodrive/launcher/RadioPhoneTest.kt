@@ -60,6 +60,10 @@ class RadioPhoneTest {
         withActivity { activity ->
             instrumentation.runOnMainSync {
                 val links = AppLinks(activity)
+                assertNull(links.dialIntent("12345")) // No OEM BT Phone on this AOSP emulator; no automatic SIM fallback.
+                val dialer = Intent(Intent.ACTION_DIAL, android.net.Uri.parse("tel:12345")).resolveActivity(activity.packageManager)!!
+                val dialerApp = links.apps().first { it.component.packageName == dialer.packageName }
+                links.saveAssociation(AppLinks.PHONE, dialerApp.component)
                 assertEquals("+212612345678", links.dialIntent("+212 (6)12 34 56 78")?.data?.schemeSpecificPart)
                 links.saveAssociation(AppLinks.PHONE, ComponentName("com.autodrive.missing", "com.autodrive.missing.Phone"))
                 assertNull(links.dialIntent("123456"))

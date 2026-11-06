@@ -32,7 +32,9 @@ internal class AppLinks(private val activity: Activity) {
             packages.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(category),
                 PackageManager.ResolveInfoFlags.of(0))
         }
-        .filter { it.activityInfo.exported && it.activityInfo.packageName != activity.packageName }
+        .filter { it.activityInfo.exported && it.activityInfo.enabled && it.activityInfo.applicationInfo.enabled &&
+            it.activityInfo.packageName != activity.packageName &&
+            (it.activityInfo.permission == null || activity.checkSelfPermission(it.activityInfo.permission) == PackageManager.PERMISSION_GRANTED) }
         .map {
             Launchable(ComponentName(it.activityInfo.packageName, it.activityInfo.name),
                 it.loadLabel(packages).toString())
@@ -75,19 +77,20 @@ internal class AppLinks(private val activity: Activity) {
 
     fun dialIntent(number: String = ""): Intent? {
         val normalized = if (number.isBlank()) "" else DialNumber.normalize(number) ?: return null
-        val intent = Intent(Intent.ACTION_DIAL, Uri.fromParts("tel", normalized, null))
-        // A saved association must never silently fall back to another application's dialer.
-        association(PHONE)?.let { intent.setPackage(it.packageName) }
+        val selected = phoneApp()?.component ?: return null
+        // Automatic mode is for the box's Bluetooth phone, never an implicit local/SIM dialer.
+        val intent = Intent(Intent.ACTION_DIAL, Uri.fromParts("tel", normalized, null)).setPackage(selected.packageName)
         return intent.takeIf { it.resolveActivity(packages) != null }
     }
 
     fun dial(number: String = "") = dialIntent(number)?.let(::start) ?: false
 
-    fun openPhone(): Boolean {
-        val selected = association(PHONE) ?: return dial()
-        val app = apps().firstOrNull { it.component == selected } ?: return false
-        return open(app)
+    fun phoneApp(available: List<Launchable> = apps()): Launchable? {
+        association(PHONE)?.let { saved -> return available.firstOrNull { it.component == saved } }
+        return available.firstOrNull { it.component == OEM_PHONE }
     }
+
+    fun openPhone(): Boolean = phoneApp()?.let(::open) ?: false
 
     private fun mapsIntent() = packages.getLaunchIntentForPackage(MAPS)
         ?: Intent(Intent.ACTION_VIEW, Uri.parse(MAPS_URL)).setPackage(MAPS)
@@ -121,6 +124,8 @@ internal class AppLinks(private val activity: Activity) {
         const val PLAY = "com.google.android.gms"
         const val YOUTUBE = "com.google.android.youtube"
         const val PHONE = "PHONE"
+        // Public MAIN/LAUNCHER activity verified in the manufacturer's X15/SLM927 Android 13 image.
+        val OEM_PHONE = ComponentName("com.carsyso.bluetooth", "com.carsyso.bluetoothcall.MainActivity")
         private const val MAPS_URL = "https://www.google.com/maps/@?api=1&map_action=map"
     }
 }

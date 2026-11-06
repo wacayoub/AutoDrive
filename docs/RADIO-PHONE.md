@@ -1,4 +1,4 @@
-# Radio Internet et Téléphone — 1.6.1
+# Radio Internet et Téléphone — 1.7.0
 
 ## Radio
 
@@ -22,14 +22,16 @@ La radio reste active dans les pages internes Téléphone et Réglages. Quitter 
 
 ## Téléphone
 
-Le raccourci Phone ouvre un clavier et six favoris locaux. Appui prolongé sur 0 : `+` ; appui prolongé sur effacement : vider ; un favori remplit le clavier et un appui prolongé propose sa suppression. Les noms et numéros saisis restent dans les préférences privées de l’application ; AutoDrive ne lit pas le carnet d’adresses ou le journal des appels.
+Le raccourci Phone propose un clavier corrigé, un onglet Contacts avec recherche et six favoris manuels. L’appui sur le numéro permet le clavier système ; `0` prolongé saisit `+` et l’effacement prolongé vide le champ. Les favoris et le brouillon restent dans les préférences privées.
 
-**Réglages → Application Téléphone** ou le bouton dans cette page permet de choisir l’application installée du téléphone ou du boîtier. **Ouvrir le téléphone** lance cette application. **Préparer l’appel** utilise `ACTION_DIAL` et une URI `tel:` correctement encodée, limitée au paquet choisi lorsqu’un choix existe. Une application absente ou ne recevant pas ce type d’intent produit un message explicite ; aucun autre composeur n’est choisi silencieusement. Le choix Téléphone Android rétablit la résolution normale du système. [Intents téléphoniques Android](https://developer.android.com/guide/components/intents-common#Phone).
+Le mode Automatique choisit **BT Phone** (`com.carsyso.bluetooth`) lorsqu’il est réellement présent et accessible ; sinon, il demande de choisir une application et ne bascule pas vers le composeur SIM du boîtier. Le bouton en haut ouvre l’application sélectionnée et l’icône des réglages change cette association. Un choix explicite reste prioritaire. **Préparer l’appel** utilise l’intent public `ACTION_DIAL` uniquement si l’application le reçoit. Sinon, **Copier et ouvrir** copie le numéro puis ouvre l’application, où il faut le coller. Cette solution ne prétend pas déclencher un appel Bluetooth directement.
 
-L’utilisateur confirme ensuite l’appel dans le composeur. AutoDrive ne demande pas `CALL_PHONE`, ne devient pas composeur par défaut et n’ajoute pas d’InCallService. Répondre, raccrocher, gérer le micro et router un appel Bluetooth restent les fonctions de l’application Téléphone et du firmware. Ouvrir un composeur sur un téléphone ne démontre pas qu’un boîtier Android peut appeler via le téléphone Bluetooth : ce point nécessite un essai sur l’Incarlink.
+**Contacts** lit uniquement le fournisseur Android standard après autorisation, hors du thread UI, et s’actualise sur ses changements pendant que la page est active. Choisir un contact remplit le champ sans appeler. Un carnet vide ou privé à BT Phone est signalé : l’autorisation Contacts ne synchronise pas, à elle seule, le carnet Bluetooth du mobile. Aucun contact lu n’est stocké ou transmis sur Internet. AutoDrive ne demande pas `CALL_PHONE`, ne devient pas composeur par défaut et ne gère pas l’audio des appels.
+
+L’[audit Téléphone Incarlink](PHONE-INCARLINK-AUDIT.md) détaille les manifestes constructeur, les limites de l’intégration et les essais matériels restant nécessaires.
 
 ![Radio native dans le tableau de bord](../deliverables/radio-1.6.1-800x480.png)
 
 ![Liste agrandie des radios](../deliverables/radio-list-1.6.1-800x480.png)
 
-![Clavier Téléphone](../deliverables/phone-1.6.0-800x480.png)
+![Contacts Android de test et clavier — émulateur](../deliverables/phone-contacts-1.7.0-800x480.png)

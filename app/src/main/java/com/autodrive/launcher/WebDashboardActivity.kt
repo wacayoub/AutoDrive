@@ -32,6 +32,9 @@ class WebDashboardActivity : ComponentActivity() {
     private lateinit var ui: DriveViews
     private lateinit var links: AppLinks
     private lateinit var radioPhone: RadioAndPhoneStore
+    private lateinit var phoneContacts: PhoneContactsViewModel
+    private var phonePanel: PhonePanel? = null
+    private var contactsRendering: Job? = null
     private lateinit var radio: InternetRadio
     private var radioPanel: InternetRadioPanel? = null
     private var expandedRadioPanel: InternetRadioPanel? = null
@@ -75,6 +78,10 @@ class WebDashboardActivity : ComponentActivity() {
         updateStatus()
     }
     private val homePicker = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { }
+    private val contactsPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (phonePanel != null && resumed) phoneContacts.start()
+        if (!granted) message("Contacts non autorisés. Le téléphone Bluetooth reste accessible ; l’autorisation se règle dans les paramètres Android d’AutoDrive.")
+    }
     private val installSource = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         if (installSourcePending) {
             installSourcePending = false
@@ -95,6 +102,7 @@ class WebDashboardActivity : ComponentActivity() {
         ui = DriveViews(this)
         links = AppLinks(this)
         radioPhone = RadioAndPhoneStore(this)
+        phoneContacts = ViewModelProvider(this)[PhoneContactsViewModel::class.java]
         radio = InternetRadio(this, ::updateRadio)
         radioArtwork = RadioArtwork(this)
         updates = ViewModelProvider(this)[UpdateViewModel::class.java]
@@ -271,6 +279,7 @@ class WebDashboardActivity : ComponentActivity() {
         gps.start()
         tick.run()
         if (homeVisible) startPanels()
+        if (phonePanel != null) phoneContacts.start()
         hideBars()
         updates.autoCheck()
     }
@@ -280,9 +289,12 @@ class WebDashboardActivity : ComponentActivity() {
         updateRendering = CoroutineScope(Dispatchers.Main.immediate).launch {
             updates.state.collect { updatePanel?.render(it) }
         }
+        contactsRendering = CoroutineScope(Dispatchers.Main.immediate).launch {
+            phoneContacts.state.collect { phonePanel?.render(it) }
+        }
     }
 
-    override fun onStop() { WebSessionStorage.persist(); updateRendering?.cancel(); updateRendering = null; super.onStop() }
+    override fun onStop() { WebSessionStorage.persist(); updateRendering?.cancel(); updateRendering = null; contactsRendering?.cancel(); super.onStop() }
 
     override fun onPause() {
         resumed = false
@@ -290,6 +302,7 @@ class WebDashboardActivity : ComponentActivity() {
         gps.stop()
         radio.close()
         stopPanels()
+        phoneContacts.stop()
         super.onPause()
     }
 
@@ -386,6 +399,8 @@ class WebDashboardActivity : ComponentActivity() {
     private fun showHome() {
         window.insetsController?.hide(WindowInsets.Type.ime())
         expandedRadioPanel = null
+        phonePanel = null
+        phoneContacts.stop()
         updatePanel = null
         pageBack = null
         homeVisible = true
@@ -396,6 +411,8 @@ class WebDashboardActivity : ComponentActivity() {
 
     private fun page(title: String, body: LinearLayout, back: () -> Unit = ::showHome, scroll: Boolean = true) {
         expandedRadioPanel = null
+        phonePanel = null
+        phoneContacts.stop()
         stopPanels()
         homeVisible = false
         pageBack = back
@@ -640,27 +657,39 @@ class WebDashboardActivity : ComponentActivity() {
     }
 
     private fun phoneAppLabel(): String {
-        val saved = links.association(AppLinks.PHONE) ?: return "Téléphone Android"
-        return links.apps().firstOrNull { it.component == saved }?.label ?: "Application indisponible"
+        return links.phoneApp()?.label ?: if (links.association(AppLinks.PHONE) != null) "Application indisponible" else "Choisir téléphone Bluetooth"
     }
 
     private fun choosePhoneApp(after: () -> Unit) {
-        val apps = links.apps()
+        val apps = links.apps().sortedBy { if (it.component == AppLinks.OEM_PHONE) 0 else 1 }
         val dialog = AlertDialog.Builder(this).setTitle("Application Téléphone / Bluetooth")
         if (apps.isEmpty()) dialog.setMessage("Aucune application installée disponible")
         else dialog.setItems(apps.map { "${it.label}\n${it.component.packageName}" }.toTypedArray()) { _, i ->
             links.saveAssociation(AppLinks.PHONE, apps[i].component); after()
         }
-        dialog.setNeutralButton("Téléphone Android") { _, _ -> links.saveAssociation(AppLinks.PHONE, null); after() }
+        dialog.setNeutralButton("Automatique · BT Phone prioritaire") { _, _ -> links.saveAssociation(AppLinks.PHONE, null); after() }
             .setNegativeButton("Annuler", null).show()
     }
 
     private fun showPhone() {
+        val hasPhoneApp = links.phoneApp() != null
+        val receivesNumber = links.dialIntent("123") != null
         val panel = PhonePanel(this, radioPhone.phoneDraft, radioPhone.phoneFavorites, phoneAppLabel(),
             { radioPhone.phoneDraft = it }, { number ->
                 when {
                     DialNumber.normalize(number) == null -> message("Saisis un numéro valide")
-                    !links.dial(number) -> message("Cette application ne reçoit pas les numéros. Utilise Ouvrir le téléphone ou change d’application.")
+                    !hasPhoneApp -> choosePhoneApp(::showPhone)
+                    receivesNumber -> if (!links.dial(number)) message("Composeur indisponible. Choisis une application téléphone.")
+                    else -> {
+                        // This is explicitly a clipboard handoff, never a claim of remote HFP dialing.
+                        val clip = android.content.ClipData.newPlainText("Numéro", DialNumber.normalize(number))
+                        clip.description.extras = android.os.PersistableBundle().apply {
+                            putBoolean(android.content.ClipDescription.EXTRA_IS_SENSITIVE, true)
+                        }
+                        getSystemService(android.content.ClipboardManager::class.java).setPrimaryClip(clip)
+                        if (links.openPhone()) message("Numéro copié. Colle-le dans l’application téléphone pour appeler.")
+                        else { message("Téléphone indisponible · choisis une application"); choosePhoneApp(::showPhone) }
+                    }
                 }
             }, { choosePhoneApp(::showPhone) }, {
                 if (!links.openPhone()) { message("Téléphone indisponible · choisis une application"); choosePhoneApp(::showPhone) }
@@ -668,8 +697,13 @@ class WebDashboardActivity : ComponentActivity() {
                 AlertDialog.Builder(this).setTitle("Supprimer ${favorite.name} ?").setPositiveButton("Supprimer") { _, _ ->
                     radioPhone.removePhoneFavorite(favorite.number); showPhone()
                 }.setNegativeButton("Annuler", null).show()
-            })
+            }, dialLabel = when { !hasPhoneApp -> "Choisir téléphone Bluetooth"; receivesNumber -> "Préparer l’appel"; else -> "Copier et ouvrir" },
+            requestContacts = { contactsPermission.launch(Manifest.permission.READ_CONTACTS) },
+            refreshContacts = { phoneContacts.start() })
         page("Téléphone", panel)
+        phonePanel = panel
+        panel.render(phoneContacts.state.value)
+        if (resumed) phoneContacts.start()
     }
 
     private fun addPhoneFavorite(number: String) {

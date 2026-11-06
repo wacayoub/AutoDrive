@@ -16,10 +16,12 @@ La même identité de signature est conservée pour permettre les mises à jour 
 
 ## Tableau de bord
 
+- Version **1.7.0** : clavier Téléphone corrigé, contacts du poste avec recherche et préférence automatique pour BT Phone lorsque présent. Le carnet Bluetooth privé et les appels restent dans l’application constructeur ; aucune synchronisation Bluetooth directe n’est revendiquée. [Audit Téléphone Incarlink](docs/PHONE-INCARLINK-AUDIT.md).
+
 - Version **1.6.2** : conservation des cookies des panneaux Maps/YouTube renforcée, avec acceptation explicite des cookies tiers et enregistrement sur disque à la sortie. Les cookies de test ont survécu à un arrêt complet ; la connexion réelle du propriétaire à Google reste à confirmer. Les sessions de Chrome et des applications installées restent séparées. [Fonctionnement et limites](docs/WEB-SESSIONS.md).
 - Version **1.6.1** : liste Radio directement dans l’accueil avec logos disponibles, station active surlignée, filtres Maroc/Favoris et liste agrandie avec recherche. Les boutons précédente/suivante parcourent maintenant tout le catalogue chargé ou les favoris sélectionnés, même avec une seule station enregistrée auparavant. La pause fonctionne aussi pendant la connexion. [Audit et corrections Radio](docs/RADIO-AUDIT.md).
 - Radio Internet native : catalogue marocain Radio Browser mémorisé, favoris et écoute audio. HIT RADIO est disponible par défaut ; les flux et logos restent soumis à leur disponibilité réelle. Aucun logo n’est inventé : une image absente ou inaccessible est remplacée par les initiales de la station.
-- **Phone** ouvre un clavier, six favoris et le choix de l’application Téléphone/Bluetooth. « Préparer l’appel » transmet le numéro à un composeur compatible ; les appels et le Bluetooth restent gérés par ce composeur et le poste. [Fonctionnement Radio et Téléphone](docs/RADIO-PHONE.md).
+- **Phone** propose un clavier corrigé, les contacts accessibles sur le poste et six favoris. BT Phone est prioritaire en mode Automatique lorsqu’il est détecté. Les appels et le carnet Bluetooth privé restent gérés par l’application d’origine ; [audit et limites](docs/PHONE-INCARLINK-AUDIT.md). [Fonctionnement Radio et Téléphone](docs/RADIO-PHONE.md).
 - Depuis **1.5.1**, la carte Google Maps interactive reste directement dans l’accueil, comme en 1.4.2. Le raccourci natif plein écran de 1.5.0 est retiré. Recherche et zoom restent dans le panneau web ; YouTube reste visible à côté en paysage.
 - Thème **Bleu profond** renforcé, compteur centré et icônes colorées (Téléphone vert, YouTube rouge, IPTV cyan). Les onglets média ont une petite surface de 40 × 32 dp, avec une cible tactile d’au moins 48 dp. Leur nom reste accessible aux lecteurs d’écran et par appui long.
 - Maps suit le mode jour/nuit Android. La nuit, un traitement visuel du panneau complet assombrit aussi les tuiles et conserve des libellés contrastés. Il s’agit d’une adaptation d’affichage du navigateur, pas du thème natif Google Maps. L’invitation connue « Ouvrir l’appli » est masquée sur les pages Maps, sans supprimer les mentions Google ni les commandes de carte.
@@ -32,7 +34,7 @@ La même identité de signature est conservée pour permettre les mises à jour 
 
 ![Radio Internet 1.6.1](deliverables/radio-1.6.1-800x480.png)
 
-![Téléphone 1.6.0](deliverables/phone-1.6.0-800x480.png)
+![Téléphone 1.7.0 — contacts synthétiques sur émulateur](deliverables/phone-contacts-1.7.0-800x480.png)
 
 ![Capture réelle en mode nuit Android](deliverables/dashboard-1.5.1-night-800x480.png)
 
