@@ -1,5 +1,7 @@
 # AutoDrive 1.3.0 web preview
 
+**Update, 1.6.2:** the WebView cookie policy is configured explicitly and cookie writes are flushed off the UI thread after page loads and lifecycle transitions. Controlled persistent cookies survived a real process restart. No real Google account was used to validate authentication, and external browser/native-app sessions remain separate. [Session audit, tests and limitations](WEB-SESSIONS.md).
+
 **Current status, 1.5.1:** the owner clarified that Maps must work on the home page as in the earlier web version. The Maps WebView, its browser preference and night display adaptation from 1.4.2 are restored. The native Maps entry card introduced in 1.5.0 is removed. The web implementation and boundaries below apply again; see [current integration](NAVIGATION-AUDIT.md#current-integration-151-inline-maps-website-restored).
 
 Reviewed 5 November 2026 after the owner rejected a traffic widget and a YouTube link-entry player. The revised target is a manipulable Google map and the actual YouTube home/browse page in the dashboard.

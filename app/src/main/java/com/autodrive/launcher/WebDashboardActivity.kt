@@ -282,7 +282,7 @@ class WebDashboardActivity : ComponentActivity() {
         }
     }
 
-    override fun onStop() { updateRendering?.cancel(); updateRendering = null; super.onStop() }
+    override fun onStop() { WebSessionStorage.persist(); updateRendering?.cancel(); updateRendering = null; super.onStop() }
 
     override fun onPause() {
         resumed = false

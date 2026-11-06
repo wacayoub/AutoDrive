@@ -61,6 +61,7 @@ internal class BrowserPanel(
         try {
             // Keep a stable light provider rendering, then adapt the complete map display at night.
             val web = WebView(if (maps) ContextThemeWrapper(activity, R.style.AutoDriveMapWebTheme) else activity)
+            WebSessionStorage.configure(web)
             if (maps) MapDisplayTheme.apply(web)
             browser = web
             web.settings.apply {
@@ -112,6 +113,7 @@ internal class BrowserPanel(
                 }
 
                 override fun onPageFinished(view: WebView, url: String?) {
+                    WebSessionStorage.persist()
                     progress.visibility = GONE
                     // Apply the owner's Maps web preference without changing attribution or map data.
                     if (maps) view.evaluateJavascript(MapWebPreference.script, null)
@@ -189,11 +191,15 @@ internal class BrowserPanel(
         return true
     }
 
-    fun save(): Bundle? = browser?.let { web -> Bundle().also { web.saveState(it) } }
+    fun save(): Bundle? = browser?.let { web ->
+        WebSessionStorage.persist()
+        Bundle().also { web.saveState(it) }
+    }
 
-    fun pause() { hideFullscreen(); browser?.onPause() }
+    fun pause() { hideFullscreen(); browser?.onPause(); WebSessionStorage.persist() }
 
     fun release() {
+        WebSessionStorage.persist()
         hideFullscreen()
         browser?.let { removeView(it); it.stopLoading(); it.destroy() }
         browser = null

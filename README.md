@@ -16,6 +16,7 @@ La même identité de signature est conservée pour permettre les mises à jour 
 
 ## Tableau de bord
 
+- Version **1.6.2** : conservation des cookies des panneaux Maps/YouTube renforcée, avec acceptation explicite des cookies tiers et enregistrement sur disque à la sortie. Les cookies de test ont survécu à un arrêt complet ; la connexion réelle du propriétaire à Google reste à confirmer. Les sessions de Chrome et des applications installées restent séparées. [Fonctionnement et limites](docs/WEB-SESSIONS.md).
 - Version **1.6.1** : liste Radio directement dans l’accueil avec logos disponibles, station active surlignée, filtres Maroc/Favoris et liste agrandie avec recherche. Les boutons précédente/suivante parcourent maintenant tout le catalogue chargé ou les favoris sélectionnés, même avec une seule station enregistrée auparavant. La pause fonctionne aussi pendant la connexion. [Audit et corrections Radio](docs/RADIO-AUDIT.md).
 - Radio Internet native : catalogue marocain Radio Browser mémorisé, favoris et écoute audio. HIT RADIO est disponible par défaut ; les flux et logos restent soumis à leur disponibilité réelle. Aucun logo n’est inventé : une image absente ou inaccessible est remplacée par les initiales de la station.
 - **Phone** ouvre un clavier, six favoris et le choix de l’application Téléphone/Bluetooth. « Préparer l’appel » transmet le numéro à un composeur compatible ; les appels et le Bluetooth restent gérés par ce composeur et le poste. [Fonctionnement Radio et Téléphone](docs/RADIO-PHONE.md).

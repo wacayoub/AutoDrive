@@ -1,5 +1,17 @@
 # AutoDrive validation
 
+## Version 1.6.2 — web cookie persistence
+
+Validated 6 November 2026, package `com.autodrive.launcher`, version code 21, on the local Android 13 emulator. [Session audit and important authentication boundaries](WEB-SESSIONS.md).
+
+- Debug and Android test APK assembly, lint and **19 JVM tests** passed. Local lint: **0 errors, 39 warnings, 1 hint** before the final test-only process-evidence additions. CI checks the committed source again.
+- **15 instrumented tests passed in one combined run**: two new web-session tests plus the 13 existing Radio/Phone/dashboard/YouTube/Maps checks. They verify cookie configuration and retained cookies/localStorage across destruction/recreation of both panel types. All session fixtures use reserved `.example` domains and synthetic values, without a real Google account.
+- Separate write/read instrumentation calls, with `am force-stop` between them, verified persistent Secure/HttpOnly cookies on both origins across different application PIDs (2762 → 2909). The write and read phases each passed. The read phase observed retained DOM localStorage for only one of the two origins after an immediate hard stop. An earlier test requiring both DOM writes to survive failed; the process-boundary test now asserts cookie durability and reports DOM durability separately. This is a known limit, not a Google authentication success claim.
+- Initial policy test invocation called a WebView-associated getter from the instrumentation thread; it failed and was corrected to execute that assertion on the UI thread. The production configuration already runs on the UI thread. The corrected suite passed.
+- No cookie values, account IDs, passwords or actual Google authentication tokens are read or logged by production code. There is no cookie deletion, expiry extension, browser-cookie import, User-Agent spoofing, account credential capture or Google OAuth bypass in this change. No Android permissions were added.
+
+Not verified: the owner's real Google sign-in, the reported logout on the Incarlink/Samsung, Google's acceptance of that WebView authentication flow, or persistent sign-in following Chrome/native-app authentication. The cookie/profile fix is implemented and tested; the user's complete Google account session remains an on-device validation item. No installation was performed on a device belonging to the owner.
+
 ## Version 1.6.1 — radio audit, artwork and station switching
 
 Validated 6 November 2026, `com.autodrive.launcher`, version code 20. [Radio audit and causes](RADIO-AUDIT.md).
