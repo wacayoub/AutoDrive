@@ -13,6 +13,9 @@ Validated 6 November 2026, `com.autodrive.launcher`, version code 29. This is a 
 
 - **11 related instrumented checks passed together in 43.819 seconds**, covering dashboard lifecycle, retained panels, Maps display memory/preferences and YouTube app choice. The non-debuggable release candidate then installed in place on the asserted emulator with the established signing identity; its dashboard/layout/lifecycle test passed in **5.529 seconds**.
 
+- Public [Android checks](https://github.com/wacayoub/AutoDrive/actions/runs/42265931272) and [signed release](https://github.com/wacayoub/AutoDrive/actions/runs/42265931212) succeeded for source `02289c8`. Anonymous latest discovery resolves **v1.12.0 / code 29**. The **11,473,157-byte** public APK matches its metadata and SHA-256 `1e3267f32d996189213ebaf8d02af8b50394fad926394bb820ba54e3dd507388`, minimum Android API 33 and the established update certificate `1ef249ecb8d4af1bbd730a15aea2248acf5d578dffde2d637fd01b7e5f637efb`.
+- That exact public APK installed in place only on the asserted disposable emulator. Its dashboard/layout/lifecycle check passed in **4.848 seconds**, including usable shortcut/tab targets, panel bounds and Settings/Back. Keyboard, screen size, density and network settings were restored; the emulator was stopped.
+
 Physical Incarlink density, safe insets and touch behavior remain unverified. No owner device was installed or changed.
 
 ## Version 1.11.1 — confirmed, bounded Maps restoration
