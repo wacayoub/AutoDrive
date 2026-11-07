@@ -1,6 +1,6 @@
 ## Correction non publiée — retrait des accès Google Play et audit widgets natifs
 
-Demande : afficher automatiquement les activités Android Maps/YouTube dans les panneaux de l’accueil. **Non réalisé** : la source 1.14.0 ouvrait ces applications à l’extérieur ; les rapports matériels transmis concernent le Samsung et aucune interface d’hébergement Incarlink supportée n’est vérifiée.
+L’affichage automatique des applications Android Maps et YouTube dans les panneaux reste bloqué. Le rapport 0.2 fourni par le propriétaire le 7 novembre confirme que l’Incarlink ne prend pas en charge l’intégration AndroidX et que Maps 11.128.0101 n’autorise pas l’hôte testé. Il s’agit d’un contrôle d’éligibilité. [Résultats matériels et piste constructeur](NAVIGATION-AUDIT.md#incarlink-preflight--7-november-2026).
 
 Correction partielle de source : boutons de magasin supprimés de `InstalledAppPanel`, callbacks de lancement et helper `openStore` supprimés. Aucun basculement vers des sites web ni ouverture automatique de tâches externes ajouté. La release publique et le canal de mise à jour restent **1.14.0**, sans nouvelle publication d’APK pour cette correction partielle.
 

@@ -4,6 +4,22 @@
 
 Reviewed 4 November 2026 for AutoDrive on an Incarlink Max X15-SLM927-72 Android 13 box that runs the launcher locally and presents its output on a Toyota in-dash display.
 
+## Incarlink preflight — 7 November 2026
+
+The owner supplied a report from Native Maps Test 0.2 on the box. It identifies Qualcomm Bengal for arm64, build `TKQ1.230110.001 release-keys`, Android 13 / API 33 and Google Maps 11.128.0101.
+
+| Check | Result |
+| --- | --- |
+| AndroidX activity embedding on the box | `SplitSupportStatus: UNAVAILABLE` |
+| Maps launcher activity | `com.google.android.apps.maps/com.google.android.maps.MapsActivity` |
+| Untrusted embedding allowed / host certificate accepted | Both false, with zero declared host certificates |
+| Android Auto projection permission for the probe | Required and denied |
+| Probe outcome | `phase: CHECKED`, `eligible: false` |
+
+This preflight rules out the tested AndroidX route on this configuration. The report's zero split count was initialized before launch, and the probe had stopped at eligibility checking. It does not record a live embedding attempt. The AndroidX support check also blocks using that route for a YouTube pane. The report does not inspect the chosen YouTube application's own permissions or metadata.
+
+[Carlinkit's TBox FAQ](https://www.carlinkit.com/faq_detail/59.html) describes an option in its launcher and advises selecting another widget app if Google Maps interferes with split screen. The page does not document a hosting interface that AutoDrive can call. No supported third-party interface for this firmware was found in the documentation reviewed. The remaining native route requires a manufacturer-documented interface or manufacturer-authorized integration. Probe 0.3 can add launcher and platform metadata to an OEM investigation. It cannot change the AndroidX eligibility result or grant hosting privileges.
+
 ## Additional native-hosting research — 6 November 2026
 
 The earlier negative result applies to **public AndroidX cross-application activity embedding**. It does not exclude OEM/system-privileged task or display hosting. The phone report is not a compatibility report for the Incarlink. No physical Incarlink test, third-party launcher installation, firmware change or privilege grant was performed for this research.

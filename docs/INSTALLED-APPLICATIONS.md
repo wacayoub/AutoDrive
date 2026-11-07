@@ -8,9 +8,9 @@ La demande suivant 1.14.0 est l’ouverture automatique des **applications insta
 
 Les boutons Google Play et leur code de lancement ont été retirés de la source. Ce changement ne réalise pas l’hébergement natif : les ouvertures externes restent externes et aucune ouverture automatique de deux tâches plein écran n’est ajoutée. Aucun site web n’est substitué au mode installé.
 
-Le rapport matériel déjà transmis identifie un Samsung SM-S918B ; il ne valide pas l’Incarlink. Le [diagnostic séparé 0.3](../native-maps-test/README.md), exécuté par le propriétaire sur le boîtier, est la prochaine vérification disponible. Un résultat de compatibilité ou de certificat positif ne suffira pas à prouver le fonctionnement : une intégration constructeur documentée et/ou un vrai essai natif réussi restent nécessaires. Les widgets AppWidget fournis par une application ne transforment pas automatiquement l’activité complète en widget ([Android AppWidgetHost](https://developer.android.com/develop/ui/views/appwidgets/host)).
+Le rapport 0.2 transmis le 7 novembre depuis le boîtier indique que l’intégration AndroidX est indisponible sur cet Android 13 et que Google Maps 11.128.0101 n’autorise pas l’hôte testé. Le diagnostic s’est arrêté au contrôle d’éligibilité. Pour héberger les applications installées, il reste à établir une interface constructeur documentée ou une intégration autorisée par le fabricant. Le [diagnostic 0.3](../native-maps-test/README.md) peut apporter des métadonnées pour cette piste. Voir le [résultat du contrôle Incarlink](NAVIGATION-AUDIT.md#incarlink-preflight--7-november-2026).
 
-**Pas de nouvel APK stable publié pour présenter ce changement partiel comme une solution aux widgets.** La dernière release demeure 1.14.0. Aucun test sur boîtier, aucune permission système accordée ni installation sur un appareil propriétaire.
+La release 1.14.0 reste la dernière version publiée. Le propriétaire a exécuté le diagnostic de compatibilité sur le boîtier. L’ouverture dans les panneaux reste bloquée au contrôle d’éligibilité.
 
 ## Utilisation de la release 1.14.0
 
@@ -26,7 +26,7 @@ Les comptes et préférences Maps/YouTube sont gérés par leurs applications. A
 
 Les intents Google Maps sont une ouverture de l’application, pas une intégration de son activité dans un widget. [Documentation Google Maps Intents Android](https://developer.android.com/guide/components/google-maps-intents).
 
-L’hébergement inter-applications nécessite la coopération de l’application embarquée et un système compatible. Le diagnostic transmis du Samsung n’autorise pas cet hébergement pour Maps ; il ne prouve pas la situation du boîtier Incarlink. Aucune interface constructeur supportée n’a été validée sur ce dernier. [Documentation Android Activity embedding](https://developer.android.com/develop/ui/views/layout/activity-embedding#cross-application-embedding).
+L’hébergement inter-applications nécessite la coopération de l’application embarquée et un système compatible. Le contrôle sur l’Incarlink a écarté la voie AndroidX pour la configuration testée. [Documentation Android Activity embedding](https://developer.android.com/develop/ui/views/layout/activity-embedding#cross-application-embedding).
 
 Aucun SDK Maps/Navigation n’est ajouté ; les conditions d’éligibilité de son intégration embarquée ne sont donc pas présentées comme résolues. Aucun partage d’écran forcé, API cachée, privilège système ou modification de firmware n’est utilisé.
 
