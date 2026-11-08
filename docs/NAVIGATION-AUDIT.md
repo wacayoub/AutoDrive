@@ -30,6 +30,24 @@ The factory manifest declares `MainSDKService` and iCar `RemoteService`. DEX met
 
 [AB Launcher's current manual](https://marrusoft.com/en/manual/kr) lists INCARLINK Max among devices using the standard package and Bengal for arm64 among Qualcomm model names. It documents assigning installed applications to its own panels and restoring a two-panel preset automatically at startup. It also documents external voice, automation and preset switching requests. The documented commands control AB Launcher and supply no surface to another launcher. The standard package is a concrete candidate for a separate launcher trial. Success means Maps search, pan and zoom and the chosen YouTube app responding in both AB panels, then the preset restoring at startup on this exact box. Hardware compatibility remains untested. No AutoDrive production changes are required for that trial.
 
+### Emulator trial of AB Launcher 1.5.7
+
+Tested the standard [publisher APK](https://dl.marrusoft.com/ota-apk/ablauncher_app-release_1.5.7.apk) on a fresh AOSP Android 13 x86_64 emulator at 800 × 480 and 160 dpi. The APK SHA-256 was `d0da83c0cbef4549959d5edb6aa349bd0c92ea5f8965bc3ed59f9deaf5f26630`. Android accepted the package under UID 1000 and granted `ADD_TRUSTED_DISPLAY`, `INJECT_EVENTS`, `MANAGE_ACTIVITY_TASKS` and `INTERNAL_SYSTEM_WINDOW`. The display and activity dumps showed two AB-owned trusted virtual displays while the launcher occupied display 0.
+
+| Check | Observed result |
+| --- | --- |
+| Native Maps 11.129.0103 in the left pane | Search and destination selection worked. A drag moved map markers and a double tap changed the scale. Maps calculated a route and started guidance from an emulator GPS fix. |
+| Second app touch | The Android Clock stopwatch could start and continue updating in the right pane while Maps remained on screen. |
+| Base map rendering | The map background remained blank in this environment. The same Google Maps build also showed a blank base map when moved to the primary display. The cause was not isolated. |
+| Native YouTube 19.17.42 | The Google-signed APK came from Google's Android 33 Play SDK image revision 9. Its activity opened in the right pane next to Maps. The app reported missing Google Play services and required an update. Playback and YouTube Advanced remain untested. |
+| Preset restoration | Cold launching AB after force-stop restored both the Maps/Clock preset and, when selected separately, the Maps/YouTube preset. After an Android reboot with AB selected before reboot, the emulator started Launcher3. Manually opening AB restored the saved Maps/Clock preset. Automatic launcher startup at Android boot was not demonstrated. |
+| AB on Google Play SDK image | The same APK failed normal installation with `INSTALL_FAILED_SHARED_USER_INCOMPATIBLE` because the system shared UID required a different signature. |
+| Ordinary APK virtual display preflight | The test probe created private and public app-owned virtual displays. Android allowed Maps on the primary display and denied it on both virtual displays. The two probe instrumentation tests passed. Build and lint passed with 0 lint errors, 29 warnings and 1 hint. |
+
+[Maps guidance with interactive Clock pane](../native-maps-test/evidence/ab-launcher-157-maps-guidance-800x480.png) · [Maps and YouTube after AB cold launch](../native-maps-test/evidence/ab-launcher-157-maps-youtube-800x480.png)
+
+Inspection of AB 1.5.7 found exported broadcast actions for applying an AB preset, activating navigation voice and running an AB automation. The manifest and publisher manual did not provide an API that attaches those app surfaces to AutoDrive. The tests validate hosting by AB with system privileges in the AOSP emulator. The owner's exact Incarlink build still requires hardware validation.
+
 ## Additional native-hosting research — 6 November 2026
 
 The earlier negative result applies to **public AndroidX cross-application activity embedding**. It does not exclude OEM/system-privileged task or display hosting. The phone report is not a compatibility report for the Incarlink. No physical Incarlink test, third-party launcher installation, firmware change or privilege grant was performed for this research.
