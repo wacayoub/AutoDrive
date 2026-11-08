@@ -4,8 +4,10 @@
 - Mise à jour en place de la 1.14.0 publique vers la 1.14.1 sur un émulateur Android 13. L’association de test avec Horloge, choisie dans les réglages de la 1.14.0, apparaît toujours dans la 1.14.1.
 - À **800 × 480, densité 160**, le candidat signé passe **12 tests instrumentés**. Le cas Maps absent est ignoré dans cette suite car Maps 11.129.0103 est installé. Le test lance le vrai Maps et vérifie son écran Android. Le contrôle séparé sans Maps passe **4 tests sur 5** avec le cas Maps installé ignoré.
 - À **800 × 480, densité 213**, les contrôles du mode installé passent **4 tests sur 5** avec le cas Maps absent ignoré. Les boutons tiennent dans l’écran, mesurent au moins 48 dp et leurs libellés ne sont pas tronqués.
+- Le contrôle en portrait **600 × 1376, densité 240** passe également **4 tests sur 5** avec le cas Maps absent ignoré.
 - Les régressions couvrent aussi le mode web choisi dans les réglages, la radio, le tiroir Apps et les mises à jour. Le test de retour depuis Horloge vérifie la fenêtre au premier plan avant d’envoyer la touche Android Back. L’autorisation de notifications d’Horloge a été traitée sur l’émulateur avant les essais finaux.
 - Horloge sert de témoin pour le raccourci YouTube. La lecture et YouTube ReVanced n’ont pas été testés. Les essais portent sur l’émulateur, sans installation sur l’Incarlink.
+- L’[APK public signé](https://github.com/wacayoub/AutoDrive/releases/download/v1.14.1/AutoDrive.apk) du commit `e423da4e9f057cd607fe52aa1e1c7b9ec9451af2` a été téléchargé sans identifiant et installé en place. Les **4 scénarios applicables** passent en 11,581 s. Le certificat Android reste celui de la 1.14.0. Le manifeste public annonce la version **1.14.1 / code 34** et correspond au fichier de **11 509 001 octets**, SHA-256 `4f6124126909b71a3df73ef786c3f66cd8835ffe7253ff50c46f02509845845d`. [Contrôles GitHub](https://github.com/wacayoub/AutoDrive/actions/runs/42511183815) · [Build signé](https://github.com/wacayoub/AutoDrive/actions/runs/42511194791)
 
 ![Accueil compact 800 × 480 avec Maps et Horloge comme application de test pour le raccourci YouTube](../deliverables/dashboard-1.14.1-800x480.png)
 
