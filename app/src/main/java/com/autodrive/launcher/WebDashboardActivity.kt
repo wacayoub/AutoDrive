@@ -217,9 +217,9 @@ class WebDashboardActivity : ComponentActivity() {
         with(ui) { gap(4) }
         addView(ui.line(portrait).apply {
             mapPane = FrameLayout(this@WebDashboardActivity).apply {
-                background = ui.shape(Palette.surface, 18, Palette.border)
-                setPadding(ui.dp(1), ui.dp(1), ui.dp(1), ui.dp(1))
                 maps?.let { panel ->
+                    background = ui.shape(Palette.surface, 18, Palette.border)
+                    setPadding(ui.dp(1), ui.dp(1), ui.dp(1), ui.dp(1))
                     panel.background = ui.shape(android.graphics.Color.BLACK, 16)
                     panel.clipToOutline = true
                     addView(panel, FrameLayout.LayoutParams(-1, -1))
@@ -229,12 +229,8 @@ class WebDashboardActivity : ComponentActivity() {
             panelGap = View(this@WebDashboardActivity)
             addView(panelGap, if (portrait) LinearLayout.LayoutParams(1, ui.dp(6)) else LinearLayout.LayoutParams(ui.dp(6), 1))
             mediaPane = ui.line(true).apply {
-                background = ui.shape(Palette.surface, 18, Palette.border)
                 setPadding(ui.dp(2), ui.dp(1), ui.dp(2), ui.dp(2))
-                mediaContent = FrameLayout(this@WebDashboardActivity).apply {
-                    background = ui.shape(android.graphics.Color.BLACK, 12)
-                    clipToOutline = true
-                }
+                mediaContent = FrameLayout(this@WebDashboardActivity)
                 addView(mediaContent, LinearLayout.LayoutParams(-1, 0, 1f))
             }
             addView(mediaPane, panelParams(if (portrait) .54f else .48f))
@@ -368,8 +364,22 @@ class WebDashboardActivity : ComponentActivity() {
     private fun refreshMapsApp() {
         mapPane.removeAllViews()
         mapPane.addView(InstalledAppPanel(this, "Google Maps", links.mapsApp(), links,
-            "Google Maps non installé ou désactivé", "nav", ::openInstalledMaps),
-            FrameLayout.LayoutParams(-1, -1))
+            "Indisponible", "nav", ::openInstalledMaps), compactAppParams(left = true))
+    }
+
+    private fun compactAppParams(left: Boolean) = FrameLayout.LayoutParams(-2, -2,
+        when {
+            portrait && left -> Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
+            portrait -> Gravity.TOP or Gravity.CENTER_HORIZONTAL
+            left -> Gravity.END or Gravity.CENTER_VERTICAL
+            else -> Gravity.START or Gravity.CENTER_VERTICAL
+        }
+    ).apply {
+        if (portrait) {
+            if (left) bottomMargin = ui.dp(8) else topMargin = ui.dp(8)
+        } else {
+            if (left) marginEnd = ui.dp(8) else marginStart = ui.dp(8)
+        }
     }
 
     private fun openInstalledMaps() {
@@ -446,11 +456,15 @@ class WebDashboardActivity : ComponentActivity() {
         youtube?.pause()
         mediaContent.removeAllViews()
         renderedMediaTab = tab
-        if (tab == MediaTab.YOUTUBE && links.installedApps) {
+        val compactYouTube = tab == MediaTab.YOUTUBE && links.installedApps
+        mediaPane.background = if (compactYouTube) null else ui.shape(Palette.surface, 18, Palette.border)
+        mediaContent.background = if (compactYouTube) null else ui.shape(android.graphics.Color.BLACK, 12)
+        mediaContent.clipToOutline = !compactYouTube
+        if (compactYouTube) {
             val app = links.forTab(tab, links.apps())
             mediaContent.addView(InstalledAppPanel(this, "YouTube", app, links,
-                if (links.association(tab.name) == null) "Application non installée ou non choisie" else "Application choisie indisponible",
-                "youtube", ::openInstalledYouTube, { chooseApp(tab) }), FrameLayout.LayoutParams(-1, -1))
+                if (links.association(tab.name) == null) "À configurer" else "Indisponible",
+                "youtube", ::openInstalledYouTube), compactAppParams(left = false))
         } else if (tab == MediaTab.YOUTUBE) {
             val panel = youtube ?: BrowserPanel(this, "https://m.youtube.com/", false, {}, ::openExternal,
                 nativeYouTube = { uri -> links.openYouTube(uri) },

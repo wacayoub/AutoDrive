@@ -16,6 +16,8 @@ La même identité de signature est conservée pour permettre les mises à jour 
 
 ## Tableau de bord
 
+- **1.14.1** remplace les grandes cartes du mode Applications Android par des raccourcis compacts Maps et YouTube. Le choix YouTube reste accessible dans Settings. [Applications installées](docs/INSTALLED-APPLICATIONS.md).
+
 - **1.14.0 — applications installées** : Google Maps officiel et application YouTube configurable, ouverture directe depuis Media → YouTube, comptes gérés dans leurs applications. Retour à AutoDrive sans relance automatique. Pas de substitution web si une application manque. [Mode installé et limites](docs/INSTALLED-APPLICATIONS.md).
 - Les descriptions historiques des panneaux web ci-dessous concernent le mode **Sites web** choisi explicitement dans Réglages.
 

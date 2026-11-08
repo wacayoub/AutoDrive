@@ -33,7 +33,7 @@ class InstalledAppsTest {
         instrumentation.runOnMainSync { click(activity, "Ouvrir YouTube") }
         awaitForeground(clock.component.packageName)
         // Actual Android Back from the external root activity, followed later by HOME intent re-entry.
-        instrumentation.sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_BACK)
+        shellOutput("input keyevent KEYCODE_BACK")
         awaitForeground(context.packageName)
         instrumentation.waitForIdleSync()
         SystemClock.sleep(600)
@@ -59,16 +59,16 @@ class InstalledAppsTest {
         instrumentation.waitForIdleSync()
         instrumentation.runOnMainSync {
             val all = views(activity.window.decorView)
-            assertTrue(all.filterIsInstance<android.widget.TextView>().any { it.text == "Application choisie indisponible" })
+            assertTrue(all.any { it.contentDescription == "YouTube · Indisponible" && !it.isClickable })
             assertTrue(all.none { it is WebView })
             assertTrue(all.none { it.contentDescription == "Ouvrir YouTube" })
-            assertNotNull(all.firstOrNull { it.contentDescription == "Choisir YouTube" })
+            assertTrue(all.none { it.contentDescription == "Choisir YouTube" })
             assertNull(AppLinks(activity).forTab(MediaTab.YOUTUBE, AppLinks(activity).apps()))
         }
         checkLayout(activity)
         if (InstrumentationRegistry.getArguments().getString("captureInstalled") == "true") {
             val bitmap = instrumentation.uiAutomation.takeScreenshot()
-            try { context.openFileOutput("installed-apps-1.14.0.png", 0).use {
+            try { context.openFileOutput("installed-apps-1.14.1.png", 0).use {
                 bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
             } } finally { bitmap.recycle() }
         }
@@ -92,7 +92,7 @@ class InstalledAppsTest {
         assumeTrue("This scenario requires Google Maps to be absent", !installed)
         instrumentation.runOnMainSync {
             val all = views(activity.window.decorView)
-            assertTrue(all.filterIsInstance<android.widget.TextView>().any { it.text == "Google Maps non installé ou désactivé" })
+            assertTrue(all.any { it.contentDescription == "Google Maps · Indisponible" && !it.isClickable })
             assertFalse(AppLinks(activity).openMaps())
             assertTrue(all.none { it is WebView })
             assertTrue(all.none { it.contentDescription == "Ouvrir Google Maps" })
@@ -154,15 +154,18 @@ class InstalledAppsTest {
             val button = all.single { it.isShown && it.contentDescription == name }
             assertTrue(button.height / activity.resources.displayMetrics.density >= 48)
         }
-        for (panel in all.filterIsInstance<InstalledAppPanel>()) {
-            for (button in views(panel).filter { it.isClickable }) {
-                val pos = IntArray(2).also(button::getLocationOnScreen)
-                assertTrue("App action must fit on screen", pos[0] >= 0 && pos[1] >= 0 &&
-                    pos[0] + button.width <= root.width && pos[1] + button.height <= root.height)
-                assertTrue("App action clipped inside panel", button.top >= panel.paddingTop && button.bottom <= panel.height - panel.paddingBottom)
-                for (text in views(button).filterIsInstance<android.widget.TextView>())
-                    assertEquals("Clipped app action ${text.text}", 0, text.layout.getEllipsisCount(0))
-            }
+        val density = activity.resources.displayMetrics.density
+        val shortcuts = all.filterIsInstance<InstalledAppPanel>()
+        assertEquals(2, shortcuts.size)
+        for (button in shortcuts) {
+            val pos = IntArray(2).also(button::getLocationOnScreen)
+            assertTrue("App shortcut must fit on screen", pos[0] >= 0 && pos[1] >= 0 &&
+                pos[0] + button.width <= root.width && pos[1] + button.height <= root.height)
+            assertTrue("App shortcut must be compact and tappable", button.height / density in 48f..64f &&
+                button.width / density <= 220f)
+            assertNull("Shortcut must not sit inside a large framed card", (button.parent as View).background)
+            for (text in views(button).filterIsInstance<android.widget.TextView>())
+                assertEquals("Clipped app action ${text.text}", 0, text.layout.getEllipsisCount(0))
         }
     }
     private fun homeIntent() = Intent(context, WebDashboardActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -171,9 +174,12 @@ class InstalledAppsTest {
     private fun views(view: View): List<View> = listOf(view) + if (view is ViewGroup)
         (0 until view.childCount).flatMap { views(view.getChildAt(it)) } else emptyList()
     private fun foreground(pkg: String): Boolean {
-        val descriptor = instrumentation.uiAutomation.executeShellCommand("dumpsys activity activities")
-        val activities = android.os.ParcelFileDescriptor.AutoCloseInputStream(descriptor).bufferedReader().use { it.readText() }
-        return activities.lineSequence().any { "ResumedActivity" in it && "$pkg/" in it }
+        return shellOutput("dumpsys window").lineSequence()
+            .any { it.trimStart().startsWith("mCurrentFocus=") && " $pkg/" in it }
+    }
+    private fun shellOutput(command: String): String {
+        val descriptor = instrumentation.uiAutomation.executeShellCommand(command)
+        return android.os.ParcelFileDescriptor.AutoCloseInputStream(descriptor).bufferedReader().use { it.readText() }
     }
     private fun awaitForeground(pkg: String) {
         repeat(40) { if (foreground(pkg)) return; SystemClock.sleep(100) }

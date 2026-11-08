@@ -1,8 +1,12 @@
-# Applications Android installées — 1.14.0
+# Applications Android installées
+
+Depuis **1.14.1**, deux raccourcis de 56 dp donnent accès à Maps et YouTube dans le mode Applications Android. Une icône et un libellé identifient chaque application. Les applications indisponibles sont signalées dans ce même espace. Le choix YouTube se fait dans **Settings → Application YouTube**. La sélection existante, y compris ReVanced, est conservée lors de la mise à jour.
+
+L’option **Sites web** dans **Settings → Affichage Maps / YouTube** reste disponible pour afficher les deux contenus web dans l’accueil.
 
 Le mode par défaut est **Applications Android · plein écran**, également pour une mise à jour depuis une version web. AutoDrive n’installe pas Google Maps ni YouTube pour l’utilisateur. Aucun site, WebView, image de carte ou vidéo n’est chargé par les panneaux Maps/YouTube dans ce mode. Les cartes d’accueil sont des accès aux applications, explicitement libellés plein écran.
 
-## Correction en cours — panneaux natifs demandés
+## Audit des panneaux natifs
 
 La demande suivant 1.14.0 est l’ouverture automatique des **applications installées à l’intérieur des deux panneaux**, sans cartes d’ouverture ni boutons de magasin. La 1.14.0 publiée ne satisfait pas cette demande.
 
@@ -10,7 +14,7 @@ Les boutons Google Play et leur code de lancement ont été retirés de la sourc
 
 Le rapport 0.2 transmis le 7 novembre depuis le boîtier indique que l’intégration AndroidX est indisponible sur cet Android 13 et que Google Maps 11.128.0101 n’autorise pas l’hôte testé. Le diagnostic s’est arrêté au contrôle d’éligibilité. Pour héberger les applications installées, il reste à établir une interface constructeur documentée ou une intégration autorisée par le fabricant. Le [diagnostic 0.3](../native-maps-test/README.md) peut apporter des métadonnées pour cette piste. Voir le [résultat du contrôle Incarlink](NAVIGATION-AUDIT.md#incarlink-preflight--7-november-2026).
 
-La release 1.14.0 reste la dernière version publiée. Le propriétaire a exécuté le diagnostic de compatibilité sur le boîtier. L’ouverture dans les panneaux reste bloquée au contrôle d’éligibilité.
+Le propriétaire a exécuté le diagnostic de compatibilité sur le boîtier. L’ouverture dans les panneaux reste bloquée au contrôle d’éligibilité.
 
 ## Utilisation de la release 1.14.0
 

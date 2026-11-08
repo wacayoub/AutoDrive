@@ -1,4 +1,15 @@
-## Correction non publiée — retrait des accès Google Play et audit widgets natifs
+## 1.14.1 — raccourcis compacts (8 novembre 2026)
+
+- Compilation debug et release réussies. Les **39 tests JVM** passent. Lint relève **0 erreur, 60 avertissements et 1 indication**.
+- Mise à jour en place de la 1.14.0 publique vers la 1.14.1 sur un émulateur Android 13. L’association de test avec Horloge, choisie dans les réglages de la 1.14.0, apparaît toujours dans la 1.14.1.
+- À **800 × 480, densité 160**, le candidat signé passe **12 tests instrumentés**. Le cas Maps absent est ignoré dans cette suite car Maps 11.129.0103 est installé. Le test lance le vrai Maps et vérifie son écran Android. Le contrôle séparé sans Maps passe **4 tests sur 5** avec le cas Maps installé ignoré.
+- À **800 × 480, densité 213**, les contrôles du mode installé passent **4 tests sur 5** avec le cas Maps absent ignoré. Les boutons tiennent dans l’écran, mesurent au moins 48 dp et leurs libellés ne sont pas tronqués.
+- Les régressions couvrent aussi le mode web choisi dans les réglages, la radio, le tiroir Apps et les mises à jour. Le test de retour depuis Horloge vérifie la fenêtre au premier plan avant d’envoyer la touche Android Back. L’autorisation de notifications d’Horloge a été traitée sur l’émulateur avant les essais finaux.
+- Horloge sert de témoin pour le raccourci YouTube. La lecture et YouTube ReVanced n’ont pas été testés. Les essais portent sur l’émulateur, sans installation sur l’Incarlink.
+
+![Accueil compact 800 × 480 avec Maps et Horloge comme application de test pour le raccourci YouTube](../deliverables/dashboard-1.14.1-800x480.png)
+
+## Préparation de la 1.14.1 — retrait des accès Google Play et audit widgets natifs
 
 L’affichage automatique des applications Android Maps et YouTube dans les panneaux reste bloqué. Le rapport 0.2 fourni par le propriétaire le 7 novembre confirme que l’Incarlink ne prend pas en charge l’intégration AndroidX et que Maps 11.128.0101 n’autorise pas l’hôte testé. Il s’agit d’un contrôle d’éligibilité. [Résultats matériels et piste constructeur](NAVIGATION-AUDIT.md#incarlink-preflight--7-november-2026).
 
