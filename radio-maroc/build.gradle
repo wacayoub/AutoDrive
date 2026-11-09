@@ -1,0 +1,46 @@
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+}
+
+android {
+    namespace 'com.autodrive.radiomaroc'
+    compileSdk 35
+    sourceSets.main.java.srcDir rootProject.file('shared-radio/src/main/java')
+
+    defaultConfig {
+        applicationId 'com.autodrive.radiomaroc'
+        minSdk 33
+        targetSdk 35
+        versionCode 1
+        versionName '1.0.0'
+    }
+
+    signingConfigs {
+        release {
+            def keyPath = System.getenv('RADIO_MAROC_KEYSTORE_FILE')
+            if (keyPath) {
+                storeFile file(keyPath)
+                storePassword System.getenv('RADIO_MAROC_KEYSTORE_PASSWORD')
+                keyAlias 'radio-maroc'
+                keyPassword System.getenv('RADIO_MAROC_KEYSTORE_PASSWORD')
+            }
+        }
+    }
+    buildTypes {
+        release { signingConfig signingConfigs.release }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+kotlin { jvmToolchain(17) }
+
+dependencies {
+    implementation 'androidx.media3:media3-exoplayer-hls:1.8.1'
+    implementation 'androidx.media3:media3-session:1.8.1'
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2'
+    testImplementation 'junit:junit:4.13.2'
+}
