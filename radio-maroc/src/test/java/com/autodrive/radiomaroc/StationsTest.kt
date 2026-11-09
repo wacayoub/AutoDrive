@@ -43,4 +43,28 @@ class StationsTest {
         val previousFavorite = "https://backup.qurango.net/radio/mohammed_siddiq_alminshawi_mojawwad"
         assertEquals(previousFavorite, Stations.visible(StationTab.FAVORITES, setOf(previousFavorite), "").single().url)
     }
+
+    @Test fun haramRecordingsAreSearchableAndKeepThePrayerAndDate() {
+        val haram = Stations.visible(StationTab.HARAM, emptySet(), "")
+        assertEquals(6, haram.size)
+        assertTrue(haram.all { Stations.isRecording(it) && "/makkah/" in it.url && it.url.endsWith(".mp3") })
+        assertFalse(Stations.isRecording(Stations.visible(StationTab.QURAN, emptySet(), "Badr Turki").single()))
+        for (prayer in listOf("الفجر", "المغرب", "العشاء")) {
+            val results = Stations.visible(StationTab.HARAM, emptySet(), "صلاة $prayer")
+            assertEquals(2, results.size)
+            assertTrue(results.all { it.name.endsWith(prayer) && Stations.subtitle(it).startsWith("المسجد الحرام · 2026-") })
+        }
+        val badr = Stations.visible(StationTab.HARAM, emptySet(), "Badr Turki")
+        assertEquals(2, badr.size)
+        assertTrue(badr.all { Stations.reciterName(it) == "بدر التركي" })
+        assertEquals(badr, Stations.visible(StationTab.FAVORITES, badr.map { it.url }.toSet(), ""))
+    }
+
+    @Test fun recurringRecitersUseTheSamePortraitAcrossTabs() {
+        val badr = Stations.visible(StationTab.QURAN, emptySet(), "Badr Turki").single()
+        val haram = Stations.visible(StationTab.HARAM, emptySet(), "")
+        assertTrue(haram.all { ReciterPortraits.forStation(it) != null })
+        val portrait = requireNotNull(ReciterPortraits.forStation(badr))
+        assertTrue(haram.filter { Stations.reciterName(it) == badr.name }.all { ReciterPortraits.forStation(it) == portrait })
+    }
 }

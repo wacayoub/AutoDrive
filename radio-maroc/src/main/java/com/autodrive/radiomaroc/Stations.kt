@@ -7,7 +7,7 @@ import com.autodrive.launcher.RadioCategory
 import com.autodrive.launcher.RadioStation
 
 internal enum class StationTab(val label: String) {
-    MOROCCO("Radio Maroc"), QURAN("القرآن"), TAJWID("التجويد"), FAVORITES("★ Favoris")
+    MOROCCO("Radio Maroc"), QURAN("القرآن"), TAJWID("التجويد"), HARAM("صلوات الحرم"), FAVORITES("★ Favoris")
 }
 
 internal object Stations {
@@ -53,27 +53,48 @@ internal object Stations {
         quranStation("محمود خليل الحصري", "mahmoud_khalil_alhussary_mojawwad"),
         quranStation("محمود علي البنا", "mahmoud_ali__albanna_mojawwad"),
     )
-    private val aliases = mapOf(
-        "bader" to listOf("Badr Turki", "Badr Al Turki", "Bader Alturki"),
-        "abdulbasit_abdulsamad_mojawwad" to listOf("Abdelbaset Abdelssamad", "Abdulbasit Abdulsamad", "عبدالباسط عبدالصمد"),
-        "mohammed_siddiq_alminshawi_mojawwad" to listOf("Mohamed Siddiq Al Minshawi"),
-        "mahmoud_khalil_alhussary_mojawwad" to listOf("Mahmoud Khalil Al Hussary"),
-        "mahmoud_ali__albanna_mojawwad" to listOf("Mahmoud Ali Al Banna"),
+    // Public audio links published by Haramain Salaah Recordings for Makkah.
+    private fun haramRecording(reciter: String, prayer: String, file: String) =
+        RadioStation("$reciter · صلاة $prayer", "https://mirrors.quranicaudio.com/haramain/$file.mp3")
+
+    private val haram = listOf(
+        haramRecording("ماهر المعيقلي", "الفجر", "2026/11/makkah/SheikhMuayqali_Fajr-2026-11-07"),
+        haramRecording("عبد الله الجهني", "الفجر", "2026/11/makkah/SheikhJuhany_Fajr-2026-11-08"),
+        haramRecording("بدر التركي", "المغرب", "2026/11/makkah/SheikhBadr_al_Turki_Maghrib-2026-11-08"),
+        haramRecording("ماهر المعيقلي", "المغرب", "2026/11/makkah/SheikhMuayqali_Maghrib-2026-11-06"),
+        haramRecording("ياسر الدوسري", "العشاء", "2026/11/makkah/SheikhDosary_Isha-2026-11-08"),
+        haramRecording("بدر التركي", "العشاء", "2026/10/makkah/SheikhBadr_al_Turki_Isha-2026-10-26"),
     )
-    val all = morocco + quran + tajwid
+    private val aliases = mapOf(
+        "بدر التركي" to listOf("Badr Turki", "Badr Al Turki", "Bader Alturki"),
+        "العيون الكوشي" to listOf("Laayoun El Kouchi", "Al Oyoun Al Koshi"),
+        "عبد الباسط عبد الصمد" to listOf("Abdelbaset Abdelssamad", "Abdulbasit Abdulsamad", "عبدالباسط عبدالصمد"),
+        "محمد صديق المنشاوي" to listOf("Mohamed Siddiq Al Minshawi"),
+        "محمود خليل الحصري" to listOf("Mahmoud Khalil Al Hussary"),
+        "محمود علي البنا" to listOf("Mahmoud Ali Al Banna"),
+        "ماهر المعيقلي" to listOf("Maher Al Muaiqly", "Maher Al Mueaqly"),
+        "ياسر الدوسري" to listOf("Yasser Al Dosari", "Yasser Al Dossari"),
+        "عبد الله الجهني" to listOf("Abdullah Al Juhany", "عبدالله الجهني"),
+    )
+    val all = morocco + quran + tajwid + haram
+
+    fun reciterName(station: RadioStation): String = station.name.substringBefore(" ·")
+    fun isRecording(station: RadioStation): Boolean = station in haram
 
     fun visible(tab: StationTab, favorites: Set<String>, query: String): List<RadioStation> = when (tab) {
         StationTab.MOROCCO -> morocco
         StationTab.QURAN -> quran
         StationTab.TAJWID -> tajwid
+        StationTab.HARAM -> haram
         StationTab.FAVORITES -> all.filter { it.url in favorites }
     }.filter { station ->
-        RadioCatalogue.search(station, query) || aliases[station.url.substringAfterLast('/')].orEmpty().any {
+        RadioCatalogue.search(station, query) || aliases[reciterName(station)].orEmpty().any {
             RadioCatalogue.searchKey(it).contains(RadioCatalogue.searchKey(query))
         }
     }
 
     fun subtitle(station: RadioStation): String = when {
+        isRecording(station) -> "المسجد الحرام · ${station.url.removeSuffix(".mp3").takeLast(10)}"
         station in tajwid -> "المصحف المجوّد · MP3Quran"
         station == badr -> "حفص عن عاصم · MP3Quran"
         else -> station.tags.firstOrNull() ?: "القرآن الكريم · MP3Quran"

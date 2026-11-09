@@ -1,6 +1,7 @@
 package com.autodrive.radiomaroc
 
 import android.app.Activity
+import android.app.AlertDialog
 import android.content.ComponentName
 import android.content.Context
 import android.content.SharedPreferences
@@ -11,8 +12,12 @@ import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.RippleDrawable
 import android.os.Bundle
 import android.text.Editable
+import android.text.SpannableStringBuilder
+import android.text.Spanned
 import android.text.TextUtils
 import android.text.TextWatcher
+import android.text.method.LinkMovementMethod
+import android.text.style.URLSpan
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
@@ -56,6 +61,7 @@ class RadioActivity : Activity() {
     private lateinit var empty: TextView
     private lateinit var playerTitle: TextView
     private lateinit var playerSubtitle: TextView
+    private var playerCategory: TextView? = null
     private lateinit var playerArtwork: StationArtwork
     private lateinit var playerStatus: TextView
     private lateinit var playButton: TextView
@@ -141,12 +147,14 @@ class RadioActivity : Activity() {
             }, LinearLayout.LayoutParams(0, -2, 1f))
         }
         val categories = row().apply {
+            isBaselineAligned = false
             tabs = StationTab.entries.associateWith { choice ->
                 button(choice.label) {
                     tab = choice
                     prefs.edit().putString("tab", choice.name).apply()
                     renderRows(resetScroll = true)
                 }.also { view ->
+                    view.textSize = 13f
                     addView(view, LinearLayout.LayoutParams(0, dp(48), 1f).apply { marginEnd = dp(4) })
                 }
             }
@@ -220,13 +228,13 @@ class RadioActivity : Activity() {
         background = getDrawable(R.drawable.radio_card)
         gravity = Gravity.CENTER_VERTICAL
         setPadding(dp(12), dp(6), dp(12), dp(6))
-        playerArtwork = StationArtwork(if (wide) 25 else 16)
+        playerArtwork = StationArtwork(if (wide) 25 else 16, showCredits = true)
         val artworkSize = dp(if (wide) 66 else 42)
         addView(playerArtwork, LinearLayout.LayoutParams(artworkSize, artworkSize).apply {
             if (wide) bottomMargin = dp(9) else marginEnd = dp(8)
         })
         addView(column().apply {
-            if (wide) addView(label("RADIO INTERNET", 11, accent, bold = true))
+            if (wide) addView(label("", 11, accent, bold = true).also { playerCategory = it })
             playerTitle = label("", if (wide) 22 else 17, textColor, bold = true).apply {
                 maxLines = 2
                 ellipsize = TextUtils.TruncateAt.END
@@ -273,7 +281,7 @@ class RadioActivity : Activity() {
             layoutParams = AbsListView.LayoutParams(-1, dp(50))
             gravity = Gravity.CENTER_VERTICAL
             addView(number, LinearLayout.LayoutParams(dp(34), -1))
-            addView(badge, LinearLayout.LayoutParams(dp(28), dp(28)).apply { marginEnd = dp(8) })
+            addView(badge, LinearLayout.LayoutParams(dp(34), dp(34)).apply { marginEnd = dp(8) })
             addView(column().apply { addView(name); addView(subtitle) }, LinearLayout.LayoutParams(0, -2, 1f))
             addView(star, LinearLayout.LayoutParams(dp(48), dp(48)))
         }
@@ -288,7 +296,7 @@ class RadioActivity : Activity() {
             number.text = position.toString().padStart(2, '0')
             badge.bind(station)
             name.text = station.name
-            subtitle.text = if (playing) "En lecture" else Stations.subtitle(station)
+            subtitle.text = if (playing && !Stations.isRecording(station)) "En lecture" else Stations.subtitle(station)
             subtitle.setTextColor(if (playing) accent else muted)
             val favorite = station.url in favorites
             star.text = if (favorite) "★" else "☆"
@@ -301,7 +309,7 @@ class RadioActivity : Activity() {
         }
     }
 
-    private inner class StationArtwork(textSize: Int) : FrameLayout(this@RadioActivity) {
+    private inner class StationArtwork(textSize: Int, private val showCredits: Boolean = false) : FrameLayout(this@RadioActivity) {
         private val initials = label("FM", textSize, accent, bold = true).apply { gravity = Gravity.CENTER }
         private val logo = ImageView(context).apply { scaleType = ImageView.ScaleType.FIT_CENTER; visibility = View.GONE }
         private var logoWork: Job? = null
@@ -326,6 +334,14 @@ class RadioActivity : Activity() {
             initials.visibility = View.VISIBLE
             logo.visibility = View.GONE
             logo.setImageDrawable(null)
+            val portrait = station?.let(ReciterPortraits::forStation)
+            bindCredit(station, portrait)
+            if (portrait != null) {
+                logo.setImageResource(portrait.image)
+                logo.visibility = View.VISIBLE
+                initials.visibility = View.GONE
+                return
+            }
             logoWork = artwork.load(station?.logoUrl) { bitmap ->
                 if (artworkKey == station?.url && bitmap != null) {
                     logo.setImageBitmap(bitmap)
@@ -335,11 +351,44 @@ class RadioActivity : Activity() {
             }
         }
 
+        private fun bindCredit(station: RadioStation?, portrait: ReciterPortrait?) {
+            if (!showCredits) return
+            val name = station?.let(Stations::reciterName)
+            if (portrait == null || name == null) {
+                setOnClickListener(null)
+                isClickable = false
+                isFocusable = false
+                contentDescription = null
+                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
+                return
+            }
+            contentDescription = "Crédit photo · $name"
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
+            isFocusable = true
+            setOnClickListener { showPhotoCredit(name, portrait) }
+        }
+
         override fun onDetachedFromWindow() {
             logoWork?.cancel()
             artworkKey = null
             super.onDetachedFromWindow()
         }
+    }
+
+    private fun showPhotoCredit(name: String, portrait: ReciterPortrait) {
+        val message = SpannableStringBuilder().append(portrait.author).append("\n")
+        val licenseStart = message.length
+        message.append(portrait.license)
+        portrait.licenseUrl?.let {
+            message.setSpan(URLSpan(it), licenseStart, message.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        }
+        message.append("\n\n")
+        val sourceStart = message.length
+        message.append("Photo sur Wikimedia Commons")
+        message.setSpan(URLSpan(portrait.sourceUrl), sourceStart, message.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        val dialog = AlertDialog.Builder(this)
+            .setTitle(name).setMessage(message).setPositiveButton("Fermer", null).show()
+        dialog.findViewById<TextView>(android.R.id.message)?.movementMethod = LinkMovementMethod.getInstance()
     }
 
     private fun renderRows(resetScroll: Boolean = false) {
@@ -358,8 +407,11 @@ class RadioActivity : Activity() {
         val player = controller
         val active = player?.currentMediaItem?.mediaId
         val station = Stations.all.firstOrNull { it.url == active } ?: savedStation
-        val requesting = player?.playWhenReady == true && player.playerError == null
+        val recording = station?.let(Stations::isRecording) == true
+        val ended = player?.playbackState == Player.STATE_ENDED
+        val requesting = player?.playWhenReady == true && player.playerError == null && !ended
         val playing = player?.isPlaying == true
+        playerCategory?.text = if (recording) "تلاوات من المسجد الحرام" else "RADIO INTERNET"
         playerTitle.text = station?.name ?: "Choisir une station"
         playerSubtitle.text = station?.let(Stations::subtitle) ?: "Sélectionne une chaîne dans la liste"
         playerArtwork.bind(station)
@@ -367,7 +419,8 @@ class RadioActivity : Activity() {
             connectionFailed -> "Lecteur indisponible · réessayer"
             player == null -> "Connexion au lecteur…"
             player.playerError != null -> "Flux indisponible · vérifier Internet ou réessayer"
-            playing -> "● En direct"
+            playing -> if (recording) "● En lecture" else "● En direct"
+            ended && recording -> "Lecture terminée"
             requesting && player.playbackState == Player.STATE_BUFFERING -> "Connexion au flux…"
             requesting -> "Lecture suspendue"
             active != null -> "En pause"
@@ -398,11 +451,12 @@ class RadioActivity : Activity() {
 
     private fun toggle() {
         val player = controller ?: run { if (connectionFailed) connectPlayer(); return }
-        if (player.playWhenReady && player.playerError == null) {
-            player.pause()
-        } else {
-            val current = Stations.all.firstOrNull { it.url == player.currentMediaItem?.mediaId }
-            (current ?: savedStation ?: rows.firstOrNull())?.let(::select)
+        val current = Stations.all.firstOrNull { it.url == player.currentMediaItem?.mediaId }
+        val playable = player.playerError == null && player.playbackState != Player.STATE_ENDED
+        when {
+            playable && player.playWhenReady -> player.pause()
+            playable && player.playbackState == Player.STATE_READY && current?.let(Stations::isRecording) == true -> player.play()
+            else -> (current ?: savedStation ?: rows.firstOrNull())?.let(::select)
         }
     }
 
