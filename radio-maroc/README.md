@@ -4,8 +4,8 @@ Application Android 13+ indépendante pour l’Incarlink et les téléphones com
 
 L’interface s’inspire de la liste de chaînes de **Metrix FHD Neo** sur Enigma2. En paysage, le lecteur regroupe le grand picon, le titre, l’état du flux et les commandes à gauche. La liste à droite affiche un picon par station et surligne la ligne active en bleu. Installer l’APK sur la version précédente conserve les favoris et la dernière station enregistrée. [Skin de référence](https://www.sat-4-all.com/board/topic/341110-skin-metrixfhd-neo/).
 
-- **Radio Maroc** garde la sélection historique en tête, puis affiche les autres flux HTTPS répertoriés par Radio Browser pour le Maroc. Les stations de la sélection mesurées individuellement gardent leur classement par part d’audience de Radiométrie Maroc au deuxième trimestre 2025. [Résultats publiés par Aujourd’hui le Maroc](https://aujourdhui.ma/culture/elle-a-accumule-une-part-daudience-de-1536-la-radio-mohammed-vi-du-saint-coran-en-tete-du-podium).
-- **SNRT** dans l’onglet Radio Maroc filtre les quatre radios nationales du groupe. Radio Nationale, Radio Amazighe, Chaîne Inter et Mohammed VI du Saint Coran ouvrent leur lecteur officiel dans le navigateur. Radio 2M ouvre également son lecteur officiel depuis la liste Radio Maroc. [SNRT Live](https://snrtlive.ma/) · [Radio 2M](https://radio2m.ma/).
+- **Radio Maroc** réunit les radios SNRT, les autres stations de la sélection et les flux HTTPS marocains de Radio Browser. Les stations dont la part d’audience est publiée sont en tête selon Radiométrie Maroc au deuxième trimestre 2025. Les autres suivent dans l’ordre du catalogue. [Résultats publiés par Aujourd’hui le Maroc](https://aujourdhui.ma/culture/elle-a-accumule-une-part-daudience-de-1536-la-radio-mohammed-vi-du-saint-coran-en-tete-du-podium).
+- Radio Nationale, Radio Amazighe, Chaîne Inter et Mohammed VI du Saint Coran sont accessibles directement dans la liste Radio Maroc ou en recherchant « SNRT ». Ces radios et Radio 2M ouvrent leurs lecteurs officiels dans le navigateur. [SNRT Live](https://snrtlive.ma/) · [Radio 2M](https://radio2m.ma/).
 - **Monde** permet de sélectionner un pays et de rechercher ses stations par nom. **Charger plus de radios** charge la page suivante. La première page consultée de chaque pays est gardée localement pour consulter la liste hors connexion. Les favoris des stations de l’annuaire restent disponibles en changeant de pays. La couverture dépend des stations répertoriées et disposant d’un flux HTTPS compatible. [Documentation de Radio Browser](https://api.radio-browser.info/).
 - **القرآن** propose 12 flux de récitation, dont بدر التركي, العيون الكوشي, عمر القزابري et محمود خليل الحصري en lecture Warsh. [Flux publiés par MP3Quran](https://www.mp3quran.net/api/v3/radios?language=ar).
 - **التجويد** regroupe quatre flux du **المصحف المجوّد**. On y retrouve عبد الباسط عبد الصمد, محمد صديق المنشاوي, محمود خليل الحصري et محمود علي البنا. Le flux مجوّد d’Al-Minshawi garde son adresse de lecture pour préserver les favoris enregistrés.
@@ -47,6 +47,10 @@ Le portrait du lecteur ouvre les crédits. Les images proviennent de Wikimedia C
 | أحمد العجمي | أحمد زين, CC BY-SA 3.0 | [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Ahmad_bin_Ali_Al-Ajmi.png) |
 | ياسر الدوسري | أحمد زين, CC BY-SA 3.0 | [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Yasser_Al-Dosari.png) |
 | عبد الله الجهني | الشيخ هيثم الدخين, CC BY-SA 4.0 | [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Abdullah_Al_Juhany_%28Cropped%29.png) |
+
+## Vérifications de la version 1.7.1
+
+Sur l’émulateur Android 13 à 800 × 480, les radios SNRT étaient accessibles dans la liste Radio Maroc et via la recherche. La mise à jour signée depuis 1.7.0 a conservé le favori Chaîne Inter. Son lecteur officiel s’est ouvert dans le navigateur. Huit tests unitaires ont réussi et lint a relevé 0 erreur et 7 avertissements.
 
 ## Vérifications de la version 1.7.0
 

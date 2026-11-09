@@ -58,7 +58,6 @@ class RadioActivity : Activity() {
     private lateinit var directory: DirectoryBrowser
     private var tab = StationTab.MOROCCO
     private var radioFavoritesOnly = false
-    private var snrtOnly = false
     private var country = "FR"
     private var directoryBookmarks = emptyList<RadioStation>()
     private var favorites = emptySet<String>()
@@ -72,7 +71,6 @@ class RadioActivity : Activity() {
     private var piconsOffline = false
     private lateinit var tabs: Map<StationTab, TextView>
     private lateinit var radioFilter: TextView
-    private lateinit var snrtFilter: TextView
     private lateinit var countryButton: TextView
     private lateinit var directoryAction: TextView
     private lateinit var list: ListView
@@ -105,7 +103,6 @@ class RadioActivity : Activity() {
         savedStation = findStation(prefs.getString("last_station", null))
         query = savedInstanceState?.getString("query").orEmpty()
         radioFavoritesOnly = savedInstanceState?.getBoolean("radio_favorites_only") == true
-        snrtOnly = savedInstanceState?.getBoolean("snrt_only") == true
         volumeControlStream = android.media.AudioManager.STREAM_MUSIC
         window.setDecorFitsSystemWindows(false)
         setContentView(screen())
@@ -115,7 +112,6 @@ class RadioActivity : Activity() {
     override fun onSaveInstanceState(outState: Bundle) {
         outState.putString("query", query)
         outState.putBoolean("radio_favorites_only", radioFavoritesOnly)
-        outState.putBoolean("snrt_only", snrtOnly)
         super.onSaveInstanceState(outState)
     }
 
@@ -254,10 +250,6 @@ class RadioActivity : Activity() {
             radioFavoritesOnly = !radioFavoritesOnly
             updateDirectory(resetScroll = true)
         }
-        snrtFilter = button("SNRT") {
-            snrtOnly = !snrtOnly
-            updateDirectory(resetScroll = true)
-        }.apply { contentDescription = "Filtrer les radios SNRT" }
         countryButton = button("") { chooseCountry() }.apply {
             maxLines = 2
             ellipsize = TextUtils.TruncateAt.END
@@ -265,7 +257,6 @@ class RadioActivity : Activity() {
         addView(row().apply {
             addView(search, LinearLayout.LayoutParams(0, -1, 1f))
             addView(countryButton, LinearLayout.LayoutParams(dp(128), -1).apply { marginStart = dp(6) })
-            addView(snrtFilter, LinearLayout.LayoutParams(dp(58), -1).apply { marginStart = dp(6) })
             addView(radioFilter, LinearLayout.LayoutParams(dp(94), -1).apply { marginStart = dp(6) })
         }, LinearLayout.LayoutParams(-1, dp(48)).apply { bottomMargin = dp(6) })
         addView(FrameLayout(context).apply {
@@ -559,7 +550,7 @@ class RadioActivity : Activity() {
 
     private fun updateDirectory(resetScroll: Boolean = false) {
         val code = when {
-            tab == StationTab.MOROCCO && !radioFavoritesOnly && !snrtOnly -> "MA"
+            tab == StationTab.MOROCCO && !radioFavoritesOnly -> "MA"
             tab == StationTab.WORLD -> country
             else -> null
         }
@@ -568,11 +559,8 @@ class RadioActivity : Activity() {
     }
 
     private fun renderRows(resetScroll: Boolean = false) {
-        rows = Stations.visible(tab, favorites, query, radioFavoritesOnly, directory.stations, directoryBookmarks, snrtOnly)
+        rows = Stations.visible(tab, favorites, query, radioFavoritesOnly, directory.stations, directoryBookmarks)
         val onRadioTab = tab == StationTab.MOROCCO
-        snrtFilter.visibility = if (onRadioTab) View.VISIBLE else View.GONE
-        snrtFilter.isSelected = snrtOnly
-        snrtFilter.background = pressable(if (snrtOnly) R.drawable.radio_selected else R.drawable.radio_control)
         countryButton.visibility = if (tab == StationTab.WORLD) View.VISIBLE else View.GONE
         countryButton.text = "${StationDirectory.countryName(country)} ▾"
         countryButton.contentDescription = "Choisir un pays · ${StationDirectory.countryName(country)}"

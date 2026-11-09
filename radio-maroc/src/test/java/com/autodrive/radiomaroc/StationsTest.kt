@@ -13,14 +13,14 @@ class StationsTest {
         val quran = Stations.visible(StationTab.QURAN, emptySet(), "")
         val tajwid = Stations.visible(StationTab.TAJWID, emptySet(), "")
         assertEquals(17, morocco.size)
-        assertEquals(12, morocco.take(12).mapNotNull { it.logoUrl?.let(RadioStation::validUrl) }.toSet().size)
+        assertEquals(17, morocco.mapNotNull { it.logoUrl?.let(RadioStation::validUrl) }.toSet().size)
         assertEquals(12, quran.size)
         assertEquals(4, tajwid.size)
         assertEquals(Stations.all.size, Stations.all.map { it.url }.toSet().size)
         assertTrue(Stations.all.all { RadioStation.validUrl(it.url) == it.url })
         assertEquals(4, Stations.snrt.size)
         assertTrue(Stations.snrt.all { it.url.startsWith("https://snrtlive.ma/") })
-        assertEquals(Stations.snrt, Stations.visible(StationTab.MOROCCO, emptySet(), "", snrtOnly = true))
+        assertEquals(Stations.snrt.toSet(), Stations.visible(StationTab.MOROCCO, emptySet(), "SNRT").toSet())
         assertEquals("العيون الكوشي", quran.first().name)
         assertTrue(tajwid.all { it.url.endsWith("_mojawwad") && it !in quran })
         assertEquals("عبد الباسط عبد الصمد", tajwid.first().name)
@@ -30,9 +30,11 @@ class StationsTest {
         val pinned = Stations.visible(StationTab.MOROCCO, emptySet(), "").first()
         val moroccan = RadioStation("Radio Azrou", "https://audio.example/azrou", countryCode = "MA")
         val french = RadioStation("France Info", "https://audio.example/info", countryCode = "FR")
-        val directory = listOf(pinned.copy(countryCode = "MA"), moroccan, french)
+        val mfm = RadioStation("MFM Radio", "https://audio.example/mfm", countryCode = "MA")
+        val directory = listOf(pinned.copy(countryCode = "MA"), moroccan, french, mfm)
         val allMoroccan = Stations.visible(StationTab.MOROCCO, emptySet(), "", directory = directory)
         assertEquals(1, allMoroccan.count { it.url == pinned.url })
+        assertEquals(mfm, allMoroccan[3])
         assertEquals(moroccan, allMoroccan.last())
         assertTrue(french !in allMoroccan)
         val bookmarks = listOf(moroccan, french)
@@ -44,10 +46,11 @@ class StationsTest {
     @Test fun favoritesSearchAndStationControlsUseTheVisibleList() {
         val morocco = Stations.visible(StationTab.MOROCCO, emptySet(), "")
         assertEquals(
-            listOf("Med Radio", "HIT RADIO", "Radio Aswat", "Chada FM", "Radio Mars", "Medina FM"),
-            morocco.take(6).map { it.name },
+            listOf("محمد السادس للقرآن الكريم", "Med Radio", "HIT RADIO", "Radio Aswat", "Radio Nationale",
+                "Chada FM", "Radio Mars", "Radio 2M", "Radio Amazighe", "Medina FM", "Chaîne Inter"),
+            morocco.take(11).map { it.name },
         )
-        assertEquals("HIT RADIO", RadioQueue.neighbor(morocco, morocco.first().url, 1)?.name)
+        assertEquals("Med Radio", RadioQueue.neighbor(morocco, morocco.first().url, 1)?.name)
         assertEquals(morocco.last(), RadioQueue.neighbor(morocco, morocco.first().url, -1))
         assertEquals("Radio Aswat", Stations.visible(StationTab.MOROCCO, emptySet(), "aswat").single().name)
         val quran = Stations.visible(StationTab.QURAN, emptySet(), "قَزَابْرِي").single()
@@ -57,15 +60,16 @@ class StationsTest {
 
     @Test fun radioFavoritesKeepAudienceOrderAndExcludeOtherTabs() {
         val morocco = Stations.visible(StationTab.MOROCCO, emptySet(), "")
-        val med = morocco.first()
+        val med = morocco.single { it.name == "Med Radio" }
         val mars = morocco.single { it.name == "Radio Mars" }
+        val inter = morocco.single { it.name == "Chaîne Inter" }
         val quran = Stations.visible(StationTab.QURAN, emptySet(), "").first()
-        val favorites = setOf(mars.url, quran.url, med.url)
+        val favorites = setOf(mars.url, quran.url, med.url, inter.url)
         val visible = Stations.visible(StationTab.MOROCCO, favorites, "", radioFavoritesOnly = true)
-        assertEquals(listOf(med, mars), visible)
+        assertEquals(listOf(med, mars, inter), visible)
         assertEquals(mars, RadioQueue.neighbor(visible, med.url, 1))
         assertEquals(listOf(mars), Stations.visible(StationTab.MOROCCO, favorites, "mars", radioFavoritesOnly = true))
-        assertEquals(listOf(med, mars, quran), Stations.visible(StationTab.FAVORITES, favorites, ""))
+        assertEquals(listOf(med, mars, inter, quran), Stations.visible(StationTab.FAVORITES, favorites, ""))
     }
 
     @Test fun badrAndTajwidCanBeFoundAndPreviousFavoritesSurviveTheMove() {

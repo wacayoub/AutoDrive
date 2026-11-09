@@ -15,7 +15,6 @@ internal enum class StationTab(val label: String) {
 
 internal object Stations {
     private val morocco = listOf(
-        // Radiométrie Maroc, Q2 2025: descending audience share among these stations.
         RadioStation("Med Radio", "https://medradio.ice.infomaniak.ch/medradio-128.mp3",
             logoUrl = "https://medradio.ma/wp-content/uploads/2023/08/cropped-med-fav-jpg-192x192.jpg", tags = setOf("Débats")),
         RadioStation("HIT RADIO", "https://hitradio-maroc.ice.infomaniak.ch/hitradio-maroc-128.mp3",
@@ -28,7 +27,6 @@ internal object Stations {
             logoUrl = "https://www.haca.ma/sites/default/files/upload/images/logo-radio-marsN-new%282%29.PNG", tags = setOf("Sport")),
         RadioStation("Medina FM", "https://medinafm.ice.infomaniak.ch/medinafm-64.mp3",
             logoUrl = "https://medinafm.ma/favicon-192.png", tags = setOf("Généraliste")),
-        // Regional and web stations without a comparable individual measurement.
         RadioStation("Skyrock Casablanca", "https://icecast.skyrock.net/s/casa_aac_64k",
             logoUrl = "https://www.skyrock.fm/images/logo-skyrock.png", tags = setOf("Rap")),
         RadioStation("Radio Plus Agadir", "https://stream-158.zeno.fm/bqdbb6hd0neuv",
@@ -46,6 +44,12 @@ internal object Stations {
     private val radio2m = RadioStation("Radio 2M", "https://radio2m.ma/", logoUrl = "https://radio2m.ma/favRadio2M.png")
     private val localRadios = morocco + snrt + radio2m
     private val localRadioNames = localRadios.map { RadioCatalogue.searchKey(it.name) }.toSet()
+    // Radiométrie Maroc, Q2 2025. Keep unmeasured stations in catalogue order.
+    private val audienceRank = listOf(
+        "محمد السادس للقرآن الكريم", "Med Radio", "HIT RADIO", "MFM Radio", "Radio Aswat",
+        "Radio Nationale", "Medi 1 Radio", "Chada FM", "Radio Mars", "Radio 2M",
+        "Radio Amazighe", "Medina FM", "Cap Radio", "Chaîne Inter",
+    ).mapIndexed { rank, name -> RadioCatalogue.searchKey(name) to rank }.toMap()
     private fun quranStation(name: String, path: String) = RadioStation(name, "https://backup.qurango.net/radio/$path")
 
     private val badr = quranStation("بدر التركي", "bader")
@@ -113,13 +117,14 @@ internal object Stations {
 
     fun visible(
         tab: StationTab, favorites: Set<String>, query: String, radioFavoritesOnly: Boolean = false,
-        directory: List<RadioStation> = emptyList(), bookmarks: List<RadioStation> = emptyList(), snrtOnly: Boolean = false,
+        directory: List<RadioStation> = emptyList(), bookmarks: List<RadioStation> = emptyList(),
     ): List<RadioStation> = when (tab) {
         StationTab.MOROCCO -> {
-            val listed = if (snrtOnly) snrt else (localRadios + (directory + bookmarks).filter {
+            (localRadios + (directory + bookmarks).filter {
                 it.countryCode == "MA" && RadioCatalogue.searchKey(it.name) !in localRadioNames
             }).distinctBy { it.url }
-            if (radioFavoritesOnly) listed.filter { it.url in favorites } else listed
+                .filter { !radioFavoritesOnly || it.url in favorites }
+                .sortedBy { audienceRank[RadioCatalogue.searchKey(it.name)] ?: Int.MAX_VALUE }
         }
         StationTab.WORLD -> directory
         StationTab.QURAN -> quran
