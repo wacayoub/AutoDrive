@@ -2,6 +2,7 @@ package com.autodrive.launcher
 
 import android.app.Application
 import android.os.Build
+import android.os.SystemClock
 import androidx.lifecycle.AndroidViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CancellationException
@@ -28,27 +29,32 @@ internal class UpdateViewModel(application: Application, val source: UpdateSourc
     private var job: Job? = null
     private var readyFile: File? = null
     private var announcedVersion: Long? = null
+    private var lastAttempt: Long? = null
     private val prefs = application.getSharedPreferences("online_updates", 0)
 
     fun autoCheck() {
-        if (state.value.phase != UpdatePhase.IDLE) return
-        val due = System.currentTimeMillis() - prefs.getLong("checked_at", 0) > 24 * 60 * 60 * 1000L ||
+        val value = state.value
+        if (value.phase !in setOf(UpdatePhase.IDLE, UpdatePhase.CURRENT, UpdatePhase.ERROR) || value.release != null) return
+        if (lastAttempt?.let { SystemClock.elapsedRealtime() - it < 15 * 60 * 1000L } == true) return
+        val age = System.currentTimeMillis() - prefs.getLong("checked_at", 0)
+        val due = age !in 0..24 * 60 * 60 * 1000L ||
             prefs.getLong("checked_version", -1) != source.versionCode
         if (due) check()
     }
 
     fun check() {
         if (job?.isActive == true) return
+        lastAttempt = SystemClock.elapsedRealtime()
         readyFile = null
         job = scope.launch {
             mutable.value = UpdateState(UpdatePhase.CHECKING, message = "Recherche sur GitHub…")
-            prefs.edit().putLong("checked_at", System.currentTimeMillis()).putLong("checked_version", source.versionCode).apply()
             try {
                 val release = withContext(Dispatchers.IO) { source.latest() }
                 require(release.minSdk <= Build.VERSION.SDK_INT) { "Cette version nécessite un Android plus récent" }
+                prefs.edit().putLong("checked_at", System.currentTimeMillis()).putLong("checked_version", source.versionCode).apply()
                 mutable.value = if (release.versionCode > source.versionCode)
                     UpdateState(UpdatePhase.AVAILABLE, release, message = "Version ${release.versionName} disponible")
-                else UpdateState(UpdatePhase.CURRENT, message = "AutoDrive est à jour")
+                else UpdateState(UpdatePhase.CURRENT, message = "La version installée est à jour")
             } catch (error: Exception) {
                 if (error is CancellationException) throw error
                 mutable.value = UpdateState(UpdatePhase.ERROR, message = friendly(error))

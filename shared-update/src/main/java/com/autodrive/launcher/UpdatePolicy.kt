@@ -13,11 +13,17 @@ internal data class UpdateRelease(
     val size: Long
 ) {
     fun validate() {
-        require(packageName == "com.autodrive.launcher") { "Application de mise à jour incorrecte" }
+        require(packageName == UpdatePolicy.LAUNCHER_PACKAGE || packageName == UpdatePolicy.RADIO_PACKAGE) {
+            "Application de mise à jour incorrecte"
+        }
         require(versionCode > 0 && versionName.isNotBlank() && versionName.length <= 64) { "Version de mise à jour incorrecte" }
         require(minSdk >= 1 && size in 1..UpdatePolicy.MAX_APK_BYTES) { "Taille ou compatibilité de mise à jour incorrecte" }
         require(Regex("[a-fA-F0-9]{64}").matches(sha256)) { "Empreinte de mise à jour absente ou incorrecte" }
-        require(UpdatePolicy.releaseAsset(apkUrl, "AutoDrive.apk")) { "Adresse de mise à jour non autorisée" }
+        val validAddress = if (packageName == UpdatePolicy.RADIO_PACKAGE) {
+            UpdatePolicy.radioTag("radio-maroc-v$versionName") &&
+                apkUrl == "${UpdatePolicy.REPO_URL}/releases/download/radio-maroc-v$versionName/Radio-Maroc-Coran-$versionName.apk"
+        } else UpdatePolicy.releaseAsset(apkUrl, "AutoDrive.apk")
+        require(validAddress) { "Adresse de mise à jour non autorisée" }
     }
 }
 
@@ -25,7 +31,13 @@ internal object UpdatePolicy {
     const val REPOSITORY = "wacayoub/AutoDrive"
     const val REPO_URL = "https://github.com/$REPOSITORY"
     const val LATEST_API = "https://api.github.com/repos/$REPOSITORY/releases/latest"
+    const val RELEASES_API = "https://api.github.com/repos/$REPOSITORY/releases"
+    const val LAUNCHER_PACKAGE = "com.autodrive.launcher"
+    const val RADIO_PACKAGE = "com.autodrive.radiomaroc"
+    const val RADIO_MANIFEST = "radio-maroc-update.json"
     const val MAX_APK_BYTES = 128L * 1024 * 1024
+
+    fun radioTag(tag: String) = Regex("radio-maroc-v[0-9]{1,6}\\.[0-9]{1,6}\\.[0-9]{1,6}").matches(tag)
 
     fun releaseAsset(url: String, name: String): Boolean {
         val uri = runCatching { URI(url) }.getOrNull() ?: return false

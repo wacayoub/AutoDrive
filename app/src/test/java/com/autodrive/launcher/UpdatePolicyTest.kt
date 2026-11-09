@@ -33,4 +33,17 @@ class UpdatePolicyTest {
             try { release.validate(); fail("Invalid metadata accepted") } catch (_: IllegalArgumentException) { }
         }
     }
+
+    @Test fun radioMetadataRequiresItsExactVersionedReleaseAsset() {
+        val radioApk = "https://github.com/wacayoub/AutoDrive/releases/download/radio-maroc-v1.9.0/Radio-Maroc-Coran-1.9.0.apk"
+        val radio = valid().copy(packageName = UpdatePolicy.RADIO_PACKAGE, versionName = "1.9.0", apkUrl = radioApk)
+        radio.validate()
+        assertTrue(UpdatePolicy.radioTag("radio-maroc-v1.9.0"))
+        assertFalse(UpdatePolicy.radioTag("v1.9.0"))
+        assertFalse(UpdatePolicy.radioTag("radio-maroc-v1.9.0-test"))
+        for (release in listOf(radio.copy(apkUrl = apk), radio.copy(versionName = "1.9.1"),
+            radio.copy(apkUrl = radioApk + "?redirect=other"), radio.copy(packageName = UpdatePolicy.LAUNCHER_PACKAGE))) {
+            try { release.validate(); fail("Wrong radio release asset accepted") } catch (_: IllegalArgumentException) { }
+        }
+    }
 }

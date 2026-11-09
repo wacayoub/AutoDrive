@@ -8,12 +8,30 @@ import base64
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 import sys
 import urllib.error
 import urllib.parse
 import urllib.request
 from build_update_manifest import build
+
+
+def verify_radio_signer(apk, aapt):
+    if aapt:
+        build_tools = Path(aapt).resolve().parent
+    else:
+        sdk = Path(os.environ.get("ANDROID_HOME") or os.environ["ANDROID_SDK_ROOT"])
+        build_tools = sdk / "build-tools/35.0.0"
+    java_home = os.environ.get("JAVA_HOME")
+    java = str(Path(java_home) / "bin" / ("java.exe" if os.name == "nt" else "java")) if java_home else "java"
+    details = subprocess.check_output(
+        [java, "-jar", str(build_tools / "lib/apksigner.jar"), "verify", "--print-certs", str(Path(apk).resolve())],
+        text=True,
+    )
+    fingerprints = re.findall(r"^Signer #\d+ certificate SHA-256 digest: ([a-f0-9]+)$", details, re.M)
+    assert fingerprints == ["ff69ab0e4ceed241255b1e58bf42b413985590989252479152d9f0c3aa849414"], \
+        "Radio Maroc APK is not signed with the published radio certificate"
 
 
 def credential(owner):
@@ -76,9 +94,15 @@ class GitHub:
                 print("Stored encrypted signing secret", name)
         return repo
 
-    def publish(self, apk, output, commit, aapt=None, notes=None):
-        metadata = build(apk, self.repository, output, aapt)
-        tag = "v" + metadata["versionName"]
+    def publish(self, apk, output, commit, aapt=None, notes=None, radio_maroc=False):
+        metadata = build(apk, self.repository, output, aapt, radio_maroc)
+        if radio_maroc:
+            verify_radio_signer(apk, aapt)
+        tag = ("radio-maroc-v" if radio_maroc else "v") + metadata["versionName"]
+        product = "Radio Maroc & Coran" if radio_maroc else "AutoDrive"
+        manifest_name = "radio-maroc-update.json" if radio_maroc else "autodrive-update.json"
+        if radio_maroc and not notes:
+            notes = "Mise à jour depuis le menu Mises à jour de Radio Maroc & Coran."
         try:
             existing = self.call(f"/repos/{self.repository}/releases/tags/{tag}")
             assert existing.get("draft"), "A published version already exists; do not overwrite installed update assets"
@@ -87,17 +111,18 @@ class GitHub:
             if error.code != 404:
                 raise
             release = self.call(f"/repos/{self.repository}/releases", "POST", dict(tag_name=tag,
-                target_commitish=commit, name="AutoDrive " + metadata["versionName"], draft=True, prerelease=False,
+                target_commitish=commit, name=product + " " + metadata["versionName"], draft=True, prerelease=radio_maroc,
                 body=notes or "Mises à jour depuis Settings → Mises à jour. Téléchargement vérifié, installation Android avec confirmation et réglages conservés.\n\nGoogle Maps et YouTube utilisent leurs panneaux web dans l’accueil. Cette version ne fournit pas Android Auto ni une activité native Google Maps intégrée."))
         assets = {item["name"] for item in self.call(f"/repos/{self.repository}/releases/{release['id']}/assets")}
         upload = release["upload_url"].split("{")[0]
-        files = [(Path(apk), "AutoDrive.apk"), (Path(output) / "autodrive-update.json", "autodrive-update.json"),
+        files = [(Path(apk), metadata["apkUrl"].rsplit("/", 1)[1]), (Path(output) / manifest_name, manifest_name),
                  (Path(output) / "SHA256SUMS.txt", "SHA256SUMS.txt")]
         assert not assets, "Draft contains assets already; inspect it before resuming"
         for file, name in files:
             self.call(upload + "?name=" + urllib.parse.quote(name), "POST", binary=file)
             print("Uploaded", name)
-        result = self.call(f"/repos/{self.repository}/releases/{release['id']}", "PATCH", dict(draft=False, make_latest="true"))
+        result = self.call(f"/repos/{self.repository}/releases/{release['id']}", "PATCH",
+                           dict(draft=False, prerelease=radio_maroc, make_latest="false" if radio_maroc else "true"))
         print("Published", result["html_url"])
 
 
@@ -110,6 +135,7 @@ if __name__ == "__main__":
     parser.add_argument("--output", default="build/publish")
     parser.add_argument("--commit", default="main")
     parser.add_argument("--aapt")
+    parser.add_argument("--radio-maroc", action="store_true", help="Publish in the standalone Radio Maroc channel")
     parser.add_argument("--notes-file", help="UTF-8 release description, with actual newlines")
     args = parser.parse_args()
     try:
@@ -118,7 +144,7 @@ if __name__ == "__main__":
             github.setup(args.signing_keystore)
         if args.apk:
             notes = Path(args.notes_file).read_text(encoding="utf-8") if args.notes_file else None
-            github.publish(args.apk, args.output, args.commit, args.aapt, notes)
+            github.publish(args.apk, args.output, args.commit, args.aapt, notes, args.radio_maroc)
     except Exception as error:
         print(f"GitHub operation failed: {type(error).__name__}: {error}", file=sys.stderr)
         sys.exit(1)

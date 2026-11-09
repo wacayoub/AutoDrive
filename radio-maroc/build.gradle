@@ -7,13 +7,14 @@ android {
     namespace 'com.autodrive.radiomaroc'
     compileSdk 35
     sourceSets.main.java.srcDir rootProject.file('shared-radio/src/main/java')
+    sourceSets.main.java.srcDir rootProject.file('shared-update/src/main/java')
 
     defaultConfig {
         applicationId 'com.autodrive.radiomaroc'
         minSdk 33
         targetSdk 35
-        versionCode 13
-        versionName '1.8.1'
+        versionCode providers.gradleProperty('radioMarocVersionCode').getOrElse('14').toInteger()
+        versionName providers.gradleProperty('radioMarocVersionName').getOrElse('1.9.0')
     }
 
     signingConfigs {
@@ -39,6 +40,8 @@ android {
 kotlin { jvmToolchain(17) }
 
 dependencies {
+    implementation 'androidx.activity:activity:1.10.1'
+    implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.8.7'
     implementation 'androidx.media3:media3-exoplayer-hls:1.8.1'
     implementation 'androidx.media3:media3-session:1.8.1'
     implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2'

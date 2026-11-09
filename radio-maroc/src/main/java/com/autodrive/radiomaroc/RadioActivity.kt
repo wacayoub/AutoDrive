@@ -1,6 +1,5 @@
 package com.autodrive.radiomaroc
 
-import android.app.Activity
 import android.app.AlertDialog
 import android.content.ComponentName
 import android.content.Context
@@ -34,6 +33,7 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ListView
 import android.widget.TextView
+import androidx.activity.ComponentActivity
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
@@ -45,7 +45,7 @@ import com.autodrive.launcher.RadioStation
 import com.google.common.util.concurrent.ListenableFuture
 import kotlinx.coroutines.Job
 
-class RadioActivity : Activity() {
+class RadioActivity : ComponentActivity() {
     private val accent = 0xFF79D3F6.toInt()
     private val textColor = 0xFFF5F6F7.toInt()
     private val muted = 0xFFB0BDC7.toInt()
@@ -53,6 +53,7 @@ class RadioActivity : Activity() {
     private lateinit var prefs: SharedPreferences
     private lateinit var artwork: RadioArtwork
     private lateinit var directory: DirectoryBrowser
+    private lateinit var radioUpdates: RadioUpdates
     private var tab = StationTab.MOROCCO
     private var radioFavoritesOnly = false
     private var country = "FR"
@@ -95,6 +96,7 @@ class RadioActivity : Activity() {
         prefs = getSharedPreferences("radio_maroc", MODE_PRIVATE)
         artwork = RadioArtwork(this, maxImageBytes = 1024 * 1024)
         directory = DirectoryBrowser(StationDirectory(this)) { renderRows() }
+        radioUpdates = RadioUpdates(this, savedInstanceState)
         tab = StationTab.entries.firstOrNull { it.name == prefs.getString("tab", null) } ?: StationTab.MOROCCO
         country = prefs.getString("world_country", null)?.takeIf { it in StationDirectory.countries && it != "MA" } ?: "FR"
         favorites = prefs.getStringSet("favorites", emptySet()).orEmpty().toSet()
@@ -111,6 +113,7 @@ class RadioActivity : Activity() {
     override fun onSaveInstanceState(outState: Bundle) {
         outState.putString("query", query)
         outState.putBoolean("radio_favorites_only", radioFavoritesOnly)
+        radioUpdates.save(outState)
         super.onSaveInstanceState(outState)
     }
 
@@ -128,6 +131,7 @@ class RadioActivity : Activity() {
     }
 
     override fun onDestroy() {
+        radioUpdates.close()
         directory.close()
         artwork.close()
         super.onDestroy()
@@ -182,6 +186,13 @@ class RadioActivity : Activity() {
                 setPadding(dp(8), 0, 0, 0)
                 maxLines = 2
             }, LinearLayout.LayoutParams(0, -2, 1f))
+            addView(ImageButton(context).apply {
+                setImageResource(R.drawable.ic_radio_update)
+                scaleType = ImageView.ScaleType.CENTER
+                background = pressable(R.drawable.radio_control)
+                contentDescription = "Mises à jour"
+                setOnClickListener { radioUpdates.show() }
+            }, LinearLayout.LayoutParams(dp(48), dp(48)))
         }
         val categories = row().apply {
             isBaselineAligned = false
@@ -199,11 +210,11 @@ class RadioActivity : Activity() {
         if (wide) {
             addView(row().apply {
                 background = getDrawable(R.drawable.radio_header)
-                addView(masthead, LinearLayout.LayoutParams(dp(205), -1))
+                addView(masthead, LinearLayout.LayoutParams(dp(if (resources.configuration.screenWidthDp < 650) 196 else 222), -1))
                 addView(categories, LinearLayout.LayoutParams(0, -1, 1f))
             }, LinearLayout.LayoutParams(-1, dp(48)).apply { bottomMargin = dp(8) })
         } else {
-            addView(masthead, LinearLayout.LayoutParams(-1, dp(36)))
+            addView(masthead, LinearLayout.LayoutParams(-1, dp(48)))
             addView(categories, LinearLayout.LayoutParams(-1, dp(48)).apply { bottomMargin = dp(8) })
         }
         val content = if (wide) row() else column()

@@ -3,6 +3,7 @@ package com.autodrive.launcher
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
@@ -21,39 +22,72 @@ internal interface UpdateSource {
 
 internal class GitHubUpdates(private val context: Context) : UpdateSource {
     private val packages = context.packageManager
+    private val isRadio = context.packageName == UpdatePolicy.RADIO_PACKAGE
+    private val filePrefix = if (isRadio) "RadioMaroc" else "AutoDrive"
+    private val manifestName = if (isRadio) UpdatePolicy.RADIO_MANIFEST else "autodrive-update.json"
     val installed get() = packages.getPackageInfo(context.packageName, PackageManager.PackageInfoFlags.of(0))
     override val versionCode get() = installed.longVersionCode
     override val versionName get() = installed.versionName.orEmpty()
 
     override fun latest(): UpdateRelease {
         File(context.filesDir, "updates").listFiles()?.forEach { file ->
-            val code = Regex("AutoDrive-(\\d+)\\.apk").matchEntire(file.name)?.groupValues?.get(1)?.toLongOrNull()
+            val code = Regex("$filePrefix-(\\d+)\\.apk").matchEntire(file.name)?.groupValues?.get(1)?.toLongOrNull()
             if (code != null && code <= versionCode) file.delete()
         }
-        val release = JSONObject(read(UpdatePolicy.LATEST_API, 1024 * 1024))
-        require(!release.optBoolean("draft") && !release.optBoolean("prerelease")) { "Aucune version stable disponible" }
-        val assets = release.getJSONArray("assets")
-        val asset = (0 until assets.length()).map { assets.getJSONObject(it) }
-            .firstOrNull { it.optString("name") == "autodrive-update.json" }
-            ?: throw IOException("Cette version ne propose pas encore de mise à jour intégrée")
-        val manifestUrl = asset.getString("browser_download_url")
-        require(UpdatePolicy.releaseAsset(manifestUrl, "autodrive-update.json")) { "Source de mise à jour incorrecte" }
+        val manifestUrl = if (isRadio) radioManifestUrl() else {
+            val release = JSONObject(read(UpdatePolicy.LATEST_API, 1024 * 1024))
+            require(!release.optBoolean("draft") && !release.optBoolean("prerelease")) { "Aucune version stable disponible" }
+            manifestAsset(release)?.optString("browser_download_url")
+        } ?: throw IOException("Cette version ne propose pas encore de mise à jour intégrée")
+        require(UpdatePolicy.releaseAsset(manifestUrl, manifestName)) { "Source de mise à jour incorrecte" }
         val manifest = JSONObject(read(manifestUrl, 64 * 1024))
         require(manifest.getInt("schema") == 1) { "Format de mise à jour incompatible" }
         return UpdateRelease(manifest.getString("packageName"), manifest.getLong("versionCode"),
             manifest.getString("versionName"), manifest.getInt("minSdk"), manifest.getString("apkUrl"),
-            manifest.getString("sha256"), manifest.getLong("size")).also { it.validate() }
+            manifest.getString("sha256"), manifest.getLong("size")).also { verifyChannel(it) }
+    }
+
+    private fun radioManifestUrl(): String? {
+        // The radio uses its own published prereleases. AutoDrive's stable latest stays independent.
+        val pageSize = 25
+        for (page in 1..4) {
+            val releases = JSONArray(read("${UpdatePolicy.RELEASES_API}?per_page=$pageSize&page=$page", 1024 * 1024))
+            for (index in 0 until releases.length()) {
+                val release = releases.getJSONObject(index)
+                val tag = release.optString("tag_name")
+                if (release.optBoolean("draft") || !UpdatePolicy.radioTag(tag)) continue
+                val asset = manifestAsset(release) ?: continue
+                val url = asset.optString("browser_download_url")
+                require(url == "${UpdatePolicy.REPO_URL}/releases/download/$tag/$manifestName") {
+                    "Source de mise à jour incorrecte"
+                }
+                return url
+            }
+            if (releases.length() < pageSize) break
+        }
+        return null
+    }
+
+    private fun manifestAsset(release: JSONObject): JSONObject? {
+        val assets = release.getJSONArray("assets")
+        return (0 until assets.length()).asSequence().map(assets::getJSONObject)
+            .firstOrNull { it.optString("name") == manifestName }
+    }
+
+    private fun verifyChannel(release: UpdateRelease) {
+        release.validate()
+        require(release.packageName == context.packageName) { "Application de mise à jour incorrecte" }
     }
 
     override fun download(release: UpdateRelease, progress: (Int) -> Unit): File {
-        release.validate()
+        verifyChannel(release)
         require(release.versionCode > versionCode) { "Cette version est déjà installée" }
         require(release.minSdk <= Build.VERSION.SDK_INT) { "Cette mise à jour nécessite un Android plus récent" }
         val folder = File(context.filesDir, "updates").apply { check(isDirectory || mkdirs()) }
         require(folder.usableSpace > release.size + 16 * 1024 * 1024) { "Espace de stockage insuffisant" }
-        val temporary = File(folder, "AutoDrive-${release.versionCode}.part")
-        val target = File(folder, "AutoDrive-${release.versionCode}.apk")
-        folder.listFiles()?.filter { it != target && it != temporary && Regex("AutoDrive-\\d+\\.(apk|part)").matches(it.name) }
+        val temporary = File(folder, "$filePrefix-${release.versionCode}.part")
+        val target = File(folder, "$filePrefix-${release.versionCode}.apk")
+        folder.listFiles()?.filter { it != target && it != temporary && Regex("$filePrefix-\\d+\\.(apk|part)").matches(it.name) }
             ?.forEach { it.delete() }
         try {
             val connection = connect(release.apkUrl)
@@ -85,7 +119,7 @@ internal class GitHubUpdates(private val context: Context) : UpdateSource {
     }
 
     override fun verify(file: File, release: UpdateRelease): File {
-        release.validate()
+        verifyChannel(release)
         require(release.minSdk <= Build.VERSION.SDK_INT) { "Mise à jour incompatible avec Android" }
         require(file.isFile && file.length() == release.size) { "Fichier de mise à jour incomplet" }
         val digest = MessageDigest.getInstance("SHA-256")
@@ -103,7 +137,9 @@ internal class GitHubUpdates(private val context: Context) : UpdateSource {
         val current = packages.getPackageInfo(context.packageName, flags)
         val installedSigners = current.signingInfo?.apkContentsSigners?.map { hex(MessageDigest.getInstance("SHA-256").digest(it.toByteArray())) }?.toSet()
         val downloadedSigners = archive.signingInfo?.apkContentsSigners?.map { hex(MessageDigest.getInstance("SHA-256").digest(it.toByteArray())) }?.toSet()
-        require(!installedSigners.isNullOrEmpty() && installedSigners == downloadedSigners) { "La signature de la mise à jour ne correspond pas à AutoDrive" }
+        require(!installedSigners.isNullOrEmpty() && installedSigners == downloadedSigners) {
+            "La signature de la mise à jour ne correspond pas à l’application installée"
+        }
         return file
     }
 
@@ -115,7 +151,7 @@ internal class GitHubUpdates(private val context: Context) : UpdateSource {
             connection.instanceFollowRedirects = false
             connection.connectTimeout = 15_000
             connection.readTimeout = 20_000
-            connection.setRequestProperty("User-Agent", "AutoDrive/$versionName")
+            connection.setRequestProperty("User-Agent", "$filePrefix/$versionName")
             connection.setRequestProperty("Accept", "application/vnd.github+json, application/octet-stream, */*")
             connection.setRequestProperty("X-GitHub-Api-Version", "2022-11-28")
             try {

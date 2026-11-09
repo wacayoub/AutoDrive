@@ -2,6 +2,20 @@
 
 Application Android 13+ indépendante pour l’Incarlink et les téléphones compatibles. Après l’installation de l’APK signé, ouvrir **Radio Maroc & Coran** depuis la grille d’applications de Quickstep. Une connexion Internet est nécessaire pour écouter.
 
+## Mises à jour en ligne
+
+Installer une fois la version **1.9.0** par-dessus l’ancienne. À l’ouverture, la radio vérifie si une nouvelle version compatible est publiée sur GitHub. La flèche **Mises à jour** en haut permet aussi de lancer la recherche. **OK** télécharge et vérifie l’APK, puis ouvre l’installateur. Au premier passage, Android peut demander d’autoriser **Radio Maroc & Coran** comme source. Revenir ensuite à la radio pour poursuivre et confirmer **Mettre à jour** dans Android. Les favoris et réglages sont conservés. [Autorisation d’installation Android](https://developer.android.com/reference/android/content/pm/PackageManager#canRequestPackageInstalls()).
+
+La vérification automatique s’effectue à l’ouverture au plus une fois par jour après une recherche réussie. Elle fonctionne au premier plan. Un téléchargement déjà autorisé attend le retour dans la radio avant d’ouvrir l’installateur. **Reprendre l’installation** permet de rouvrir l’installateur pour un fichier déjà vérifié.
+
+Pour publier une mise à jour, augmenter le code et le nom de version, signer l’APK avec le certificat Radio Maroc habituel, puis publier avec la commande ci-dessous depuis la racine du dépôt. Le manifeste `radio-maroc-update.json` est généré à partir de l’APK. Le canal `radio-maroc-vX.Y.Z` est distinct de la dernière version stable du lanceur AutoDrive. [Canal GitHub Releases](https://github.com/wacayoub/AutoDrive/releases).
+
+```sh
+python tools/github_release.py --radio-maroc --apk radio-maroc/build/outputs/apk/release/radio-maroc-release.apk --output build/radio-publish
+```
+
+## Écoute
+
 L’interface graphite s’inspire de la liste de chaînes de **Metrix FHD Neo** sur Enigma2. En paysage, le lecteur regroupe le grand picon, le titre, l’état du flux et les commandes à gauche. Le direct s’affiche en vert et la perte de connexion en ambre. La liste à droite affiche un picon par station et surligne la ligne active en bleu. Installer l’APK sur la version précédente conserve les favoris et la dernière station enregistrée. [Skin de référence](https://www.sat-4-all.com/board/topic/341110-skin-metrixfhd-neo/).
 
 - **Radio Maroc** réunit les radios SNRT, les autres stations de la sélection et les flux HTTPS marocains de Radio Browser. Les parts d’audience publiées pour le deuxième trimestre 2025 déterminent les premières places et s’affichent sous le nom de chaque station concernée avec la mention « T2 2025 ». Les autres radios sont classées selon les clics des dernières 24 heures disponibles dans l’annuaire. Les radios sans données suivent en fin de liste. [Résultats publiés par Aujourd’hui le Maroc](https://aujourdhui.ma/culture/elle-a-accumule-une-part-daudience-de-1536-la-radio-mohammed-vi-du-saint-coran-en-tete-du-podium) · [Documentation de Radio Browser](https://de1.api.radio-browser.info/).

@@ -6,6 +6,7 @@ android {
     namespace 'com.autodrive.launcher'
     compileSdk 35
     sourceSets.main.java.srcDir rootProject.file('shared-radio/src/main/java')
+    sourceSets.main.java.srcDir rootProject.file('shared-update/src/main/java')
     defaultConfig {
         applicationId 'com.autodrive.launcher'
         minSdk 33
