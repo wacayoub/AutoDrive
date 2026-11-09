@@ -7,21 +7,23 @@ La version **1.2.0** s’inspire de l’interface de chaînes de **Metrix FHD Ne
 - **Radio Maroc** affiche 12 flux directs. Les stations mesurées individuellement sont en tête, par part d’audience décroissante selon Radiométrie Maroc au deuxième trimestre 2025. Les autres stations suivent dans leur ordre précédent. La mesure agrégée du réseau Radio Plus ne donne pas de rang individuel à l’antenne d’Agadir. [Résultats de Radiométrie Maroc, publiés par Aujourd’hui le Maroc](https://aujourdhui.ma/culture/elle-a-accumule-une-part-daudience-de-1536-la-radio-mohammed-vi-du-saint-coran-en-tete-du-podium).
 - **القرآن** propose 12 flux de récitation, dont بدر التركي, العيون الكوشي, عمر القزابري et محمود خليل الحصري en lecture Warsh. [Flux publiés par MP3Quran](https://www.mp3quran.net/api/v3/radios?language=ar).
 - **التجويد** regroupe quatre flux du **المصحف المجوّد**. On y retrouve عبد الباسط عبد الصمد, محمد صديق المنشاوي, محمود خليل الحصري et محمود علي البنا. Le flux مجوّد d’Al-Minshawi garde son adresse de lecture pour préserver les favoris enregistrés.
-- **صلوات الحرم** rassemble six enregistrements audio de prières à la Mosquée sacrée de La Mecque. Chaque entrée indique le récitant, la prière et la date. Les fichiers sont lus depuis les liens publics de Haramain Salaah Recordings, hébergés par QuranicAudio pour l’écoute personnelle. [Archives Haramain](https://haramain.info/) · [Conditions d’utilisation de QuranicAudio](https://quranicaudio.com/about).
+- **تلاوات الحرم** rassemble six extraits coraniques du Fajr, du Maghrib et de l’Isha à la Mosquée sacrée de La Mecque. Chaque extrait commence après la Fatiha et s’arrête avant le passage au rukūʿ. L’entrée indique le récitant, la sourate, la prière et la date. Le lecteur utilise les liens publics de Haramain Salaah Recordings, hébergés par QuranicAudio pour l’écoute personnelle. [Archives Haramain](https://haramain.info/) · [Conditions d’utilisation de QuranicAudio](https://quranicaudio.com/about).
 - Les étoiles enregistrent les favoris. La recherche et les commandes précédente/suivante suivent la liste affichée. La dernière station est mémorisée pour une reprise manuelle. La lecture active continue en arrière-plan et peut être mise en pause depuis les commandes média Android.
 
 Le catalogue est embarqué et les flux sont lus directement depuis leurs hébergeurs. Les lecteurs officiels de certains diffuseurs sont les sources de leurs URL publiques. Les autres entrées de la sélection marocaine proviennent de l’[annuaire Radio Browser](https://www.radio-browser.info/). Les stations et horaires peuvent évoluer. [HIT RADIO](https://www.hitradio.ma/live) · [Radio Mars](https://radiomars.ma/radio-live/) · [Chada FM](https://chada.ma/test-live/) · [Radio Aswat](https://radioaswat.ma/).
 
 ## Archives de La Mecque
 
-| Prière | Récitant | Date | Notice d’origine |
-| --- | --- | --- | --- |
-| الفجر | ماهر المعيقلي | 7 nov. 2026 | [Haramain](http://www.haramain.info/2026/11/makkah-fajr-07th-november-2026.html) |
-| الفجر | عبد الله الجهني | 8 nov. 2026 | [Haramain](http://www.haramain.info/2026/11/makkah-fajr-08th-november-2026.html) |
-| المغرب | بدر التركي | 8 nov. 2026 | [Haramain](http://www.haramain.info/2026/11/makkah-maghrib-08th-november-2026.html) |
-| المغرب | ماهر المعيقلي | 6 nov. 2026 | [Haramain](http://www.haramain.info/2026/11/makkah-maghrib-06th-november-2026.html) |
-| العشاء | ياسر الدوسري | 8 nov. 2026 | [Haramain](http://www.haramain.info/2026/11/makkah-isha-08th-november-2026.html) |
-| العشاء | بدر التركي | 26 oct. 2026 | [Haramain](http://www.haramain.info/2026/10/makkah-isha-26th-october-2026.html) |
+| Prière | Récitant | Sourate | Date | Notice d’origine |
+| --- | --- | --- | --- | --- |
+| الفجر | ماهر المعيقلي | الرحمن | 7 nov. 2026 | [Haramain](http://www.haramain.info/2026/11/makkah-fajr-07th-november-2026.html) |
+| الفجر | عبد الله الجهني | الأنعام | 8 nov. 2026 | [Haramain](http://www.haramain.info/2026/11/makkah-fajr-08th-november-2026.html) |
+| المغرب | بدر التركي | التين | 8 nov. 2026 | [Haramain](http://www.haramain.info/2026/11/makkah-maghrib-08th-november-2026.html) |
+| المغرب | ماهر المعيقلي | الأحزاب | 6 nov. 2026 | [Haramain](http://www.haramain.info/2026/11/makkah-maghrib-06th-november-2026.html) |
+| العشاء | ياسر الدوسري | الفرقان | 8 nov. 2026 | [Haramain](http://www.haramain.info/2026/11/makkah-isha-08th-november-2026.html) |
+| العشاء | بدر التركي | التوبة | 26 oct. 2026 | [Haramain](http://www.haramain.info/2026/10/makkah-isha-26th-october-2026.html) |
+
+Les limites de lecture ont été relevées dans l’audio source à l’aide de la transcription et de la forme d’onde. Les adresses des six fichiers servent toujours d’identifiant pour retrouver les favoris des anciennes versions.
 
 ## Crédits photo
 

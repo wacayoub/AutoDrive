@@ -7,7 +7,7 @@ import com.autodrive.launcher.RadioCategory
 import com.autodrive.launcher.RadioStation
 
 internal enum class StationTab(val label: String) {
-    MOROCCO("Radio Maroc"), QURAN("القرآن"), TAJWID("التجويد"), HARAM("صلوات الحرم"), FAVORITES("★ Favoris")
+    MOROCCO("Radio Maroc"), QURAN("القرآن"), TAJWID("التجويد"), HARAM("تلاوات الحرم"), FAVORITES("★ Favoris")
 }
 
 internal object Stations {
@@ -55,18 +55,27 @@ internal object Stations {
         quranStation("محمود خليل الحصري", "mahmoud_khalil_alhussary_mojawwad"),
         quranStation("محمود علي البنا", "mahmoud_ali__albanna_mojawwad"),
     )
-    // Public audio links published by Haramain Salaah Recordings for Makkah.
-    private fun haramRecording(reciter: String, prayer: String, file: String) =
-        RadioStation("$reciter · صلاة $prayer", "https://mirrors.quranicaudio.com/haramain/$file.mp3")
+    private data class HaramExcerpt(val station: RadioStation, val startMs: Long, val endMs: Long)
 
-    private val haram = listOf(
-        haramRecording("ماهر المعيقلي", "الفجر", "2026/11/makkah/SheikhMuayqali_Fajr-2026-11-07"),
-        haramRecording("عبد الله الجهني", "الفجر", "2026/11/makkah/SheikhJuhany_Fajr-2026-11-08"),
-        haramRecording("بدر التركي", "المغرب", "2026/11/makkah/SheikhBadr_al_Turki_Maghrib-2026-11-08"),
-        haramRecording("ماهر المعيقلي", "المغرب", "2026/11/makkah/SheikhMuayqali_Maghrib-2026-11-06"),
-        haramRecording("ياسر الدوسري", "العشاء", "2026/11/makkah/SheikhDosary_Isha-2026-11-08"),
-        haramRecording("بدر التركي", "العشاء", "2026/10/makkah/SheikhBadr_al_Turki_Isha-2026-10-26"),
+    private fun haramExcerpt(
+        reciter: String, surah: String, prayer: String, file: String, startMs: Long, endMs: Long,
+    ) = HaramExcerpt(
+        RadioStation("$reciter · سورة $surah", "https://mirrors.quranicaudio.com/haramain/$file.mp3",
+            tags = setOf("صلاة $prayer")),
+        startMs,
+        endMs,
     )
+
+    // Play only the first recitation after Al-Fatiha, ending before the transition to bowing.
+    private val haram = listOf(
+        haramExcerpt("ماهر المعيقلي", "الرحمن", "الفجر", "2026/11/makkah/SheikhMuayqali_Fajr-2026-11-07", 124_400, 384_500),
+        haramExcerpt("عبد الله الجهني", "الأنعام", "الفجر", "2026/11/makkah/SheikhJuhany_Fajr-2026-11-08", 125_800, 399_100),
+        haramExcerpt("بدر التركي", "التين", "المغرب", "2026/11/makkah/SheikhBadr_al_Turki_Maghrib-2026-11-08", 108_700, 162_700),
+        haramExcerpt("ماهر المعيقلي", "الأحزاب", "المغرب", "2026/11/makkah/SheikhMuayqali_Maghrib-2026-11-06", 101_550, 196_300),
+        haramExcerpt("ياسر الدوسري", "الفرقان", "العشاء", "2026/11/makkah/SheikhDosary_Isha-2026-11-08", 106_950, 317_250),
+        haramExcerpt("بدر التركي", "التوبة", "العشاء", "2026/10/makkah/SheikhBadr_al_Turki_Isha-2026-10-26", 113_200, 275_750),
+    ).associateBy { it.station.url }
+    private val haramStations = haram.values.map { it.station }
     private val aliases = mapOf(
         "بدر التركي" to listOf("Badr Turki", "Badr Al Turki", "Bader Alturki"),
         "العيون الكوشي" to listOf("Laayoun El Kouchi", "Al Oyoun Al Koshi"),
@@ -78,16 +87,16 @@ internal object Stations {
         "ياسر الدوسري" to listOf("Yasser Al Dosari", "Yasser Al Dossari"),
         "عبد الله الجهني" to listOf("Abdullah Al Juhany", "عبدالله الجهني"),
     )
-    val all = morocco + quran + tajwid + haram
+    val all = morocco + quran + tajwid + haramStations
 
     fun reciterName(station: RadioStation): String = station.name.substringBefore(" ·")
-    fun isRecording(station: RadioStation): Boolean = station in haram
+    fun isRecording(station: RadioStation): Boolean = station.url in haram
 
     fun visible(tab: StationTab, favorites: Set<String>, query: String): List<RadioStation> = when (tab) {
         StationTab.MOROCCO -> morocco
         StationTab.QURAN -> quran
         StationTab.TAJWID -> tajwid
-        StationTab.HARAM -> haram
+        StationTab.HARAM -> haramStations
         StationTab.FAVORITES -> all.filter { it.url in favorites }
     }.filter { station ->
         RadioCatalogue.search(station, query) || aliases[reciterName(station)].orEmpty().any {
@@ -96,13 +105,22 @@ internal object Stations {
     }
 
     fun subtitle(station: RadioStation): String = when {
-        isRecording(station) -> "المسجد الحرام · ${station.url.removeSuffix(".mp3").takeLast(10)}"
+        isRecording(station) -> "${station.tags.single()} · المسجد الحرام · ${station.url.removeSuffix(".mp3").takeLast(10)}"
         station in tajwid -> "المصحف المجوّد · MP3Quran"
         station == badr -> "حفص عن عاصم · MP3Quran"
         else -> station.tags.firstOrNull() ?: "القرآن الكريم · MP3Quran"
     }
 
-    fun item(station: RadioStation): MediaItem = MediaItem.Builder().setMediaId(station.url).setUri(station.url)
+    fun item(station: RadioStation): MediaItem = MediaItem.Builder()
+        .setMediaId(station.url)
+        .setUri(station.url)
         .setMediaMetadata(MediaMetadata.Builder().setTitle(station.name).setArtist(subtitle(station)).build())
-        .build()
+        .apply {
+            haram[station.url]?.let { excerpt ->
+                setClippingConfiguration(MediaItem.ClippingConfiguration.Builder()
+                    .setStartPositionMs(excerpt.startMs)
+                    .setEndPositionMs(excerpt.endMs)
+                    .build())
+            }
+        }.build()
 }

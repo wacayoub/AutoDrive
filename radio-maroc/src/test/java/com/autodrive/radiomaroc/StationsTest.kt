@@ -56,8 +56,9 @@ class StationsTest {
         for (prayer in listOf("الفجر", "المغرب", "العشاء")) {
             val results = Stations.visible(StationTab.HARAM, emptySet(), "صلاة $prayer")
             assertEquals(2, results.size)
-            assertTrue(results.all { it.name.endsWith(prayer) && Stations.subtitle(it).startsWith("المسجد الحرام · 2026-") })
+            assertTrue(results.all { Stations.subtitle(it).startsWith("صلاة $prayer · المسجد الحرام · 2026-") })
         }
+        assertEquals("بدر التركي · سورة التين", Stations.visible(StationTab.HARAM, emptySet(), "سورة التين").single().name)
         val badr = Stations.visible(StationTab.HARAM, emptySet(), "Badr Turki")
         assertEquals(2, badr.size)
         assertTrue(badr.all { Stations.reciterName(it) == "بدر التركي" })
