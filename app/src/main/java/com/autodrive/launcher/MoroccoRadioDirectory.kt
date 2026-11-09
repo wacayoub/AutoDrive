@@ -4,8 +4,6 @@ import android.content.Context
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
-import java.net.HttpURLConnection
-import java.net.URL
 
 /** Public directory metadata only. Streams remain on their publishers' servers. */
 internal class MoroccoRadioDirectory(context: Context) {
@@ -27,33 +25,13 @@ internal class MoroccoRadioDirectory(context: Context) {
     }.getOrDefault(true)
 
     fun fetch(): List<RadioStation> {
-        var lastError: Exception? = null
-        for (server in listOf("de1.api.radio-browser.info", "de2.api.radio-browser.info")) {
-            try {
-                val connection = URL("https://$server/json/stations/bycountrycodeexact/MA?hidebroken=true&order=clickcount&reverse=true&limit=300")
-                    .openConnection() as HttpURLConnection
-                val text = try {
-                    connection.connectTimeout = 8_000
-                    connection.readTimeout = 10_000
-                    connection.instanceFollowRedirects = false
-                    connection.setRequestProperty("User-Agent", userAgent)
-                    connection.setRequestProperty("Accept", "application/json")
-                    check(connection.responseCode == 200) { "Directory unavailable" }
-                    connection.inputStream.use { stream ->
-                        val bytes = stream.readNBytes(MAX_BYTES + 1)
-                        check(bytes.size <= MAX_BYTES) { "Directory too large" }
-                        bytes.toString(Charsets.UTF_8)
-                    }
-                } finally { connection.disconnect() }
-                val result = parse(text)
-                check(result.isNotEmpty()) { "No compatible stations" }
-                val temporary = File(cache.parentFile, cache.name + ".tmp")
-                temporary.writeText(JSONArray(result.map { JSONObject().put("name", it.name).put("url", it.url).put("logo", it.logoUrl.orEmpty()).put("tags", it.tags.joinToString(",")) }).toString())
-                check(temporary.renameTo(cache)) { "Directory cache update failed" }
-                return result
-            } catch (error: Exception) { lastError = error }
+        val result = RadioBrowser.read("stations/bycountrycodeexact/MA?hidebroken=true&order=clickcount&reverse=true&limit=300", userAgent) {
+            parse(it).also { rows -> check(rows.isNotEmpty()) { "No compatible stations" } }
         }
-        throw lastError ?: IllegalStateException("Directory unavailable")
+        val temporary = File(cache.parentFile, cache.name + ".tmp")
+        temporary.writeText(JSONArray(result.map { JSONObject().put("name", it.name).put("url", it.url).put("logo", it.logoUrl.orEmpty()).put("tags", it.tags.joinToString(",")) }).toString())
+        check(temporary.renameTo(cache)) { "Directory cache update failed" }
+        return result
     }
     companion object {
         // Public live URLs used by each broadcaster's own website; useful if the directory is unavailable.

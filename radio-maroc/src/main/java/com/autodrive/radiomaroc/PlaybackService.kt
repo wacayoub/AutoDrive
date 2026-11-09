@@ -85,7 +85,14 @@ internal class PlaybackService : MediaSessionService() {
             .setCallback(object : MediaSession.Callback {
                 override fun onAddMediaItems(session: MediaSession, controller: MediaSession.ControllerInfo,
                     mediaItems: List<MediaItem>): ListenableFuture<List<MediaItem>> = Futures.immediateFuture(
-                    mediaItems.mapNotNull { item -> Stations.all.firstOrNull { it.url == item.mediaId }?.let(Stations::item) }
+                    mediaItems.mapNotNull { item ->
+                        val station = Stations.all.firstOrNull { it.url == item.mediaId }
+                        when {
+                            station != null -> if (Stations.officialPlayer(station) == null) Stations.item(station) else null
+                            controller.uid == applicationInfo.uid && controller.packageName == packageName -> Stations.directoryItem(item)
+                            else -> null
+                        }
+                    }
                 )
             }).build()
         connectivity.registerDefaultNetworkCallback(networkCallback, Handler(Looper.getMainLooper()))

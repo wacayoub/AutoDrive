@@ -1,13 +1,16 @@
 package com.autodrive.radiomaroc
 
+import android.net.Uri
+import android.os.Bundle
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
+import androidx.media3.common.MimeTypes
 import com.autodrive.launcher.RadioCatalogue
 import com.autodrive.launcher.RadioCategory
 import com.autodrive.launcher.RadioStation
 
 internal enum class StationTab(val label: String) {
-    MOROCCO("Radio Maroc"), QURAN("القرآن"), TAJWID("التجويد"), HARAM("تلاوات الحرم"), FAVORITES("★ Favoris")
+    MOROCCO("Radio Maroc"), WORLD("Monde"), QURAN("القرآن"), TAJWID("التجويد"), HARAM("تلاوات الحرم"), FAVORITES("★ Favoris")
 }
 
 internal object Stations {
@@ -39,6 +42,10 @@ internal object Stations {
         RadioStation("Medina FM Tarab", "https://medinatarab.ice.infomaniak.ch/medinatarab-128.mp3",
             logoUrl = "https://api.medinafm.ma/uploads/f0b5829f-c5ed-4acc-a775-d921ecd2edc7-w320.webp", tags = setOf("Tarab")),
     )
+    val snrt = RadioCatalogue.featured.filter { RadioCatalogue.officialPlayer(it) != null }
+    private val radio2m = RadioStation("Radio 2M", "https://radio2m.ma/", logoUrl = "https://radio2m.ma/favRadio2M.png")
+    private val localRadios = morocco + snrt + radio2m
+    private val localRadioNames = localRadios.map { RadioCatalogue.searchKey(it.name) }.toSet()
     private fun quranStation(name: String, path: String) = RadioStation(name, "https://backup.qurango.net/radio/$path")
 
     private val badr = quranStation("بدر التركي", "bader")
@@ -96,26 +103,39 @@ internal object Stations {
         "ياسر الدوسري" to listOf("Yasser Al Dosari", "Yasser Al Dossari"),
         "عبد الله الجهني" to listOf("Abdullah Al Juhany", "عبدالله الجهني"),
     )
-    val all = morocco + quran + tajwid + haramStations
+    val all = localRadios + quran + tajwid + haramStations
 
     fun reciterName(station: RadioStation): String = station.name.substringBefore(" ·")
     fun isRecording(station: RadioStation): Boolean = station.url in haram
+    fun isReciter(station: RadioStation): Boolean = station in quran || station in tajwid || isRecording(station)
+    fun officialPlayer(station: RadioStation?): String? =
+        RadioCatalogue.officialPlayer(station) ?: radio2m.url.takeIf { station?.url == it }
 
     fun visible(
         tab: StationTab, favorites: Set<String>, query: String, radioFavoritesOnly: Boolean = false,
+        directory: List<RadioStation> = emptyList(), bookmarks: List<RadioStation> = emptyList(), snrtOnly: Boolean = false,
     ): List<RadioStation> = when (tab) {
-        StationTab.MOROCCO -> if (radioFavoritesOnly) morocco.filter { it.url in favorites } else morocco
+        StationTab.MOROCCO -> {
+            val listed = if (snrtOnly) snrt else (localRadios + (directory + bookmarks).filter {
+                it.countryCode == "MA" && RadioCatalogue.searchKey(it.name) !in localRadioNames
+            }).distinctBy { it.url }
+            if (radioFavoritesOnly) listed.filter { it.url in favorites } else listed
+        }
+        StationTab.WORLD -> directory
         StationTab.QURAN -> quran
         StationTab.TAJWID -> tajwid
         StationTab.HARAM -> haramStations
-        StationTab.FAVORITES -> all.filter { it.url in favorites }
+        StationTab.FAVORITES -> (all + bookmarks).distinctBy { it.url }.filter { it.url in favorites }
     }.filter { station ->
-        RadioCatalogue.search(station, query) || aliases[reciterName(station)].orEmpty().any {
+        query.isBlank() || RadioCatalogue.search(station, query) || aliases[reciterName(station)].orEmpty().any {
             RadioCatalogue.searchKey(it).contains(RadioCatalogue.searchKey(query))
         }
     }
 
     fun subtitle(station: RadioStation): String = when {
+        station in snrt -> "SNRT Live · lecteur officiel"
+        station == radio2m -> "Radio 2M · lecteur officiel"
+        station.countryCode != null -> StationDirectory.countryName(station.countryCode)
         isRecording(station) -> "${station.tags.single()} · المسجد الحرام · ${station.url.removeSuffix(".mp3").takeLast(10)}"
         station in tajwid -> "المصحف المجوّد · MP3Quran"
         station == badr -> "حفص عن عاصم · MP3Quran"
@@ -127,6 +147,11 @@ internal object Stations {
         .setUri(station.url)
         .setMediaMetadata(MediaMetadata.Builder().setTitle(station.name).setArtist(subtitle(station)).build())
         .apply {
+            if (station.isHls) setMimeType(MimeTypes.APPLICATION_M3U8)
+            if (station.countryCode != null) setRequestMetadata(MediaItem.RequestMetadata.Builder()
+                .setMediaUri(Uri.parse(station.url))
+                .setExtras(Bundle().apply { putBoolean("hls", station.isHls) })
+                .build())
             haram[station.url]?.let { excerpt ->
                 setClippingConfiguration(MediaItem.ClippingConfiguration.Builder()
                     .setStartPositionMs(excerpt.startMs)
@@ -134,4 +159,13 @@ internal object Stations {
                     .build())
             }
         }.build()
+
+    fun directoryItem(request: MediaItem): MediaItem? {
+        val metadata = request.requestMetadata
+        val url = metadata.mediaUri?.toString()?.let(RadioStation::validUrl) ?: return null
+        if (url != request.mediaId) return null
+        return MediaItem.Builder().setMediaId(url).setUri(url).setMediaMetadata(request.mediaMetadata)
+            .apply { if (metadata.extras?.getBoolean("hls") == true) setMimeType(MimeTypes.APPLICATION_M3U8) }
+            .build()
+    }
 }

@@ -2,14 +2,17 @@ package com.autodrive.radiomaroc
 
 import android.app.Activity
 import android.app.AlertDialog
+import android.content.ActivityNotFoundException
 import android.content.ComponentName
 import android.content.Context
+import android.content.Intent
 import android.content.SharedPreferences
 import android.content.res.ColorStateList
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.RippleDrawable
+import android.net.Uri
 import android.os.Bundle
 import android.text.Editable
 import android.text.SpannableStringBuilder
@@ -25,6 +28,7 @@ import android.view.ViewGroup
 import android.view.WindowInsets
 import android.view.inputmethod.EditorInfo
 import android.widget.AbsListView
+import android.widget.ArrayAdapter
 import android.widget.BaseAdapter
 import android.widget.EditText
 import android.widget.FrameLayout
@@ -33,10 +37,12 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ListView
 import android.widget.TextView
+import android.widget.Toast
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.autodrive.launcher.RadioArtwork
+import com.autodrive.launcher.RadioCatalogue
 import com.autodrive.launcher.RadioQueue
 import com.autodrive.launcher.RadioStation
 import com.google.common.util.concurrent.ListenableFuture
@@ -49,8 +55,12 @@ class RadioActivity : Activity() {
     private val amber = 0xFFFFCF73.toInt()
     private lateinit var prefs: SharedPreferences
     private lateinit var artwork: RadioArtwork
+    private lateinit var directory: DirectoryBrowser
     private var tab = StationTab.MOROCCO
     private var radioFavoritesOnly = false
+    private var snrtOnly = false
+    private var country = "FR"
+    private var directoryBookmarks = emptyList<RadioStation>()
     private var favorites = emptySet<String>()
     private var query = ""
     private var rows = emptyList<RadioStation>()
@@ -62,6 +72,9 @@ class RadioActivity : Activity() {
     private var piconsOffline = false
     private lateinit var tabs: Map<StationTab, TextView>
     private lateinit var radioFilter: TextView
+    private lateinit var snrtFilter: TextView
+    private lateinit var countryButton: TextView
+    private lateinit var directoryAction: TextView
     private lateinit var list: ListView
     private lateinit var empty: TextView
     private lateinit var playerTitle: TextView
@@ -84,20 +97,25 @@ class RadioActivity : Activity() {
         super.onCreate(savedInstanceState)
         prefs = getSharedPreferences("radio_maroc", MODE_PRIVATE)
         artwork = RadioArtwork(this, maxImageBytes = 1024 * 1024)
+        directory = DirectoryBrowser(StationDirectory(this)) { renderRows() }
         tab = StationTab.entries.firstOrNull { it.name == prefs.getString("tab", null) } ?: StationTab.MOROCCO
+        country = prefs.getString("world_country", null)?.takeIf { it in StationDirectory.countries && it != "MA" } ?: "FR"
         favorites = prefs.getStringSet("favorites", emptySet()).orEmpty().toSet()
-        savedStation = Stations.all.firstOrNull { it.url == prefs.getString("last_station", null) }
+        directoryBookmarks = StationDirectory.decode(prefs.getString("directory_bookmarks", null).orEmpty())
+        savedStation = findStation(prefs.getString("last_station", null))
         query = savedInstanceState?.getString("query").orEmpty()
         radioFavoritesOnly = savedInstanceState?.getBoolean("radio_favorites_only") == true
+        snrtOnly = savedInstanceState?.getBoolean("snrt_only") == true
         volumeControlStream = android.media.AudioManager.STREAM_MUSIC
         window.setDecorFitsSystemWindows(false)
         setContentView(screen())
-        renderRows()
+        updateDirectory()
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
         outState.putString("query", query)
         outState.putBoolean("radio_favorites_only", radioFavoritesOnly)
+        outState.putBoolean("snrt_only", snrtOnly)
         super.onSaveInstanceState(outState)
     }
 
@@ -115,6 +133,7 @@ class RadioActivity : Activity() {
     }
 
     override fun onDestroy() {
+        directory.close()
         artwork.close()
         super.onDestroy()
     }
@@ -144,6 +163,7 @@ class RadioActivity : Activity() {
         if (piconsOffline && !offline) {
             artwork.retryFailures()
             stationAdapter.notifyDataSetChanged()
+            if (directory.failed) directory.loadMore()
         }
         piconsOffline = offline
         renderPlayer()
@@ -174,9 +194,9 @@ class RadioActivity : Activity() {
                 button(choice.label) {
                     tab = choice
                     prefs.edit().putString("tab", choice.name).apply()
-                    renderRows(resetScroll = true)
+                    updateDirectory(resetScroll = true)
                 }.also { view ->
-                    view.textSize = 13f
+                    view.textSize = 12f
                     addView(view, LinearLayout.LayoutParams(0, dp(48), 1f).apply { marginEnd = dp(4) })
                 }
             }
@@ -226,16 +246,26 @@ class RadioActivity : Activity() {
                 override fun afterTextChanged(text: Editable?) = Unit
                 override fun onTextChanged(text: CharSequence?, start: Int, before: Int, count: Int) {
                     query = text.toString()
-                    renderRows(resetScroll = true)
+                    updateDirectory(resetScroll = true)
                 }
             })
         }
         radioFilter = button("★ Favoris") {
             radioFavoritesOnly = !radioFavoritesOnly
-            renderRows(resetScroll = true)
+            updateDirectory(resetScroll = true)
+        }
+        snrtFilter = button("SNRT") {
+            snrtOnly = !snrtOnly
+            updateDirectory(resetScroll = true)
+        }.apply { contentDescription = "Filtrer les radios SNRT" }
+        countryButton = button("") { chooseCountry() }.apply {
+            maxLines = 2
+            ellipsize = TextUtils.TruncateAt.END
         }
         addView(row().apply {
             addView(search, LinearLayout.LayoutParams(0, -1, 1f))
+            addView(countryButton, LinearLayout.LayoutParams(dp(128), -1).apply { marginStart = dp(6) })
+            addView(snrtFilter, LinearLayout.LayoutParams(dp(58), -1).apply { marginStart = dp(6) })
             addView(radioFilter, LinearLayout.LayoutParams(dp(94), -1).apply { marginStart = dp(6) })
         }, LinearLayout.LayoutParams(-1, dp(48)).apply { bottomMargin = dp(6) })
         addView(FrameLayout(context).apply {
@@ -251,6 +281,55 @@ class RadioActivity : Activity() {
             addView(empty, FrameLayout.LayoutParams(-1, -1))
             list.emptyView = empty
         }, LinearLayout.LayoutParams(-1, 0, 1f))
+        directoryAction = button("") { directory.loadMore() }
+        addView(directoryAction, LinearLayout.LayoutParams(-1, dp(44)).apply { topMargin = dp(4) })
+    }
+
+    private fun chooseCountry() {
+        val countries = StationDirectory.countries.filter { it != "MA" }
+        var shown = countries
+        val adapter = ArrayAdapter<String>(this, android.R.layout.simple_list_item_1)
+        val dialog = AlertDialog.Builder(this).setTitle("Choisir un pays").setNegativeButton("Fermer", null).create()
+        val content = column().apply {
+            setPadding(dp(16), 0, dp(16), 0)
+            val input = EditText(context).apply {
+                hint = "Rechercher un pays"
+                setSingleLine(true)
+                imeOptions = EditorInfo.IME_ACTION_DONE or EditorInfo.IME_FLAG_NO_EXTRACT_UI
+                setOnEditorActionListener { _, action, _ ->
+                    if (action != EditorInfo.IME_ACTION_DONE) return@setOnEditorActionListener false
+                    dialog.window?.insetsController?.hide(WindowInsets.Type.ime())
+                    clearFocus()
+                    true
+                }
+            }
+            addView(input, LinearLayout.LayoutParams(-1, dp(48)))
+            addView(ListView(context).apply {
+                this.adapter = adapter
+                setOnItemClickListener { _, _, position, _ ->
+                    country = shown[position]
+                    prefs.edit().putString("world_country", country).apply()
+                    dialog.dismiss()
+                    updateDirectory(resetScroll = true)
+                }
+            }, LinearLayout.LayoutParams(-1, dp(200)))
+            adapter.addAll(shown.map(StationDirectory::countryName))
+            input.addTextChangedListener(object : TextWatcher {
+                override fun beforeTextChanged(text: CharSequence?, start: Int, count: Int, after: Int) = Unit
+                override fun afterTextChanged(text: Editable?) = Unit
+                override fun onTextChanged(text: CharSequence?, start: Int, before: Int, count: Int) {
+                    val key = RadioCatalogue.searchKey(text.toString())
+                    shown = countries.filter {
+                        RadioCatalogue.searchKey(StationDirectory.countryName(it)).contains(key) || it.lowercase() == key
+                    }
+                    adapter.clear()
+                    adapter.addAll(shown.map(StationDirectory::countryName))
+                }
+            })
+        }
+        dialog.setView(content)
+        dialog.window?.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN)
+        dialog.show()
     }
 
     private fun stationPanel(wide: Boolean): View = column().apply {
@@ -369,7 +448,11 @@ class RadioActivity : Activity() {
             layoutDirection = directionOf(station.name)
             background = pressable(if (selected) R.drawable.radio_selected else R.drawable.radio_card)
             isActivated = selected
-            contentDescription = "Écouter ${station.name}"
+            contentDescription = when {
+                station in Stations.snrt -> "Ouvrir ${station.name} sur SNRT Live"
+                Stations.officialPlayer(station) != null -> "Ouvrir le lecteur officiel de ${station.name}"
+                else -> "Écouter ${station.name}"
+            }
             setOnClickListener { select(station) }
             number.text = if (playing) "▶" else position.toString().padStart(2, '0')
             badge.bind(station)
@@ -381,7 +464,7 @@ class RadioActivity : Activity() {
             star.contentDescription = if (favorite) "Retirer ${station.name} des favoris" else "Ajouter ${station.name} aux favoris"
             star.setOnClickListener {
                 favorites = if (favorite) favorites - station.url else favorites + station.url
-                prefs.edit().putStringSet("favorites", favorites).apply()
+                persistStations(station)
                 renderRows()
             }
         }
@@ -410,7 +493,7 @@ class RadioActivity : Activity() {
             background = getDrawable(R.drawable.radio_control)
             initials.text = when {
                 station == null -> "FM"
-                station.tags.isEmpty() -> "ق"
+                Stations.isReciter(station) -> "ق"
                 else -> station.name.split(' ').take(2).joinToString("") { it.take(1) }
             }
             initials.visibility = View.VISIBLE
@@ -474,9 +557,25 @@ class RadioActivity : Activity() {
         dialog.findViewById<TextView>(android.R.id.message)?.movementMethod = LinkMovementMethod.getInstance()
     }
 
+    private fun updateDirectory(resetScroll: Boolean = false) {
+        val code = when {
+            tab == StationTab.MOROCCO && !radioFavoritesOnly && !snrtOnly -> "MA"
+            tab == StationTab.WORLD -> country
+            else -> null
+        }
+        directory.open(code?.let { StationDirectory.Query(it, query) })
+        renderRows(resetScroll)
+    }
+
     private fun renderRows(resetScroll: Boolean = false) {
-        rows = Stations.visible(tab, favorites, query, radioFavoritesOnly)
+        rows = Stations.visible(tab, favorites, query, radioFavoritesOnly, directory.stations, directoryBookmarks, snrtOnly)
         val onRadioTab = tab == StationTab.MOROCCO
+        snrtFilter.visibility = if (onRadioTab) View.VISIBLE else View.GONE
+        snrtFilter.isSelected = snrtOnly
+        snrtFilter.background = pressable(if (snrtOnly) R.drawable.radio_selected else R.drawable.radio_control)
+        countryButton.visibility = if (tab == StationTab.WORLD) View.VISIBLE else View.GONE
+        countryButton.text = "${StationDirectory.countryName(country)} ▾"
+        countryButton.contentDescription = "Choisir un pays · ${StationDirectory.countryName(country)}"
         radioFilter.visibility = if (onRadioTab) View.VISIBLE else View.GONE
         radioFilter.isSelected = radioFavoritesOnly
         radioFilter.contentDescription =
@@ -485,8 +584,18 @@ class RadioActivity : Activity() {
         empty.text = when {
             onRadioTab && radioFavoritesOnly && query.isBlank() -> "Ajoute une radio marocaine avec ☆"
             tab == StationTab.FAVORITES && favorites.isEmpty() -> "Ajoute une station avec ☆"
+            directory.loading -> "Chargement des radios…"
+            directory.failed -> "Annuaire indisponible"
+            tab == StationTab.WORLD && query.isBlank() -> "Aucune station HTTPS disponible pour ce pays"
             else -> "Aucune station trouvée"
         }
+        directoryAction.text = when {
+            directory.loading -> "Chargement de l’annuaire…"
+            directory.failed -> "Réessayer l’annuaire"
+            else -> "Charger plus de radios"
+        }
+        directoryAction.visibility = if (directory.hasMore) View.VISIBLE else View.GONE
+        enable(directoryAction, !directory.loading)
         for ((choice, button) in tabs) {
             button.isSelected = choice == tab
             button.background = pressable(if (choice == tab) R.drawable.radio_selected else R.drawable.radio_control)
@@ -499,7 +608,8 @@ class RadioActivity : Activity() {
     private fun renderPlayer() {
         val player = controller
         val active = player?.currentMediaItem?.mediaId
-        val station = Stations.all.firstOrNull { it.url == active } ?: savedStation
+        val station = findStation(active) ?: savedStation
+        val official = Stations.officialPlayer(station) != null
         val recording = station?.let(Stations::isRecording) == true
         val ended = player?.playbackState == Player.STATE_ENDED
         val waitingForNetwork = player?.let(::waitingForNetwork) == true
@@ -511,6 +621,8 @@ class RadioActivity : Activity() {
         playerSubtitle.text = station?.let(Stations::subtitle) ?: "Sélectionne une chaîne dans la liste"
         playerArtwork.bind(station)
         playerStatus.text = when {
+            station in Stations.snrt -> "Écouter sur SNRT Live"
+            official -> "Ouvrir le lecteur officiel"
             connectionFailed -> "Lecteur indisponible · réessayer"
             player == null -> "Connexion au lecteur…"
             waitingForNetwork && !playing -> "Connexion perdue · reprise automatique"
@@ -529,8 +641,13 @@ class RadioActivity : Activity() {
             else -> muted
         })
         playButton.setImageResource(if (requesting) R.drawable.ic_radio_pause else R.drawable.ic_radio_play)
-        playButton.contentDescription = if (requesting) "Mettre en pause" else "Écouter"
-        enable(playButton, (player != null && (station != null || rows.isNotEmpty())) || connectionFailed)
+        playButton.contentDescription = when {
+            station in Stations.snrt -> "Ouvrir le lecteur officiel SNRT"
+            official -> "Ouvrir le lecteur officiel"
+            requesting -> "Mettre en pause"
+            else -> "Écouter"
+        }
+        enable(playButton, official || (player != null && (station != null || rows.isNotEmpty())) || connectionFailed)
         enable(previous, player != null && rows.size > 1)
         enable(next, player != null && rows.size > 1)
         val highlight = (active ?: savedStation?.url) to playing
@@ -541,9 +658,22 @@ class RadioActivity : Activity() {
     }
 
     private fun select(station: RadioStation) {
+        Stations.officialPlayer(station)?.let { url ->
+            try {
+                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                controller?.pause()
+                controller?.clearMediaItems()
+                savedStation = station
+                persistStations(station)
+                renderPlayer()
+            } catch (_: ActivityNotFoundException) {
+                Toast.makeText(this, "Aucun navigateur disponible pour le lecteur officiel", Toast.LENGTH_LONG).show()
+            }
+            return
+        }
         val player = controller ?: return
         savedStation = station
-        prefs.edit().putString("last_station", station.url).apply()
+        persistStations(station)
         player.setMediaItem(Stations.item(station))
         player.prepare()
         player.play()
@@ -551,14 +681,31 @@ class RadioActivity : Activity() {
     }
 
     private fun toggle() {
+        val official = savedStation?.takeIf { Stations.officialPlayer(it) != null }
+        if (official != null) {
+            select(official)
+            return
+        }
         val player = controller ?: run { if (connectionFailed) connectPlayer(); return }
-        val current = Stations.all.firstOrNull { it.url == player.currentMediaItem?.mediaId }
+        val current = findStation(player.currentMediaItem?.mediaId)
         val playable = player.playerError == null && player.playbackState != Player.STATE_ENDED
         when {
             (playable || waitingForNetwork(player)) && player.playWhenReady -> player.pause()
             playable && player.playbackState == Player.STATE_READY && current?.let(Stations::isRecording) == true -> player.play()
             else -> (current ?: savedStation ?: rows.firstOrNull())?.let(::select)
         }
+    }
+
+    private fun findStation(url: String?): RadioStation? =
+        Stations.all.firstOrNull { it.url == url } ?: directoryBookmarks.firstOrNull { it.url == url }
+
+    private fun persistStations(station: RadioStation) {
+        if (station.countryCode != null) {
+            directoryBookmarks = listOf(station) + directoryBookmarks.filter { it.url != station.url }
+        }
+        directoryBookmarks = directoryBookmarks.filter { it.url == savedStation?.url || it.url in favorites }
+        prefs.edit().putStringSet("favorites", favorites).putString("last_station", savedStation?.url)
+            .putString("directory_bookmarks", StationDirectory.encode(directoryBookmarks)).apply()
     }
 
     private fun waitingForNetwork(player: MediaController): Boolean =

@@ -8,20 +8,37 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class StationsTest {
-    @Test fun categoriesUseDistinctDirectHttpsStreams() {
+    @Test fun categoriesUseDistinctHttpsSourcesAndOfficialSnrtPlayers() {
         val morocco = Stations.visible(StationTab.MOROCCO, emptySet(), "")
         val quran = Stations.visible(StationTab.QURAN, emptySet(), "")
         val tajwid = Stations.visible(StationTab.TAJWID, emptySet(), "")
-        assertEquals(12, morocco.size)
-        assertEquals(12, morocco.mapNotNull { it.logoUrl?.let(RadioStation::validUrl) }.toSet().size)
+        assertEquals(17, morocco.size)
+        assertEquals(12, morocco.take(12).mapNotNull { it.logoUrl?.let(RadioStation::validUrl) }.toSet().size)
         assertEquals(12, quran.size)
         assertEquals(4, tajwid.size)
         assertEquals(Stations.all.size, Stations.all.map { it.url }.toSet().size)
         assertTrue(Stations.all.all { RadioStation.validUrl(it.url) == it.url })
-        assertFalse(Stations.all.any { "snrtlive.ma" in it.url })
+        assertEquals(4, Stations.snrt.size)
+        assertTrue(Stations.snrt.all { it.url.startsWith("https://snrtlive.ma/") })
+        assertEquals(Stations.snrt, Stations.visible(StationTab.MOROCCO, emptySet(), "", snrtOnly = true))
         assertEquals("العيون الكوشي", quran.first().name)
         assertTrue(tajwid.all { it.url.endsWith("_mojawwad") && it !in quran })
         assertEquals("عبد الباسط عبد الصمد", tajwid.first().name)
+    }
+
+    @Test fun directoryRowsMergeWithMoroccoAndBookmarksStayAvailableAcrossCountries() {
+        val pinned = Stations.visible(StationTab.MOROCCO, emptySet(), "").first()
+        val moroccan = RadioStation("Radio Azrou", "https://audio.example/azrou", countryCode = "MA")
+        val french = RadioStation("France Info", "https://audio.example/info", countryCode = "FR")
+        val directory = listOf(pinned.copy(countryCode = "MA"), moroccan, french)
+        val allMoroccan = Stations.visible(StationTab.MOROCCO, emptySet(), "", directory = directory)
+        assertEquals(1, allMoroccan.count { it.url == pinned.url })
+        assertEquals(moroccan, allMoroccan.last())
+        assertTrue(french !in allMoroccan)
+        val bookmarks = listOf(moroccan, french)
+        val favorites = bookmarks.map { it.url }.toSet()
+        assertEquals(bookmarks, Stations.visible(StationTab.FAVORITES, favorites, "", bookmarks = bookmarks))
+        assertEquals(listOf(moroccan), Stations.visible(StationTab.MOROCCO, favorites, "", true, bookmarks = bookmarks))
     }
 
     @Test fun favoritesSearchAndStationControlsUseTheVisibleList() {
