@@ -20,6 +20,7 @@ import android.text.TextUtils
 import android.text.TextWatcher
 import android.text.method.LinkMovementMethod
 import android.text.style.URLSpan
+import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
@@ -200,28 +201,17 @@ class RadioActivity : ComponentActivity() {
                 setOnClickListener { radioUpdates.show() }
             }, LinearLayout.LayoutParams(dp(48), dp(48)))
         }
-        val categories = row().apply {
-            isBaselineAligned = false
-            tabs = StationTab.entries.associateWith { choice ->
-                button(choice.label) {
-                    tab = choice
-                    prefs.edit().putString("tab", choice.name).apply()
-                    updateDirectory(resetScroll = true)
-                }.also { view ->
-                    view.textSize = 12f
-                    addView(view, LinearLayout.LayoutParams(0, dp(48), 1f).apply { marginEnd = dp(4) })
-                }
-            }
-        }
+        val categories = categoryBar()
+        val headerHeight = dp(56)
         if (wide) {
             addView(row().apply {
                 background = getDrawable(R.drawable.radio_header)
                 addView(masthead, LinearLayout.LayoutParams(dp(if (resources.configuration.screenWidthDp < 650) 196 else 222), -1))
                 addView(categories, LinearLayout.LayoutParams(0, -1, 1f))
-            }, LinearLayout.LayoutParams(-1, dp(48)).apply { bottomMargin = dp(8) })
+            }, LinearLayout.LayoutParams(-1, headerHeight).apply { bottomMargin = dp(8) })
         } else {
             addView(masthead, LinearLayout.LayoutParams(-1, dp(48)))
-            addView(categories, LinearLayout.LayoutParams(-1, dp(48)).apply { bottomMargin = dp(8) })
+            addView(categories, LinearLayout.LayoutParams(-1, headerHeight).apply { bottomMargin = dp(8) })
         }
         val content = if (wide) row() else column()
         if (wide) {
@@ -233,6 +223,45 @@ class RadioActivity : ComponentActivity() {
         }
         addView(content, LinearLayout.LayoutParams(-1, 0, 1f))
         requestFocus()
+    }
+
+    private fun categoryBar(): LinearLayout = row().apply {
+        isBaselineAligned = false
+        val configuration = resources.configuration
+        val showIcons = configuration.screenWidthDp >= 360 && configuration.fontScale <= 1.3f
+        val maxTextSize = if (configuration.screenWidthDp >= 650) 14 else 13
+        val tabFont = Typeface.create(Typeface.DEFAULT, 600, false)
+        tabs = StationTab.entries.associateWith { choice ->
+            button(choice.label) {
+                tab = choice
+                prefs.edit().putString("tab", choice.name).apply()
+                updateDirectory(resetScroll = true)
+            }.also { view ->
+                view.typeface = tabFont
+                view.maxLines = 2
+                view.setAutoSizeTextTypeUniformWithConfiguration(11, maxTextSize, 1, TypedValue.COMPLEX_UNIT_SP)
+                view.background = pressable(R.drawable.radio_tab)
+                view.setPadding(dp(2), dp(3), dp(2), dp(5))
+                view.setTextColor(getColorStateList(R.color.radio_tab_text))
+                if (showIcons) {
+                    val icon = when (choice) {
+                        StationTab.MOROCCO -> R.drawable.ic_tab_radio
+                        StationTab.WORLD -> R.drawable.ic_tab_world
+                        StationTab.QURAN -> R.drawable.ic_tab_quran
+                        StationTab.TAJWID -> R.drawable.ic_tab_tajwid
+                        StationTab.HARAM -> R.drawable.ic_tab_haram
+                        StationTab.FAVORITES -> R.drawable.ic_tab_favorites
+                    }
+                    view.setCompoundDrawablesRelativeWithIntrinsicBounds(0, icon, 0, 0)
+                    view.compoundDrawableTintList = getColorStateList(R.color.radio_tab_icon)
+                    view.compoundDrawablePadding = dp(1)
+                }
+                val weight = if (choice == StationTab.MOROCCO || choice == StationTab.HARAM) 1.18f else 1f
+                addView(view, LinearLayout.LayoutParams(0, -1, weight).apply {
+                    if (choice != StationTab.entries.last()) marginEnd = dp(4)
+                })
+            }
+        }
     }
 
     private fun stationList(): View = column().apply {
@@ -377,6 +406,7 @@ class RadioActivity : ComponentActivity() {
     private fun stationPanel(wide: Boolean): View = column().apply {
         background = getDrawable(R.drawable.radio_player)
         setPadding(dp(12), dp(if (wide) 8 else 6), dp(12), dp(8))
+        val compactLandscape = wide && resources.configuration.screenHeightDp < 420
         val presentation = (if (wide) column() else row()).apply {
             playerPanel = this
             gravity = if (wide) Gravity.CENTER else Gravity.START or Gravity.CENTER_VERTICAL
@@ -388,26 +418,31 @@ class RadioActivity : ComponentActivity() {
             playerArtwork = StationArtwork(if (wide) 26 else 16, showCredits = true)
             val artworkSize = dp(when {
                 !wide -> 48
-                resources.configuration.screenHeightDp >= 420 -> 76
-                else -> 60
+                compactLandscape -> 54
+                else -> 76
             })
             val motifHeight = dp(when {
                 !wide -> 56
-                resources.configuration.screenHeightDp >= 420 -> 148
-                else -> 98
+                compactLandscape -> 72
+                else -> 148
             })
             addView(FrameLayout(context).apply {
                 addView(PremiumRadioMotif(context), FrameLayout.LayoutParams(-1, -1))
                 addView(playerArtwork, FrameLayout.LayoutParams(artworkSize, artworkSize, Gravity.CENTER))
             }, LinearLayout.LayoutParams(if (wide) -1 else dp(76), motifHeight).apply {
                 if (wide) {
-                    topMargin = dp(5)
-                    bottomMargin = dp(6)
+                    topMargin = dp(if (compactLandscape) 4 else 5)
+                    bottomMargin = dp(if (compactLandscape) 4 else 6)
                 } else marginEnd = dp(10)
             })
             val alignment = if (wide) View.TEXT_ALIGNMENT_CENTER else View.TEXT_ALIGNMENT_VIEW_START
             addView(column().apply {
-                playerTitle = label("", if (wide) 21 else 17, textColor, bold = true).apply {
+                val titleSize = when {
+                    !wide -> 17
+                    compactLandscape -> 19
+                    else -> 21
+                }
+                playerTitle = label("", titleSize, textColor, bold = true).apply {
                     textAlignment = alignment
                     maxLines = 2
                     ellipsize = TextUtils.TruncateAt.END
@@ -415,7 +450,7 @@ class RadioActivity : ComponentActivity() {
                 addView(playerTitle, LinearLayout.LayoutParams(-1, -2))
                 playerSubtitle = label("", 12, muted).apply {
                     textAlignment = alignment
-                    maxLines = 2
+                    maxLines = if (compactLandscape) 1 else 2
                     ellipsize = TextUtils.TruncateAt.END
                 }
                 addView(playerSubtitle, LinearLayout.LayoutParams(-1, -2))
@@ -485,7 +520,24 @@ class RadioActivity : ComponentActivity() {
     }
 
     private inner class StationCard(context: Context) : LinearLayout(context) {
-        private val number = label("", 12, accent, bold = true).apply { gravity = Gravity.CENTER; importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO }
+        private val number = label("", 11, muted, bold = true).apply { gravity = Gravity.CENTER }
+        private val playingIcon = ImageView(context).apply {
+            setImageResource(R.drawable.ic_radio_play)
+            imageTintList = ColorStateList.valueOf(accent)
+        }
+        private val rank = FrameLayout(context).apply {
+            background = getDrawable(R.drawable.radio_station_rank)
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
+            addView(number, FrameLayout.LayoutParams(-1, -1))
+            addView(playingIcon, FrameLayout.LayoutParams(dp(18), dp(18), Gravity.CENTER))
+        }
+        private val selectionMark = View(context).apply {
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+            background = GradientDrawable().apply {
+                cornerRadius = dp(2).toFloat()
+                setColor(accent)
+            }
+        }
         private val badge = StationArtwork(12)
         private val name = label("", 17, textColor, bold = true).apply {
             textAlignment = View.TEXT_ALIGNMENT_VIEW_START
@@ -497,13 +549,18 @@ class RadioActivity : ComponentActivity() {
             maxLines = 1
             ellipsize = TextUtils.TruncateAt.END
         }
-        private val star = button("☆") {}.apply { background = null; textSize = 21f; setTextColor(amber) }
+        private val star = button("☆") {}.apply { background = null; textSize = 21f }
 
         init {
             layoutParams = AbsListView.LayoutParams(-1, -2)
             minimumHeight = dp(52)
             gravity = Gravity.CENTER_VERTICAL
-            addView(number, LinearLayout.LayoutParams(dp(34), -1))
+            background = pressable(R.drawable.radio_card)
+            addView(FrameLayout(context).apply {
+                addView(selectionMark, FrameLayout.LayoutParams(dp(2), dp(20), Gravity.START or Gravity.CENTER_VERTICAL)
+                    .apply { marginStart = dp(2) })
+                addView(rank, FrameLayout.LayoutParams(dp(26), dp(26), Gravity.CENTER))
+            }, LinearLayout.LayoutParams(dp(38), dp(44)))
             addView(badge, LinearLayout.LayoutParams(dp(46), dp(38)).apply { marginEnd = dp(9) })
             addView(column().apply { addView(name); addView(subtitle) }, LinearLayout.LayoutParams(0, -2, 1f))
             addView(star, LinearLayout.LayoutParams(dp(48), dp(48)))
@@ -513,11 +570,14 @@ class RadioActivity : ComponentActivity() {
             val selected = station.url == highlighted?.first
             val playing = selected && highlighted?.second == true
             layoutDirection = directionOf(station.name)
-            background = pressable(if (selected) R.drawable.radio_selected else R.drawable.radio_card)
             isActivated = selected
+            selectionMark.visibility = if (selected) View.VISIBLE else View.GONE
             contentDescription = "Écouter ${station.name}"
             setOnClickListener { select(station) }
-            number.text = if (playing) "▶" else position.toString().padStart(2, '0')
+            number.text = position.toString().padStart(2, '0')
+            number.visibility = if (playing) View.INVISIBLE else View.VISIBLE
+            number.setTextColor(if (selected) accent else muted)
+            playingIcon.visibility = if (playing) View.VISIBLE else View.GONE
             badge.bind(station)
             name.text = station.name
             val detail = Stations.subtitle(station)
@@ -526,6 +586,7 @@ class RadioActivity : ComponentActivity() {
             subtitle.setTextColor(if (playing) accent else muted)
             val favorite = station.url in favorites
             star.text = if (favorite) "★" else "☆"
+            star.setTextColor(if (favorite) amber else muted)
             star.contentDescription = if (favorite) "Retirer ${station.name} des favoris" else "Ajouter ${station.name} aux favoris"
             star.setOnClickListener {
                 favorites = if (favorite) favorites - station.url else favorites + station.url
@@ -661,10 +722,7 @@ class RadioActivity : ComponentActivity() {
         }
         directoryAction.visibility = if (directory.hasMore) View.VISIBLE else View.GONE
         enable(directoryAction, !directory.loading)
-        for ((choice, button) in tabs) {
-            button.isSelected = choice == tab
-            button.background = pressable(if (choice == tab) R.drawable.radio_selected else R.drawable.radio_control)
-        }
+        for ((choice, button) in tabs) button.isSelected = choice == tab
         stationAdapter.notifyDataSetChanged()
         if (resetScroll) list.setSelection(0)
         renderPlayer()

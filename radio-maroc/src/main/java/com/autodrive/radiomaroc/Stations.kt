@@ -10,7 +10,7 @@ import com.autodrive.launcher.RadioCategory
 import com.autodrive.launcher.RadioStation
 
 internal enum class StationTab(val label: String) {
-    MOROCCO("Radio Maroc"), WORLD("Monde"), QURAN("القرآن"), TAJWID("التجويد"), HARAM("تلاوات الحرم"), FAVORITES("★ Favoris")
+    MOROCCO("Radio Maroc"), WORLD("Monde"), QURAN("القرآن"), TAJWID("التجويد"), HARAM("تلاوات الحرم"), FAVORITES("Favoris")
 }
 
 internal object Stations {
