@@ -2,7 +2,7 @@
 
 Application Android 13+ indépendante pour l’Incarlink et les téléphones compatibles. Après l’installation de l’APK signé, ouvrir **Radio Maroc & Coran** depuis la grille d’applications de Quickstep. Une connexion Internet est nécessaire pour écouter.
 
-La version **1.2.0** s’inspire de l’interface de chaînes de **Metrix FHD Neo** sur Enigma2. En paysage, elle affiche les informations de la station à gauche, une liste numérotée à droite et un bandeau de lecture en bas. La sélection est surlignée en bleu. Installer l’APK sur la version précédente conserve les favoris et la dernière station enregistrée. [Skin de référence](https://www.sat-4-all.com/board/topic/341110-skin-metrixfhd-neo/).
+L’interface s’inspire de la liste de chaînes de **Metrix FHD Neo** sur Enigma2. En paysage, le lecteur regroupe le grand picon, le titre, l’état du flux et les commandes à gauche. La liste à droite affiche un picon par station et surligne la ligne active en bleu. Installer l’APK sur la version précédente conserve les favoris et la dernière station enregistrée. [Skin de référence](https://www.sat-4-all.com/board/topic/341110-skin-metrixfhd-neo/).
 
 - **Radio Maroc** affiche 12 flux directs. Les stations mesurées individuellement sont en tête, par part d’audience décroissante selon Radiométrie Maroc au deuxième trimestre 2025. Les autres stations suivent dans leur ordre précédent. La mesure agrégée du réseau Radio Plus ne donne pas de rang individuel à l’antenne d’Agadir. [Résultats de Radiométrie Maroc, publiés par Aujourd’hui le Maroc](https://aujourdhui.ma/culture/elle-a-accumule-une-part-daudience-de-1536-la-radio-mohammed-vi-du-saint-coran-en-tete-du-podium).
 - **القرآن** propose 12 flux de récitation, dont بدر التركي, العيون الكوشي, عمر القزابري et محمود خليل الحصري en lecture Warsh. [Flux publiés par MP3Quran](https://www.mp3quran.net/api/v3/radios?language=ar).
@@ -13,6 +13,8 @@ La version **1.2.0** s’inspire de l’interface de chaînes de **Metrix FHD Ne
 - La dernière station est mémorisée pour une reprise manuelle au lancement. Pendant la lecture, l’application signale une coupure quand le flux ne joue plus et retente automatiquement au retour du réseau tant que la session reste active. Une pause manuelle annule cette reprise. Les commandes média Android restent accessibles en arrière-plan.
 
 Le catalogue est embarqué et les flux sont lus directement depuis leurs hébergeurs. Les lecteurs officiels de certains diffuseurs sont les sources de leurs URL publiques. Les autres entrées de la sélection marocaine proviennent de l’[annuaire Radio Browser](https://www.radio-browser.info/). Les stations et horaires peuvent évoluer. [HIT RADIO](https://www.hitradio.ma/live) · [Radio Mars](https://radiomars.ma/radio-live/) · [Chada FM](https://chada.ma/test-live/) · [Radio Aswat](https://radioaswat.ma/).
+
+Les douze picons de Radio Maroc sont chargés depuis les sites des diffuseurs ou la HACA. Skyrock Casablanca utilise le logo du réseau Skyrock. Le lecteur garde les images en cache et affiche des initiales lorsque l’image est indisponible. [Med Radio](https://medradio.ma/) · [HIT RADIO](https://www.hitradio.ma/) · [Radio Aswat](https://radioaswat.ma/) · [Chada FM](https://chada.ma/fr/) · [Medina FM](https://medinafm.ma/) · [U Radio](https://www.uradio.ma/) · [Skyrock](https://www.skyrock.fm/) · [HACA](https://www.haca.ma/fr/radio).
 
 ## Archives de La Mecque
 
@@ -43,6 +45,10 @@ Le portrait du lecteur ouvre les crédits. Les images proviennent de Wikimedia C
 | أحمد العجمي | أحمد زين, CC BY-SA 3.0 | [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Ahmad_bin_Ali_Al-Ajmi.png) |
 | ياسر الدوسري | أحمد زين, CC BY-SA 3.0 | [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Yasser_Al-Dosari.png) |
 | عبد الله الجهني | الشيخ هيثم الدخين, CC BY-SA 4.0 | [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Abdullah_Al_Juhany_%28Cropped%29.png) |
+
+## Vérifications de la version 1.6.0
+
+Les douze picons se sont affichés sur l’émulateur Android 13. Le nouveau lecteur a été vérifié en 800 × 480 à 160 et 213 dpi et en portrait. Les favoris ont été conservés lors de la mise à jour signée de 1.5.0. La navigation entre les favoris, la pause, la lecture d’un extrait et la reprise de HIT RADIO après une coupure ont été testées. Six tests unitaires ont réussi et lint a signalé 0 erreur et 6 avertissements. La compilation Kotlin du lanceur AutoDrive a également réussi. Le test sur l’Incarlink reste à faire.
 
 ## Vérifications de la version 1.5.0
 

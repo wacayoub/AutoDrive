@@ -17,7 +17,7 @@ import java.net.URL
 import java.security.MessageDigest
 
 /** Bounded, HTTPS-only station artwork. No synthetic branding or UI-thread downloads. */
-internal class RadioArtwork(context: Context) {
+internal class RadioArtwork(context: Context, private val maxImageBytes: Int = 512 * 1024) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val io = Dispatchers.IO.limitedParallelism(2)
     private val folder = File(context.cacheDir, "radio-logos")
@@ -40,7 +40,7 @@ internal class RadioArtwork(context: Context) {
         folder.mkdirs()
         val key = MessageDigest.getInstance("SHA-256").digest(url.toByteArray()).joinToString("") { "%02x".format(it.toInt() and 255) }
         val cached = File(folder, key)
-        if (cached.exists() && cached.length() <= LIMIT && System.currentTimeMillis() - cached.lastModified() < 7 * 86400000L) {
+        if (cached.exists() && cached.length() <= maxImageBytes && System.currentTimeMillis() - cached.lastModified() < 7 * 86400000L) {
             decode(cached.readBytes())?.let { return it }
         }
         var target = url
@@ -56,8 +56,8 @@ internal class RadioArtwork(context: Context) {
                     target = RadioStation.validUrl(URL(URL(target), location).toString()) ?: return null
                 } else {
                     if (connection.responseCode != 200) return null
-                    val bytes = connection.inputStream.use { it.readNBytes(LIMIT + 1) }
-                    if (bytes.size > LIMIT) return null
+                    val bytes = connection.inputStream.use { it.readNBytes(maxImageBytes + 1) }
+                    if (bytes.size > maxImageBytes) return null
                     val bitmap = decode(bytes) ?: return null
                     cached.writeBytes(bytes)
                     val files = folder.listFiles().orEmpty().sortedByDescending { it.lastModified() }
@@ -85,5 +85,4 @@ internal class RadioArtwork(context: Context) {
         return BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options().apply { inSampleSize = sample })
     }
     fun close() { scope.cancel(); memory.evictAll() }
-    companion object { private const val LIMIT = 512 * 1024 }
 }

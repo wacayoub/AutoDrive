@@ -13,6 +13,7 @@ class StationsTest {
         val quran = Stations.visible(StationTab.QURAN, emptySet(), "")
         val tajwid = Stations.visible(StationTab.TAJWID, emptySet(), "")
         assertEquals(12, morocco.size)
+        assertEquals(12, morocco.mapNotNull { it.logoUrl?.let(RadioStation::validUrl) }.toSet().size)
         assertEquals(12, quran.size)
         assertEquals(4, tajwid.size)
         assertEquals(Stations.all.size, Stations.all.map { it.url }.toSet().size)
