@@ -12,10 +12,11 @@ class StationsTest {
     @Test fun categoriesUseDistinctHttpsSourcesAndKeepBroadcastStationIds() {
         val morocco = Stations.visible(StationTab.MOROCCO, emptySet(), "")
         val quran = Stations.visible(StationTab.QURAN, emptySet(), "")
-        val tajwid = Stations.visible(StationTab.TAJWID, emptySet(), "")
+        val tajwid = quran.filter { Stations.quranSection(it) == QuranSection.TAJWID }
         assertEquals(17, morocco.size)
         assertEquals(17, morocco.mapNotNull { it.logoUrl?.let(RadioStation::validUrl) }.toSet().size)
-        assertEquals(12, quran.size)
+        assertEquals(22, quran.size)
+        assertEquals(12, quran.count { Stations.quranSection(it) == QuranSection.MURATTAL })
         assertEquals(4, tajwid.size)
         assertEquals(Stations.all.size, Stations.all.map { it.url }.toSet().size)
         assertTrue(Stations.all.all { RadioStation.validUrl(it.url) == it.url })
@@ -42,7 +43,7 @@ class StationsTest {
         assertEquals(savedStations.toSet(),
             Stations.visible(StationTab.FAVORITES, savedStations.map { it.url }.toSet(), "").toSet())
         assertEquals("العيون الكوشي", quran.first().name)
-        assertTrue(tajwid.all { it.url.endsWith("_mojawwad") && it !in quran })
+        assertTrue(tajwid.all { it.url.endsWith("_mojawwad") })
         assertEquals("عبد الباسط عبد الصمد", tajwid.first().name)
     }
 
@@ -109,10 +110,15 @@ class StationsTest {
     }
 
     @Test fun badrAndTajwidCanBeFoundAndPreviousFavoritesSurviveTheMove() {
-        val badr = Stations.visible(StationTab.QURAN, emptySet(), "Badr Turki").single()
+        val results = Stations.visible(StationTab.QURAN, emptySet(), "Badr Turki")
+        val badr = results.single { Stations.quranSection(it) == QuranSection.MURATTAL }
         assertEquals("بدر التركي", badr.name)
-        assertEquals(badr, Stations.visible(StationTab.QURAN, emptySet(), "بَدْر التُّرْكِي").single())
-        val abdelbaset = Stations.visible(StationTab.TAJWID, emptySet(), "Abdelbaset").single()
+        assertEquals(3, results.size)
+        assertEquals(results, Stations.visible(StationTab.QURAN, emptySet(), "بَدْر التُّرْكِي"))
+        val abdelbasetResults = Stations.visible(StationTab.QURAN, emptySet(), "Abdelbaset")
+        assertEquals(listOf(QuranSection.MURATTAL, QuranSection.TAJWID),
+            abdelbasetResults.mapNotNull(Stations::quranSection))
+        val abdelbaset = abdelbasetResults.single { Stations.quranSection(it) == QuranSection.TAJWID }
         assertTrue(abdelbaset.url.endsWith("abdulbasit_abdulsamad_mojawwad"))
         assertTrue(Stations.subtitle(abdelbaset).startsWith("المصحف المجوّد"))
         val previousFavorite = "https://backup.qurango.net/radio/mohammed_siddiq_alminshawi_mojawwad"
@@ -120,27 +126,40 @@ class StationsTest {
     }
 
     @Test fun haramRecordingsAreSearchableAndKeepThePrayerAndDate() {
-        val haram = Stations.visible(StationTab.HARAM, emptySet(), "")
+        val haram = Stations.visible(StationTab.QURAN, emptySet(), "تلاوات الحرم")
         assertEquals(6, haram.size)
         assertTrue(haram.all { Stations.isRecording(it) && "/makkah/" in it.url && it.url.endsWith(".mp3") })
-        assertFalse(Stations.isRecording(Stations.visible(StationTab.QURAN, emptySet(), "Badr Turki").single()))
+        assertFalse(Stations.isRecording(Stations.visible(StationTab.QURAN, emptySet(), "Badr Turki").first()))
         for (prayer in listOf("الفجر", "المغرب", "العشاء")) {
-            val results = Stations.visible(StationTab.HARAM, emptySet(), "صلاة $prayer")
+            val results = Stations.visible(StationTab.QURAN, emptySet(), "صلاة $prayer")
             assertEquals(2, results.size)
             assertTrue(results.all { Stations.subtitle(it).startsWith("صلاة $prayer · المسجد الحرام · 2026-") })
         }
-        assertEquals("بدر التركي · سورة التين", Stations.visible(StationTab.HARAM, emptySet(), "سورة التين").single().name)
-        val badr = Stations.visible(StationTab.HARAM, emptySet(), "Badr Turki")
+        assertEquals("بدر التركي · سورة التين", Stations.visible(StationTab.QURAN, emptySet(), "سورة التين").single().name)
+        val badr = Stations.visible(StationTab.QURAN, emptySet(), "Badr Turki").filter(Stations::isRecording)
         assertEquals(2, badr.size)
         assertTrue(badr.all { Stations.reciterName(it) == "بدر التركي" })
         assertEquals(badr, Stations.visible(StationTab.FAVORITES, badr.map { it.url }.toSet(), ""))
     }
 
-    @Test fun recurringRecitersUseTheSamePortraitAcrossTabs() {
-        val badr = Stations.visible(StationTab.QURAN, emptySet(), "Badr Turki").single()
-        val haram = Stations.visible(StationTab.HARAM, emptySet(), "")
+    @Test fun recurringRecitersUseTheSamePortraitAcrossSections() {
+        val badr = Stations.visible(StationTab.QURAN, emptySet(), "Badr Turki").first()
+        val haram = Stations.visible(StationTab.QURAN, emptySet(), "").filter(Stations::isRecording)
         assertTrue(haram.all { ReciterPortraits.forStation(it) != null })
         val portrait = requireNotNull(ReciterPortraits.forStation(badr))
         assertTrue(haram.filter { Stations.reciterName(it) == badr.name }.all { ReciterPortraits.forStation(it) == portrait })
+    }
+
+    @Test fun quranSectionsAreOrderedAndLegacyTabsRestoreToQuran() {
+        val quran = Stations.visible(StationTab.QURAN, emptySet(), "")
+        assertEquals(QuranSection.entries, quran.mapNotNull(Stations::quranSection).distinct())
+        for (section in QuranSection.entries) {
+            assertEquals(quran.filter { Stations.quranSection(it) == section },
+                Stations.visible(StationTab.QURAN, emptySet(), section.label))
+        }
+        assertEquals(quran[12], RadioQueue.neighbor(quran, quran[11].url, 1))
+        assertEquals(StationTab.QURAN, StationTab.restore("TAJWID"))
+        assertEquals(StationTab.QURAN, StationTab.restore("HARAM"))
+        assertEquals(StationTab.WORLD, StationTab.restore("WORLD"))
     }
 }

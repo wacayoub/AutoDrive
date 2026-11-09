@@ -10,7 +10,18 @@ import com.autodrive.launcher.RadioCategory
 import com.autodrive.launcher.RadioStation
 
 internal enum class StationTab(val label: String) {
-    MOROCCO("Radio Maroc"), WORLD("Monde"), QURAN("القرآن"), TAJWID("التجويد"), HARAM("تلاوات الحرم"), FAVORITES("Favoris")
+    MOROCCO("Radio Maroc"), WORLD("Monde"), QURAN("القرآن"), FAVORITES("Favoris");
+
+    companion object {
+        fun restore(name: String?): StationTab = when (name) {
+            "TAJWID", "HARAM" -> QURAN
+            else -> entries.firstOrNull { it.name == name } ?: MOROCCO
+        }
+    }
+}
+
+internal enum class QuranSection(val label: String) {
+    MURATTAL("الترتيل"), TAJWID("التجويد"), HARAM("تلاوات الحرم")
 }
 
 internal object Stations {
@@ -126,36 +137,49 @@ internal object Stations {
         "ياسر الدوسري" to listOf("Yasser Al Dosari", "Yasser Al Dossari"),
         "عبد الله الجهني" to listOf("Abdullah Al Juhany", "عبدالله الجهني"),
     )
-    val all = localRadios + quran + tajwid + haramStations
+    private val quranLibrary = quran + tajwid + haramStations
+    val all = localRadios + quranLibrary
 
     fun reciterName(station: RadioStation): String = station.name.substringBefore(" ·")
     fun isRecording(station: RadioStation): Boolean = station.url in haram
-    fun isReciter(station: RadioStation): Boolean = station in quran || station in tajwid || isRecording(station)
+    fun isReciter(station: RadioStation): Boolean = quranSection(station) != null
+    fun quranSection(station: RadioStation): QuranSection? = when {
+        station in quran -> QuranSection.MURATTAL
+        station in tajwid -> QuranSection.TAJWID
+        isRecording(station) -> QuranSection.HARAM
+        else -> null
+    }
     fun streamUrl(station: RadioStation): String = officialStreams[station.url] ?: station.url
     fun isHls(station: RadioStation): Boolean = station.isHls || station.url in officialStreams
 
     fun visible(
         tab: StationTab, favorites: Set<String>, query: String, radioFavoritesOnly: Boolean = false,
         directory: List<RadioStation> = emptyList(), bookmarks: List<RadioStation> = emptyList(),
-    ): List<RadioStation> = when (tab) {
-        StationTab.MOROCCO -> {
-            val listed = (directory + bookmarks).filter { it.countryCode == "MA" }.distinctBy { it.url }
-            val clicksByName = listed.groupBy { RadioCatalogue.searchKey(it.name) }
-                .mapValues { (_, entries) -> entries.maxOf { it.directoryClicks ?: -1 } }
-            (localRadios + listed.filter { RadioCatalogue.searchKey(it.name) !in localRadioNames })
-                .distinctBy { it.url }
-                .filter { !radioFavoritesOnly || it.url in favorites }
-                .sortedWith(compareByDescending<RadioStation> { audienceShare(it) ?: -1 }
-                    .thenByDescending { clicksByName[RadioCatalogue.searchKey(it.name)] ?: -1 })
+    ): List<RadioStation> {
+        val candidates = when (tab) {
+            StationTab.MOROCCO -> {
+                val listed = (directory + bookmarks).filter { it.countryCode == "MA" }.distinctBy { it.url }
+                val clicksByName = listed.groupBy { RadioCatalogue.searchKey(it.name) }
+                    .mapValues { (_, entries) -> entries.maxOf { it.directoryClicks ?: -1 } }
+                (localRadios + listed.filter { RadioCatalogue.searchKey(it.name) !in localRadioNames })
+                    .distinctBy { it.url }
+                    .filter { !radioFavoritesOnly || it.url in favorites }
+                    .sortedWith(compareByDescending<RadioStation> { audienceShare(it) ?: -1 }
+                        .thenByDescending { clicksByName[RadioCatalogue.searchKey(it.name)] ?: -1 })
+            }
+            StationTab.WORLD -> directory
+            StationTab.QURAN -> quranLibrary
+            StationTab.FAVORITES -> (all + bookmarks).distinctBy { it.url }.filter { it.url in favorites }
         }
-        StationTab.WORLD -> directory
-        StationTab.QURAN -> quran
-        StationTab.TAJWID -> tajwid
-        StationTab.HARAM -> haramStations
-        StationTab.FAVORITES -> (all + bookmarks).distinctBy { it.url }.filter { it.url in favorites }
-    }.filter { station ->
-        query.isBlank() || RadioCatalogue.search(station, query) || aliases[reciterName(station)].orEmpty().any {
-            RadioCatalogue.searchKey(it).contains(RadioCatalogue.searchKey(query))
+        if (query.isBlank()) return candidates
+        val key = RadioCatalogue.searchKey(query)
+        val sections = if (tab == StationTab.QURAN && key.isNotEmpty()) {
+            QuranSection.entries.filter { RadioCatalogue.searchKey(it.label).contains(key) }
+        } else emptyList()
+        return candidates.filter { station ->
+            RadioCatalogue.search(station, query) ||
+                aliases[reciterName(station)].orEmpty().any { RadioCatalogue.searchKey(it).contains(key) } ||
+                (sections.isNotEmpty() && quranSection(station) in sections)
         }
     }
 

@@ -65,6 +65,7 @@ class RadioActivity : ComponentActivity() {
     private var favorites = emptySet<String>()
     private var query = ""
     private var rows = emptyList<RadioStation>()
+    private var listEntries = emptyList<ListEntry>()
     private var savedStation: RadioStation? = null
     private var highlighted: Pair<String?, Boolean>? = null
     private var controllerFuture: ListenableFuture<MediaController>? = null
@@ -104,7 +105,7 @@ class RadioActivity : ComponentActivity() {
         artwork = RadioArtwork(this, maxImageBytes = 1024 * 1024)
         directory = DirectoryBrowser(StationDirectory(this)) { renderRows() }
         radioUpdates = RadioUpdates(this, savedInstanceState)
-        tab = StationTab.entries.firstOrNull { it.name == prefs.getString("tab", null) } ?: StationTab.MOROCCO
+        tab = StationTab.restore(prefs.getString("tab", null))
         country = prefs.getString("world_country", null)?.takeIf { it in StationDirectory.countries && it != "MA" } ?: "FR"
         favorites = prefs.getStringSet("favorites", emptySet()).orEmpty().toSet()
         directoryBookmarks = StationDirectory.decode(prefs.getString("directory_bookmarks", null).orEmpty())
@@ -230,10 +231,14 @@ class RadioActivity : ComponentActivity() {
         isBaselineAligned = false
         background = getDrawable(R.drawable.radio_category_line)
         val configuration = resources.configuration
-        val showIcons = configuration.screenWidthDp >= 650 && configuration.fontScale <= 1.3f
+        val showIcons = configuration.screenWidthDp >= 460 && configuration.fontScale <= 1.3f
         val maxTextSize = if (configuration.screenWidthDp >= 650) 14 else 13
         val tabFont = Typeface.create(Typeface.DEFAULT, 600, false)
         tabs = StationTab.entries.associateWith { choice ->
+            if (choice != StationTab.entries.first()) addView(View(context).apply {
+                setBackgroundColor(getColor(R.color.radio_list_rule))
+                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+            }, LinearLayout.LayoutParams(dp(1), dp(22)).apply { gravity = Gravity.CENTER_VERTICAL })
             button(choice.label) {
                 tab = choice
                 prefs.edit().putString("tab", choice.name).apply()
@@ -251,15 +256,15 @@ class RadioActivity : ComponentActivity() {
                         StationTab.MOROCCO -> R.drawable.ic_tab_radio
                         StationTab.WORLD -> R.drawable.ic_tab_world
                         StationTab.QURAN -> R.drawable.ic_tab_quran
-                        StationTab.TAJWID -> R.drawable.ic_tab_tajwid
-                        StationTab.HARAM -> R.drawable.ic_tab_haram
                         StationTab.FAVORITES -> R.drawable.ic_tab_favorites
                     }
+                    view.gravity = Gravity.START or Gravity.CENTER_VERTICAL
+                    view.textAlignment = View.TEXT_ALIGNMENT_VIEW_START
                     view.setCompoundDrawablesRelativeWithIntrinsicBounds(icon, 0, 0, 0)
                     view.compoundDrawableTintList = getColorStateList(R.color.radio_tab_icon)
                     view.compoundDrawablePadding = dp(3)
                 }
-                val weight = if (choice == StationTab.MOROCCO || choice == StationTab.HARAM) 1.35f else 1f
+                val weight = if (choice == StationTab.MOROCCO) 1.35f else 1f
                 addView(view, LinearLayout.LayoutParams(0, -1, weight))
             }
         }
@@ -512,12 +517,31 @@ class RadioActivity : ComponentActivity() {
             setOnClickListener { action() }
         }
 
+    private sealed interface ListEntry {
+        data class Heading(val section: QuranSection) : ListEntry
+        data class Station(val radio: RadioStation, val number: Int) : ListEntry
+    }
+
     private val stationAdapter = object : BaseAdapter() {
-        override fun getCount(): Int = rows.size
-        override fun getItem(position: Int): RadioStation = rows[position]
+        override fun getCount(): Int = listEntries.size
+        override fun getItem(position: Int): ListEntry = listEntries[position]
         override fun getItemId(position: Int): Long = position.toLong()
-        override fun getView(position: Int, recycled: View?, parent: ViewGroup): View =
-            (recycled as? StationLine ?: StationLine(parent.context)).apply { bind(getItem(position), position + 1) }
+        override fun areAllItemsEnabled(): Boolean = false
+        override fun isEnabled(position: Int): Boolean = getItem(position) is ListEntry.Station
+        override fun getViewTypeCount(): Int = 2
+        override fun getItemViewType(position: Int): Int = if (isEnabled(position)) 0 else 1
+        override fun getView(position: Int, recycled: View?, parent: ViewGroup): View = when (val item = getItem(position)) {
+            is ListEntry.Heading -> (recycled as? TextView ?: label("", 14, accent, bold = true).apply {
+                layoutParams = AbsListView.LayoutParams(-1, dp(32))
+                layoutDirection = View.LAYOUT_DIRECTION_RTL
+                gravity = Gravity.START or Gravity.CENTER_VERTICAL
+                setPaddingRelative(dp(12), 0, dp(12), 0)
+                isAccessibilityHeading = true
+            }).apply { text = item.section.label }
+            is ListEntry.Station -> (recycled as? StationLine ?: StationLine(parent.context)).apply {
+                bind(item.radio, item.number)
+            }
+        }
     }
 
     private inner class StationLine(context: Context) : LinearLayout(context) {
@@ -695,6 +719,15 @@ class RadioActivity : ComponentActivity() {
 
     private fun renderRows(resetScroll: Boolean = false) {
         rows = Stations.visible(tab, favorites, query, radioFavoritesOnly, directory.stations, directoryBookmarks)
+        listEntries = buildList {
+            var previousSection: QuranSection? = null
+            rows.forEachIndexed { index, station ->
+                val section = if (tab == StationTab.QURAN) Stations.quranSection(station) else null
+                if (section != null && section != previousSection) add(ListEntry.Heading(section))
+                previousSection = section
+                add(ListEntry.Station(station, index + 1))
+            }
+        }
         val onRadioTab = tab == StationTab.MOROCCO
         listContext.visibility = if (onRadioTab || tab == StationTab.WORLD) View.VISIBLE else View.GONE
         listContext.text = if (onRadioTab) "RADIO MAROC · POPULARITÉ"
