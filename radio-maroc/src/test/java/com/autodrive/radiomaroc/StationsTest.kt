@@ -11,12 +11,16 @@ class StationsTest {
     @Test fun categoriesUseDistinctDirectHttpsStreams() {
         val morocco = Stations.visible(StationTab.MOROCCO, emptySet(), "")
         val quran = Stations.visible(StationTab.QURAN, emptySet(), "")
+        val tajwid = Stations.visible(StationTab.TAJWID, emptySet(), "")
         assertEquals(12, morocco.size)
         assertEquals(12, quran.size)
+        assertEquals(4, tajwid.size)
         assertEquals(Stations.all.size, Stations.all.map { it.url }.toSet().size)
         assertTrue(Stations.all.all { RadioStation.validUrl(it.url) == it.url })
         assertFalse(Stations.all.any { "snrtlive.ma" in it.url })
         assertEquals("العيون الكوشي", quran.first().name)
+        assertTrue(tajwid.all { it.url.endsWith("_mojawwad") && it !in quran })
+        assertEquals("عبد الباسط عبد الصمد", tajwid.first().name)
     }
 
     @Test fun favoritesSearchAndStationControlsUseTheVisibleList() {
@@ -27,5 +31,16 @@ class StationsTest {
         val quran = Stations.visible(StationTab.QURAN, emptySet(), "قَزَابْرِي").single()
         assertEquals("عمر القزابري", quran.name)
         assertEquals(listOf(quran), Stations.visible(StationTab.FAVORITES, setOf(quran.url), ""))
+    }
+
+    @Test fun badrAndTajwidCanBeFoundAndPreviousFavoritesSurviveTheMove() {
+        val badr = Stations.visible(StationTab.QURAN, emptySet(), "Badr Turki").single()
+        assertEquals("بدر التركي", badr.name)
+        assertEquals(badr, Stations.visible(StationTab.QURAN, emptySet(), "بَدْر التُّرْكِي").single())
+        val abdelbaset = Stations.visible(StationTab.TAJWID, emptySet(), "Abdelbaset").single()
+        assertTrue(abdelbaset.url.endsWith("abdulbasit_abdulsamad_mojawwad"))
+        assertTrue(Stations.subtitle(abdelbaset).startsWith("المصحف المجوّد"))
+        val previousFavorite = "https://backup.qurango.net/radio/mohammed_siddiq_alminshawi_mojawwad"
+        assertEquals(previousFavorite, Stations.visible(StationTab.FAVORITES, setOf(previousFavorite), "").single().url)
     }
 }

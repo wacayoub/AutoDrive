@@ -7,7 +7,7 @@ import com.autodrive.launcher.RadioCategory
 import com.autodrive.launcher.RadioStation
 
 internal enum class StationTab(val label: String) {
-    MOROCCO("Radio Maroc"), QURAN("القرآن"), FAVORITES("★ Favoris")
+    MOROCCO("Radio Maroc"), QURAN("القرآن"), TAJWID("التجويد"), FAVORITES("★ Favoris")
 }
 
 internal object Stations {
@@ -28,30 +28,56 @@ internal object Stations {
         RadioStation("Medina FM Tarab", "https://medinatarab.ice.infomaniak.ch/medinatarab-128.mp3",
             logoUrl = "https://api.medinafm.ma/uploads/f0b5829f-c5ed-4acc-a775-d921ecd2edc7-w320.webp", tags = setOf("Tarab")),
     )
+    private fun quranStation(name: String, path: String) = RadioStation(name, "https://backup.qurango.net/radio/$path")
+
+    private val badr = quranStation("بدر التركي", "bader")
     private val excludedQuranPaths = setOf("mishary_alafasi", "abdulrahman_alsudaes", "yasser_aldosari")
     private val quran = (RadioCatalogue.featured.filter {
         RadioCatalogue.matches(it, RadioCategory.QURAN) && RadioCatalogue.officialPlayer(it) == null &&
             it.url.substringAfterLast('/') !in excludedQuranPaths
     } + listOf(
-        RadioStation("محمود خليل الحصري · ورش", "https://backup.qurango.net/radio/mahmoud_khalil_alhussary_warsh"),
-        RadioStation("محمد صديق المنشاوي · مجوّد", "https://backup.qurango.net/radio/mohammed_siddiq_alminshawi_mojawwad"),
-        RadioStation("إبراهيم الدوسري", "https://backup.qurango.net/radio/ibrahim_aldosari"),
+        badr,
+        quranStation("محمود خليل الحصري · ورش", "mahmoud_khalil_alhussary_warsh"),
+        quranStation("إبراهيم الدوسري", "ibrahim_aldosari"),
     )).sortedBy { station ->
         when (station.url.substringAfterLast('/')) {
             "aloyoon_alkoshi" -> 0
             "omar_alqazabri" -> 1
-            else -> 2
+            "bader" -> 2
+            else -> 3
         }
     }
-    val all = morocco + quran
+    private val tajwid = listOf(
+        quranStation("عبد الباسط عبد الصمد", "abdulbasit_abdulsamad_mojawwad"),
+        quranStation("محمد صديق المنشاوي · مجوّد", "mohammed_siddiq_alminshawi_mojawwad"),
+        quranStation("محمود خليل الحصري", "mahmoud_khalil_alhussary_mojawwad"),
+        quranStation("محمود علي البنا", "mahmoud_ali__albanna_mojawwad"),
+    )
+    private val aliases = mapOf(
+        "bader" to listOf("Badr Turki", "Badr Al Turki", "Bader Alturki"),
+        "abdulbasit_abdulsamad_mojawwad" to listOf("Abdelbaset Abdelssamad", "Abdulbasit Abdulsamad", "عبدالباسط عبدالصمد"),
+        "mohammed_siddiq_alminshawi_mojawwad" to listOf("Mohamed Siddiq Al Minshawi"),
+        "mahmoud_khalil_alhussary_mojawwad" to listOf("Mahmoud Khalil Al Hussary"),
+        "mahmoud_ali__albanna_mojawwad" to listOf("Mahmoud Ali Al Banna"),
+    )
+    val all = morocco + quran + tajwid
 
     fun visible(tab: StationTab, favorites: Set<String>, query: String): List<RadioStation> = when (tab) {
         StationTab.MOROCCO -> morocco
         StationTab.QURAN -> quran
+        StationTab.TAJWID -> tajwid
         StationTab.FAVORITES -> all.filter { it.url in favorites }
-    }.filter { RadioCatalogue.search(it, query) }
+    }.filter { station ->
+        RadioCatalogue.search(station, query) || aliases[station.url.substringAfterLast('/')].orEmpty().any {
+            RadioCatalogue.searchKey(it).contains(RadioCatalogue.searchKey(query))
+        }
+    }
 
-    fun subtitle(station: RadioStation): String = station.tags.firstOrNull() ?: "القرآن الكريم · MP3Quran"
+    fun subtitle(station: RadioStation): String = when {
+        station in tajwid -> "المصحف المجوّد · MP3Quran"
+        station == badr -> "حفص عن عاصم · MP3Quran"
+        else -> station.tags.firstOrNull() ?: "القرآن الكريم · MP3Quran"
+    }
 
     fun item(station: RadioStation): MediaItem = MediaItem.Builder().setMediaId(station.url).setUri(station.url)
         .setMediaMetadata(MediaMetadata.Builder().setTitle(station.name).setArtist(subtitle(station)).build())
