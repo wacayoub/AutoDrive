@@ -76,7 +76,8 @@ internal class StationDirectory(context: Context) {
                 val name = RadioCatalogue.cleanName(row.optString("name").take(512)).ifBlank { return@mapNotNull null }
                 RadioCatalogue.polish(RadioStation(name, url, logoUrl = RadioStation.validUrl(row.optString("favicon")),
                     tags = RadioCatalogue.parseTags(row.optString("tags")), countryCode = country,
-                    isHls = row.optInt("hls") == 1))
+                    isHls = row.optInt("hls") == 1,
+                    directoryClicks = row.optInt("clickcount", -1).takeIf { it >= 0 }))
             }.distinctBy { it.url }
             return Page(stations, if (rows.length() >= PAGE_SIZE) offset + PAGE_SIZE else null)
         }
@@ -84,6 +85,7 @@ internal class StationDirectory(context: Context) {
         fun encode(stations: List<RadioStation>): String = JSONArray(stations.map {
             JSONObject().put("name", it.name).put("url", it.url).put("country", it.countryCode)
                 .put("logo", it.logoUrl.orEmpty()).put("tags", it.tags.joinToString(",")).put("hls", it.isHls)
+                .put("clickcount", it.directoryClicks)
         }).toString()
 
         fun decode(json: String): List<RadioStation> = runCatching {
@@ -95,7 +97,8 @@ internal class StationDirectory(context: Context) {
                 val country = row.optString("country").takeIf { it in countries } ?: return@mapNotNull null
                 RadioStation(name, url, logoUrl = RadioStation.validUrl(row.optString("logo")),
                     tags = RadioCatalogue.parseTags(row.optString("tags")), countryCode = country,
-                    isHls = row.optBoolean("hls"))
+                    isHls = row.optBoolean("hls"),
+                    directoryClicks = row.optInt("clickcount", -1).takeIf { it >= 0 })
             }.distinctBy { it.url }
         }.getOrDefault(emptyList())
     }

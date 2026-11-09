@@ -4,6 +4,7 @@ import com.autodrive.launcher.RadioQueue
 import com.autodrive.launcher.RadioStation
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -56,6 +57,22 @@ class StationsTest {
         val quran = Stations.visible(StationTab.QURAN, emptySet(), "قَزَابْرِي").single()
         assertEquals("عمر القزابري", quran.name)
         assertEquals(listOf(quran), Stations.visible(StationTab.FAVORITES, setOf(quran.url), ""))
+    }
+
+    @Test fun publishedSharesPrecedeDirectoryClicksAndKeepCuratedStreams() {
+        val high = RadioStation("Radio Azrou", "https://audio.example/azrou", countryCode = "MA", directoryClicks = 420)
+        val low = RadioStation("Radio Ifrane", "https://audio.example/ifrane", countryCode = "MA", directoryClicks = 10)
+        val dance = RadioStation("U Dance", "https://audio.example/dance", countryCode = "MA", directoryClicks = 100)
+        val mfm = RadioStation("MFM Radio", "https://audio.example/mfm", countryCode = "MA", directoryClicks = 2)
+        val stations = Stations.visible(StationTab.MOROCCO, emptySet(), "", directory = listOf(low, high, dance, mfm))
+        val curatedDance = stations.single { it.name == dance.name }
+        assertEquals("15,36 %", Stations.audienceLabel(stations.first()))
+        assertEquals("8,09 %", Stations.audienceLabel(stations[3]))
+        assertNull(Stations.audienceLabel(high))
+        assertTrue(stations.indexOf(high) > stations.indexOfLast { Stations.audienceLabel(it) != null })
+        assertTrue(stations.indexOf(high) < stations.indexOf(curatedDance))
+        assertTrue(stations.indexOf(curatedDance) < stations.indexOf(low))
+        assertEquals("https://udance.ice.infomaniak.ch/udance-128.aac", curatedDance.url)
     }
 
     @Test fun radioFavoritesKeepAudienceOrderAndExcludeOtherTabs() {

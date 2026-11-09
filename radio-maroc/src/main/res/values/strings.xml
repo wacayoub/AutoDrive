@@ -1,8 +1,8 @@
 <resources>
     <string name="app_name">Radio Maroc &amp; Coran</string>
     <style name="RadioTheme" parent="android:style/Theme.Material.NoActionBar">
-        <item name="android:colorAccent">#5BBFEB</item>
-        <item name="android:windowBackground">#080F16</item>
+        <item name="android:colorAccent">#68B8F7</item>
+        <item name="android:windowBackground">#0C1118</item>
         <item name="android:windowLightStatusBar">false</item>
         <item name="android:windowLightNavigationBar">false</item>
     </style>

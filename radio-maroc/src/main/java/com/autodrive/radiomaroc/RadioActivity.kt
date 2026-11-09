@@ -72,6 +72,8 @@ class RadioActivity : Activity() {
     private lateinit var tabs: Map<StationTab, TextView>
     private lateinit var radioFilter: TextView
     private lateinit var countryButton: TextView
+    private lateinit var stationSearch: EditText
+    private lateinit var listContext: TextView
     private lateinit var directoryAction: TextView
     private lateinit var list: ListView
     private lateinit var empty: TextView
@@ -220,7 +222,13 @@ class RadioActivity : Activity() {
     }
 
     private fun stationList(): View = column().apply {
-        val search = EditText(context).apply {
+        listContext = label("", 11, accent, bold = true).apply {
+            gravity = Gravity.START or Gravity.CENTER_VERTICAL
+            letterSpacing = .08f
+            setPadding(dp(4), 0, 0, 0)
+        }
+        addView(listContext, LinearLayout.LayoutParams(-1, dp(24)))
+        stationSearch = EditText(context).apply {
             hint = "Rechercher…"
             contentDescription = "Rechercher une station ou un récitateur"
             setSingleLine(true)
@@ -250,12 +258,12 @@ class RadioActivity : Activity() {
             radioFavoritesOnly = !radioFavoritesOnly
             updateDirectory(resetScroll = true)
         }
-        countryButton = button("") { chooseCountry() }.apply {
+        countryButton = button("") { chooseContinent() }.apply {
             maxLines = 2
             ellipsize = TextUtils.TruncateAt.END
         }
         addView(row().apply {
-            addView(search, LinearLayout.LayoutParams(0, -1, 1f))
+            addView(stationSearch, LinearLayout.LayoutParams(0, -1, 1f))
             addView(countryButton, LinearLayout.LayoutParams(dp(128), -1).apply { marginStart = dp(6) })
             addView(radioFilter, LinearLayout.LayoutParams(dp(94), -1).apply { marginStart = dp(6) })
         }, LinearLayout.LayoutParams(-1, dp(48)).apply { bottomMargin = dp(6) })
@@ -276,11 +284,39 @@ class RadioActivity : Activity() {
         addView(directoryAction, LinearLayout.LayoutParams(-1, dp(44)).apply { topMargin = dp(4) })
     }
 
-    private fun chooseCountry() {
-        val countries = StationDirectory.countries.filter { it != "MA" }
+    private fun chooseContinent() {
+        val dialog = AlertDialog.Builder(this).setTitle("Choisir un continent").setNegativeButton("Fermer", null).create()
+        val selected = WorldContinent.forCountry(country)
+        val content = column().apply {
+            setPadding(dp(16), dp(8), dp(16), 0)
+            WorldContinent.entries.chunked(3).forEach { choices ->
+                addView(row().apply {
+                    isBaselineAligned = false
+                    choices.forEach { continent ->
+                        addView(button(continent.label) {
+                            dialog.dismiss()
+                            chooseCountry(continent)
+                        }.apply {
+                            textSize = 13f
+                            maxLines = 2
+                            isSelected = continent == selected
+                            if (isSelected) background = pressable(R.drawable.radio_selected)
+                        }, LinearLayout.LayoutParams(0, -1, 1f).apply { marginEnd = dp(4) })
+                    }
+                }, LinearLayout.LayoutParams(-1, dp(48)).apply { bottomMargin = dp(6) })
+            }
+        }
+        dialog.setView(content)
+        dialog.show()
+        dialog.window?.setBackgroundDrawableResource(R.drawable.radio_dialog)
+    }
+
+    private fun chooseCountry(continent: WorldContinent) {
+        val countries = StationDirectory.countries.filter { it != "MA" && it in continent.countryCodes }
         var shown = countries
         val adapter = ArrayAdapter<String>(this, android.R.layout.simple_list_item_1)
-        val dialog = AlertDialog.Builder(this).setTitle("Choisir un pays").setNegativeButton("Fermer", null).create()
+        val dialog = AlertDialog.Builder(this).setTitle("Pays · ${continent.label}")
+            .setNegativeButton("Continents") { _, _ -> chooseContinent() }.create()
         val content = column().apply {
             setPadding(dp(16), 0, dp(16), 0)
             val input = EditText(context).apply {
@@ -301,7 +337,7 @@ class RadioActivity : Activity() {
                     country = shown[position]
                     prefs.edit().putString("world_country", country).apply()
                     dialog.dismiss()
-                    updateDirectory(resetScroll = true)
+                    if (query.isEmpty()) updateDirectory(resetScroll = true) else stationSearch.setText("")
                 }
             }, LinearLayout.LayoutParams(-1, dp(200)))
             adapter.addAll(shown.map(StationDirectory::countryName))
@@ -321,6 +357,7 @@ class RadioActivity : Activity() {
         dialog.setView(content)
         dialog.window?.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN)
         dialog.show()
+        dialog.window?.setBackgroundDrawableResource(R.drawable.radio_dialog)
     }
 
     private fun stationPanel(wide: Boolean): View = column().apply {
@@ -331,6 +368,7 @@ class RadioActivity : Activity() {
             gravity = if (wide) Gravity.CENTER else Gravity.START or Gravity.CENTER_VERTICAL
             if (wide) addView(label("", 11, accent, bold = true).apply {
                 gravity = Gravity.CENTER
+                letterSpacing = .08f
                 playerCategory = this
             }, LinearLayout.LayoutParams(-1, -2))
             playerArtwork = StationArtwork(if (wide) 26 else 16, showCredits = true)
@@ -370,11 +408,13 @@ class RadioActivity : Activity() {
     private fun playbackBar(wide: Boolean): View = (if (wide) column() else row()).apply {
         gravity = Gravity.CENTER
         playerStatus = label("", 13, muted, bold = true).apply {
-            gravity = if (wide) Gravity.CENTER else Gravity.START or Gravity.CENTER_VERTICAL
+            gravity = Gravity.CENTER
             maxLines = 2
             ellipsize = TextUtils.TruncateAt.END
+            background = getDrawable(R.drawable.radio_status)
+            setPadding(dp(6), dp(if (wide) 0 else 4), dp(6), dp(if (wide) 0 else 4))
         }
-        addView(playerStatus, if (wide) LinearLayout.LayoutParams(-1, dp(37))
+        addView(playerStatus, if (wide) LinearLayout.LayoutParams(-1, dp(33)).apply { bottomMargin = dp(4) }
             else LinearLayout.LayoutParams(0, -2, 1f).apply { marginEnd = dp(6) })
         addView(row().apply {
             gravity = Gravity.CENTER
@@ -448,7 +488,9 @@ class RadioActivity : Activity() {
             number.text = if (playing) "▶" else position.toString().padStart(2, '0')
             badge.bind(station)
             name.text = station.name
-            subtitle.text = if (playing && !Stations.isRecording(station)) "En lecture" else Stations.subtitle(station)
+            val detail = if (playing && !Stations.isRecording(station)) "En lecture" else Stations.subtitle(station)
+            val audience = if (tab == StationTab.MOROCCO) Stations.audienceLabel(station) else null
+            subtitle.text = if (audience == null) detail else "$detail · $audience"
             subtitle.setTextColor(if (playing) accent else muted)
             val favorite = station.url in favorites
             star.text = if (favorite) "★" else "☆"
@@ -561,9 +603,12 @@ class RadioActivity : Activity() {
     private fun renderRows(resetScroll: Boolean = false) {
         rows = Stations.visible(tab, favorites, query, radioFavoritesOnly, directory.stations, directoryBookmarks)
         val onRadioTab = tab == StationTab.MOROCCO
+        listContext.visibility = if (onRadioTab || tab == StationTab.WORLD) View.VISIBLE else View.GONE
+        listContext.text = if (onRadioTab) "RADIO MAROC · POPULARITÉ"
+            else "MONDE · ${WorldContinent.forCountry(country)?.label.orEmpty()}"
         countryButton.visibility = if (tab == StationTab.WORLD) View.VISIBLE else View.GONE
         countryButton.text = "${StationDirectory.countryName(country)} ▾"
-        countryButton.contentDescription = "Choisir un pays · ${StationDirectory.countryName(country)}"
+        countryButton.contentDescription = "Choisir un continent ou un pays · ${StationDirectory.countryName(country)}"
         radioFilter.visibility = if (onRadioTab) View.VISIBLE else View.GONE
         radioFilter.isSelected = radioFavoritesOnly
         radioFilter.contentDescription =
@@ -627,6 +672,12 @@ class RadioActivity : Activity() {
             playing && !recording -> 0xFF79E4AD.toInt()
             playing -> accent
             else -> muted
+        })
+        playerStatus.backgroundTintList = ColorStateList.valueOf(when {
+            waitingForNetwork && !playing -> 0xFF3A2B1C.toInt()
+            playing && !recording -> 0xFF18332D.toInt()
+            playing -> 0xFF1B3143.toInt()
+            else -> 0xFF202A36.toInt()
         })
         playButton.setImageResource(if (requesting) R.drawable.ic_radio_pause else R.drawable.ic_radio_play)
         playButton.contentDescription = when {

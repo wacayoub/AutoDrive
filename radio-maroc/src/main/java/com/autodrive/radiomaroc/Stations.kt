@@ -44,12 +44,19 @@ internal object Stations {
     private val radio2m = RadioStation("Radio 2M", "https://radio2m.ma/", logoUrl = "https://radio2m.ma/favRadio2M.png")
     private val localRadios = morocco + snrt + radio2m
     private val localRadioNames = localRadios.map { RadioCatalogue.searchKey(it.name) }.toSet()
-    // Radiométrie Maroc, Q2 2025. Keep unmeasured stations in catalogue order.
-    private val audienceRank = listOf(
-        "محمد السادس للقرآن الكريم", "Med Radio", "HIT RADIO", "MFM Radio", "Radio Aswat",
-        "Radio Nationale", "Medi 1 Radio", "Chada FM", "Radio Mars", "Radio 2M",
-        "Radio Amazighe", "Medina FM", "Cap Radio", "Chaîne Inter",
-    ).mapIndexed { rank, name -> RadioCatalogue.searchKey(name) to rank }.toMap()
+    // Radiométrie Maroc, Q2 2025, audience share in hundredths of a percentage point.
+    private val audienceShares = mapOf(
+        "محمد السادس للقرآن الكريم" to 1536,
+        "Med Radio" to 1282, "HIT RADIO" to 1025, "MFM Radio" to 809, "Radio Aswat" to 775,
+        "Radio Nationale" to 715, "Medi 1 Radio" to 626, "Chada FM" to 572, "Radio Mars" to 565,
+        "Radio 2M" to 535, "Radio Amazighe" to 484, "Medina FM" to 265, "Cap Radio" to 246, "Chaîne Inter" to 91,
+    ).mapKeys { (name, _) -> RadioCatalogue.searchKey(name) }
+
+    private fun audienceShare(station: RadioStation): Int? = audienceShares[RadioCatalogue.searchKey(station.name)]
+
+    fun audienceLabel(station: RadioStation): String? = audienceShare(station)?.let {
+        "${it / 100},${(it % 100).toString().padStart(2, '0')} %"
+    }
     private fun quranStation(name: String, path: String) = RadioStation(name, "https://backup.qurango.net/radio/$path")
 
     private val badr = quranStation("بدر التركي", "bader")
@@ -120,11 +127,14 @@ internal object Stations {
         directory: List<RadioStation> = emptyList(), bookmarks: List<RadioStation> = emptyList(),
     ): List<RadioStation> = when (tab) {
         StationTab.MOROCCO -> {
-            (localRadios + (directory + bookmarks).filter {
-                it.countryCode == "MA" && RadioCatalogue.searchKey(it.name) !in localRadioNames
-            }).distinctBy { it.url }
+            val listed = (directory + bookmarks).filter { it.countryCode == "MA" }.distinctBy { it.url }
+            val clicksByName = listed.groupBy { RadioCatalogue.searchKey(it.name) }
+                .mapValues { (_, entries) -> entries.maxOf { it.directoryClicks ?: -1 } }
+            (localRadios + listed.filter { RadioCatalogue.searchKey(it.name) !in localRadioNames })
+                .distinctBy { it.url }
                 .filter { !radioFavoritesOnly || it.url in favorites }
-                .sortedBy { audienceRank[RadioCatalogue.searchKey(it.name)] ?: Int.MAX_VALUE }
+                .sortedWith(compareByDescending<RadioStation> { audienceShare(it) ?: -1 }
+                    .thenByDescending { clicksByName[RadioCatalogue.searchKey(it.name)] ?: -1 })
         }
         StationTab.WORLD -> directory
         StationTab.QURAN -> quran

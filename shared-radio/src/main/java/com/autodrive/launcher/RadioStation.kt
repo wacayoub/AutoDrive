@@ -10,6 +10,7 @@ internal data class RadioStation(
     val tags: Set<String> = emptySet(),
     val countryCode: String? = null,
     val isHls: Boolean = false,
+    val directoryClicks: Int? = null,
 ) {
     override fun toString() = name
     companion object {
