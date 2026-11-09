@@ -388,10 +388,18 @@ class RadioActivity : ComponentActivity() {
             playerArtwork = StationArtwork(if (wide) 26 else 16, showCredits = true)
             val artworkSize = dp(when {
                 !wide -> 48
-                resources.configuration.screenHeightDp >= 420 -> 94
-                else -> 64
+                resources.configuration.screenHeightDp >= 420 -> 76
+                else -> 60
             })
-            addView(playerArtwork, LinearLayout.LayoutParams(artworkSize, artworkSize).apply {
+            val motifHeight = dp(when {
+                !wide -> 56
+                resources.configuration.screenHeightDp >= 420 -> 148
+                else -> 98
+            })
+            addView(FrameLayout(context).apply {
+                addView(PremiumRadioMotif(context), FrameLayout.LayoutParams(-1, -1))
+                addView(playerArtwork, FrameLayout.LayoutParams(artworkSize, artworkSize, Gravity.CENTER))
+            }, LinearLayout.LayoutParams(if (wide) -1 else dp(76), motifHeight).apply {
                 if (wide) {
                     topMargin = dp(5)
                     bottomMargin = dp(6)
