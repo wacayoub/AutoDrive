@@ -25,9 +25,10 @@ internal class GitHubUpdates(private val context: Context) : UpdateSource {
     private val isRadio = context.packageName == UpdatePolicy.RADIO_PACKAGE
     private val filePrefix = if (isRadio) "RadioMaroc" else "AutoDrive"
     private val manifestName = if (isRadio) UpdatePolicy.RADIO_MANIFEST else "autodrive-update.json"
-    val installed get() = packages.getPackageInfo(context.packageName, PackageManager.PackageInfoFlags.of(0))
-    override val versionCode get() = installed.longVersionCode
-    override val versionName get() = installed.versionName.orEmpty()
+    @Suppress("DEPRECATION")
+    private fun installedPackage(flags: Int = 0) = packages.getPackageInfo(context.packageName, flags)
+    override val versionCode get() = installedPackage().longVersionCode
+    override val versionName get() = installedPackage().versionName.orEmpty()
 
     override fun latest(): UpdateRelease {
         File(context.filesDir, "updates").listFiles()?.forEach { file ->
@@ -123,6 +124,7 @@ internal class GitHubUpdates(private val context: Context) : UpdateSource {
         } finally { temporary.delete() }
     }
 
+    @Suppress("DEPRECATION")
     override fun verify(file: File, release: UpdateRelease): File {
         verifyChannel(release)
         require(release.minSdk <= Build.VERSION.SDK_INT) { "Mise à jour incompatible avec Android" }
@@ -133,13 +135,13 @@ internal class GitHubUpdates(private val context: Context) : UpdateSource {
             while (true) { val count = input.read(buffer); if (count < 0) break; digest.update(buffer, 0, count) }
         }
         require(hex(digest.digest()).equals(release.sha256, true)) { "Empreinte du téléchargement incorrecte" }
-        val flags = PackageManager.PackageInfoFlags.of(PackageManager.GET_SIGNING_CERTIFICATES.toLong())
+        val flags = PackageManager.GET_SIGNING_CERTIFICATES
         val archive = packages.getPackageArchiveInfo(file.absolutePath, flags)
             ?: throw IOException("Fichier Android invalide")
         require(archive.packageName == context.packageName && archive.packageName == release.packageName) { "Le fichier appartient à une autre application" }
         require(archive.longVersionCode == release.versionCode && archive.longVersionCode > versionCode) { "Version Android inattendue ou plus ancienne" }
         require(archive.versionName == release.versionName && archive.applicationInfo?.minSdkVersion == release.minSdk) { "Mise à jour incompatible" }
-        val current = packages.getPackageInfo(context.packageName, flags)
+        val current = installedPackage(flags)
         val installedSigners = current.signingInfo?.apkContentsSigners?.map { hex(MessageDigest.getInstance("SHA-256").digest(it.toByteArray())) }?.toSet()
         val downloadedSigners = archive.signingInfo?.apkContentsSigners?.map { hex(MessageDigest.getInstance("SHA-256").digest(it.toByteArray())) }?.toSet()
         require(!installedSigners.isNullOrEmpty() && installedSigners == downloadedSigners) {
@@ -182,7 +184,7 @@ internal class GitHubUpdates(private val context: Context) : UpdateSource {
         val connection = connect(url)
         try {
             require(connection.contentLengthLong <= limit) { "Réponse de mise à jour trop volumineuse" }
-            val bytes = connection.inputStream.use { it.readNBytes(limit + 1) }
+            val bytes = connection.inputStream.use { it.readUpTo(limit + 1) }
             require(bytes.size <= limit) { "Réponse de mise à jour trop volumineuse" }
             return bytes.toString(Charsets.UTF_8)
         } finally { connection.disconnect() }

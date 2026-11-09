@@ -56,7 +56,7 @@ internal class RadioArtwork(context: Context, private val maxImageBytes: Int = 5
                     target = RadioStation.validUrl(URL(URL(target), location).toString()) ?: return null
                 } else {
                     if (connection.responseCode != 200) return null
-                    val bytes = connection.inputStream.use { it.readNBytes(maxImageBytes + 1) }
+                    val bytes = connection.inputStream.use { it.readUpTo(maxImageBytes + 1) }
                     if (bytes.size > maxImageBytes) return null
                     val bitmap = decode(bytes) ?: return null
                     cached.writeBytes(bytes)

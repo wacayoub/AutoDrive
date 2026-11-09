@@ -1,10 +1,10 @@
 # Radio Maroc & Coran
 
-Application Android 13+ indépendante pour l’Incarlink et les téléphones compatibles. Après l’installation de l’APK signé, ouvrir **Radio Maroc & Coran** depuis la grille d’applications de Quickstep. Une connexion Internet est nécessaire pour écouter.
+Application Android 11+ pour les téléphones, les boîtiers Android tels que l’Incarlink et Android TV. Le même APK signé s’adapte à l’écran. Sur l’Incarlink, l’application se lance depuis la grille Quickstep. Sur Android TV, elle apparaît dans la liste des applications avec sa bannière. Une connexion Internet est nécessaire pour écouter. [Lancement des applications sur Android TV](https://developer.android.com/training/tv/get-started/create).
 
 ## Mises à jour en ligne
 
-Installer une fois la version **1.9.0** par-dessus l’ancienne. À l’ouverture, la radio vérifie si une nouvelle version compatible est publiée sur GitHub. La flèche **Mises à jour** en haut permet aussi de lancer la recherche. **OK** télécharge et vérifie l’APK, puis ouvre l’installateur. Au premier passage, Android peut demander d’autoriser **Radio Maroc & Coran** comme source. Revenir ensuite à la radio pour poursuivre et confirmer **Mettre à jour** dans Android. Les favoris et réglages sont conservés. [Autorisation d’installation Android](https://developer.android.com/reference/android/content/pm/PackageManager#canRequestPackageInstalls()).
+À l’ouverture, la radio vérifie si une nouvelle version compatible est publiée sur GitHub. La flèche **Mises à jour** en haut permet aussi de lancer la recherche. **OK** télécharge et vérifie l’APK, puis ouvre l’installateur. Au premier passage, Android peut demander d’autoriser **Radio Maroc & Coran** comme source. Revenir ensuite à la radio pour poursuivre et confirmer **Mettre à jour** dans Android. Les favoris et réglages sont conservés. [Autorisation d’installation Android](https://developer.android.com/reference/android/content/pm/PackageManager#canRequestPackageInstalls()).
 
 La vérification automatique s’effectue à l’ouverture au plus une fois par jour après une recherche réussie. Elle fonctionne au premier plan. Un téléchargement déjà autorisé attend le retour dans la radio avant d’ouvrir l’installateur. **Reprendre l’installation** permet de rouvrir l’installateur pour un fichier déjà vérifié.
 
@@ -16,7 +16,7 @@ python tools/github_release.py --radio-maroc --apk radio-maroc/build/outputs/apk
 
 ## Écoute
 
-L’interface graphite s’inspire de la liste de chaînes de **Metrix FHD Neo** sur Enigma2. Le lecteur **Audio premium** encadre le logo de la station d’une grille de haut-parleur et d’ondes dessinées. Des filets verticaux séparent les quatre catégories sur la barre horizontale et un trait bleu souligne la catégorie active. En paysage, la barre des catégories commence au bord de la liste et le lecteur regroupe le logo, le titre, l’état du flux et les commandes à gauche. Un petit point rouge clignote doucement pendant le direct. La perte de connexion s’affiche en ambre. Les stations apparaissent en lignes séparées par un filet fin, avec leur picon et leur numéro ou symbole de lecture. Un trait bleu marque la station sélectionnée et une étoile dorée marque les favoris. Installer l’APK sur la version précédente conserve les favoris et la dernière station enregistrée. [Skin de référence](https://www.sat-4-all.com/board/topic/341110-skin-metrixfhd-neo/).
+Le thème graphite et turquoise regroupe les radios, le Coran et les favoris dans une barre de catégories avec icônes. Sur l’Incarlink, le lecteur occupe la colonne de gauche et les catégories commencent au bord de la liste. En portrait, les commandes restent en bas de l’écran. Sur Android TV, le catalogue se trouve à gauche, le lecteur à droite et le cadre clair indique la sélection de la télécommande. Les flèches parcourent les catégories, les stations et les commandes. **OK** lance la station sélectionnée. L’étoile à droite du bouton **Suivante** ajoute ou retire la station du lecteur des favoris. [Navigation à la télécommande](https://developer.android.com/training/tv/get-started/controllers).
 
 - **Radio Maroc** réunit les radios SNRT, les autres stations de la sélection et les flux HTTPS marocains de Radio Browser. Les parts d’audience publiées pour le deuxième trimestre 2025 déterminent les premières places et s’affichent sous le nom de chaque station concernée avec la mention « T2 2025 ». Les autres radios sont classées selon les clics des dernières 24 heures disponibles dans l’annuaire. Les radios sans données suivent en fin de liste. [Résultats publiés par Aujourd’hui le Maroc](https://aujourdhui.ma/culture/elle-a-accumule-une-part-daudience-de-1536-la-radio-mohammed-vi-du-saint-coran-en-tete-du-podium) · [Documentation de Radio Browser](https://de1.api.radio-browser.info/).
 - Radio Nationale, Radio Amazighe, Chaîne Inter et Mohammed VI du Saint Coran sont accessibles dans la liste Radio Maroc ou en recherchant « SNRT ». L’application tente de lire leurs flux HLS et celui de Radio 2M dans le lecteur intégré. Elle affiche le diffuseur et l’état réel du lecteur. En cas de refus du serveur, la station reste sélectionnée et la commande de lecture permet de réessayer. [SNRT Live](https://snrtlive.ma/) · [Radio 2M](https://radio2m.ma/).
@@ -48,7 +48,7 @@ Les limites de lecture ont été relevées dans l’audio source à l’aide de 
 
 ## Crédits photo
 
-Le portrait du lecteur ouvre les crédits. Les images proviennent de Wikimedia Commons. Trois fichiers sont les miniatures Commons de 250 px. Les autres fichiers sont repris tels quels depuis leur notice. Une vignette « ق » s’affiche pour les récitateurs dont la photo reste à obtenir sous licence de réutilisation.
+Le portrait du lecteur ouvre les crédits. Les images proviennent de Wikimedia Commons. Trois fichiers sont les miniatures Commons de 250 px. Les autres fichiers sont repris tels quels depuis leur notice. Une icône de livre accompagne les récitateurs sans portrait disponible sous licence de réutilisation.
 
 | Récitant | Crédit et licence | Source |
 | --- | --- | --- |

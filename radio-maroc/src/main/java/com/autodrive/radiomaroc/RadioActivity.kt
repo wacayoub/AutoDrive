@@ -7,6 +7,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.SharedPreferences
 import android.content.res.ColorStateList
+import android.content.res.Configuration
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.ColorDrawable
@@ -56,9 +57,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 class RadioActivity : ComponentActivity() {
-    private val accent = 0xFF79D3F6.toInt()
-    private val textColor = 0xFFF5F6F7.toInt()
-    private val muted = 0xFFB0BDC7.toInt()
+    private val accent = 0xFF75EED8.toInt()
+    private val textColor = 0xFFF1F7F6.toInt()
+    private val muted = 0xFFA7BABF.toInt()
     private val amber = 0xFFFFCF73.toInt()
     private lateinit var prefs: SharedPreferences
     private lateinit var artwork: RadioArtwork
@@ -102,6 +103,9 @@ class RadioActivity : ComponentActivity() {
     private lateinit var playButton: ImageButton
     private lateinit var previous: ImageButton
     private lateinit var next: ImageButton
+    private var playerFavorite: ImageButton? = null
+    private val television: Boolean
+        get() = resources.configuration.uiMode and Configuration.UI_MODE_TYPE_MASK == Configuration.UI_MODE_TYPE_TELEVISION
 
     private val playerListener = object : Player.Listener {
         override fun onEvents(player: Player, events: Player.Events) {
@@ -126,6 +130,7 @@ class RadioActivity : ComponentActivity() {
         window.setDecorFitsSystemWindows(false)
         setContentView(screen())
         updateDirectory()
+        if (television && savedInstanceState == null) tabs.getValue(tab).requestFocus()
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -191,45 +196,69 @@ class RadioActivity : ComponentActivity() {
     private fun screen(): LinearLayout = column().apply {
         layoutDirection = View.LAYOUT_DIRECTION_LTR
         background = getDrawable(R.drawable.radio_background)
-        isFocusableInTouchMode = true
+        isFocusableInTouchMode = !television
         setOnApplyWindowInsetsListener { view, insets ->
             val edges = insets.getInsets(WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout() or WindowInsets.Type.ime())
-            view.setPadding(edges.left + dp(10), edges.top + dp(4), edges.right + dp(10), edges.bottom + dp(8))
+            val horizontal = dp(if (television) 40 else 10)
+            val vertical = dp(if (television) 24 else 6)
+            view.setPadding(edges.left + horizontal, edges.top + vertical, edges.right + horizontal, edges.bottom + vertical)
             insets
         }
-        val wide = resources.configuration.screenWidthDp >= 560 && resources.configuration.screenWidthDp > resources.configuration.screenHeightDp
+        val wide = television || (resources.configuration.screenWidthDp >= 560 &&
+            resources.configuration.screenWidthDp > resources.configuration.screenHeightDp)
+        val compactMasthead = wide && !television && resources.configuration.screenWidthDp < 720
         val masthead = row().apply {
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(6), 0, dp(8), 0)
-            addView(ImageView(context).apply { setImageResource(R.drawable.ic_radio) }, LinearLayout.LayoutParams(dp(32), dp(32)))
-            addView(label(getString(R.string.app_name), 16, textColor, bold = true).apply {
-                setPadding(dp(8), 0, 0, 0)
-                maxLines = 2
+            val iconSize = dp(if (television) 46 else 36)
+            addView(ImageView(context).apply { setImageResource(R.drawable.ic_radio) }, LinearLayout.LayoutParams(iconSize, iconSize))
+            addView(column().apply {
+                setPadding(dp(9), 0, dp(4), 0)
+                addView(label(getString(R.string.app_name), if (television) 25 else 16, textColor, bold = true).apply {
+                    maxLines = if (compactMasthead) 2 else 1
+                    ellipsize = TextUtils.TruncateAt.END
+                })
+                if (!compactMasthead) addView(label("RADIOS & RÉCITATIONS", if (television) 12 else 9, muted, bold = true).apply {
+                    letterSpacing = .10f
+                    maxLines = 1
+                    ellipsize = TextUtils.TruncateAt.END
+                })
             }, LinearLayout.LayoutParams(0, -2, 1f))
             addView(ImageButton(context).apply {
                 setImageResource(R.drawable.ic_radio_update)
+                imageTintList = ColorStateList.valueOf(accent)
                 scaleType = ImageView.ScaleType.CENTER
                 background = pressable(R.drawable.radio_control)
+                remoteFocus()
                 contentDescription = "Mises à jour"
                 setOnClickListener { radioUpdates.show() }
             }, LinearLayout.LayoutParams(dp(48), dp(48)))
         }
         val categories = categoryBar()
-        val headerHeight = dp(48)
-        if (wide) {
+        val headerHeight = dp(if (television) 62 else if (wide) 52 else 54)
+        if (wide && !television) {
             addView(wideColumns(masthead, categories).apply {
                 background = getDrawable(R.drawable.radio_header)
             }, LinearLayout.LayoutParams(-1, headerHeight).apply { bottomMargin = dp(8) })
         } else {
-            addView(masthead, LinearLayout.LayoutParams(-1, dp(48)))
+            addView(masthead, LinearLayout.LayoutParams(-1, dp(if (television) 60 else 52)))
             addView(categories, LinearLayout.LayoutParams(-1, headerHeight).apply { bottomMargin = dp(8) })
         }
-        val content = if (wide) wideColumns(stationPanel(true), stationList()) else column().apply {
-            addView(stationList(), LinearLayout.LayoutParams(-1, 0, 1f))
-            addView(stationPanel(false), LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(6) })
+        val content = when {
+            television -> row().apply {
+                addView(stationList(), LinearLayout.LayoutParams(0, -1, .58f).apply { marginEnd = dp(18) })
+                addView(stationPanel(true), LinearLayout.LayoutParams(0, -1, .42f))
+                list.nextFocusRightId = playButton.id
+                previous.nextFocusLeftId = list.id
+            }
+            wide -> wideColumns(stationPanel(true), stationList())
+            else -> column().apply {
+                addView(stationList(), LinearLayout.LayoutParams(-1, 0, 1f))
+                addView(stationPanel(false), LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(6) })
+            }
         }
         addView(content, LinearLayout.LayoutParams(-1, 0, 1f))
-        requestFocus()
+        if (!television) requestFocus()
     }
 
     private fun wideColumns(left: View, right: View): LinearLayout = row().apply {
@@ -241,8 +270,8 @@ class RadioActivity : ComponentActivity() {
         isBaselineAligned = false
         background = getDrawable(R.drawable.radio_category_line)
         val configuration = resources.configuration
-        val showIcons = configuration.screenWidthDp >= 460 && configuration.fontScale <= 1.3f
-        val maxTextSize = if (configuration.screenWidthDp >= 650) 14 else 13
+        val inlineIcons = television || (configuration.screenWidthDp >= 460 && configuration.fontScale <= 1.3f)
+        val maxTextSize = if (television) 18 else if (configuration.screenWidthDp >= 650) 14 else 13
         val tabFont = Typeface.create(Typeface.DEFAULT, 600, false)
         tabs = StationTab.entries.associateWith { choice ->
             if (choice != StationTab.entries.first()) addView(View(context).apply {
@@ -259,21 +288,28 @@ class RadioActivity : ComponentActivity() {
                 view.ellipsize = TextUtils.TruncateAt.END
                 view.setAutoSizeTextTypeUniformWithConfiguration(11, maxTextSize, 1, TypedValue.COMPLEX_UNIT_SP)
                 view.background = pressable(R.drawable.radio_tab)
-                view.setPadding(dp(if (showIcons) 8 else 2), 0, dp(2), dp(2))
+                view.setPadding(dp(if (inlineIcons) 8 else 2), dp(if (inlineIcons) 0 else 5), dp(2), dp(4))
                 view.setTextColor(getColorStateList(R.color.radio_tab_text))
-                if (showIcons) {
-                    val icon = when (choice) {
-                        StationTab.MOROCCO -> R.drawable.ic_tab_radio
-                        StationTab.WORLD -> R.drawable.ic_tab_world
-                        StationTab.QURAN -> R.drawable.ic_tab_quran
-                        StationTab.FAVORITES -> R.drawable.ic_tab_favorites
-                    }
+                val icon = when (choice) {
+                    StationTab.MOROCCO -> R.drawable.ic_tab_radio
+                    StationTab.WORLD -> R.drawable.ic_tab_world
+                    StationTab.QURAN -> R.drawable.ic_tab_quran
+                    StationTab.FAVORITES -> R.drawable.ic_tab_favorites
+                }
+                if (television) {
+                    val symbol = getDrawable(icon)?.apply { setBounds(0, 0, dp(24), dp(24)) }
+                    view.setCompoundDrawablesRelative(null, symbol, null, null)
+                    view.compoundDrawablePadding = dp(3)
+                    view.setPadding(0, dp(4), 0, dp(4))
+                } else if (inlineIcons) {
                     view.gravity = Gravity.START or Gravity.CENTER_VERTICAL
                     view.textAlignment = View.TEXT_ALIGNMENT_VIEW_START
                     view.setCompoundDrawablesRelativeWithIntrinsicBounds(icon, 0, 0, 0)
-                    view.compoundDrawableTintList = getColorStateList(R.color.radio_tab_icon)
-                    view.compoundDrawablePadding = dp(3)
+                    view.compoundDrawablePadding = dp(5)
+                } else {
+                    view.setCompoundDrawablesRelativeWithIntrinsicBounds(0, icon, 0, 0)
                 }
+                view.compoundDrawableTintList = getColorStateList(R.color.radio_tab_icon)
                 val weight = if (choice == StationTab.MOROCCO) 1.35f else 1f
                 addView(view, LinearLayout.LayoutParams(0, -1, weight))
             }
@@ -281,7 +317,7 @@ class RadioActivity : ComponentActivity() {
     }
 
     private fun stationList(): View = column().apply {
-        listContext = label("", 11, accent, bold = true).apply {
+        listContext = label("", if (television) 13 else 11, accent, bold = true).apply {
             gravity = Gravity.START or Gravity.CENTER_VERTICAL
             letterSpacing = .08f
             setPadding(dp(4), 0, 0, 0)
@@ -291,12 +327,15 @@ class RadioActivity : ComponentActivity() {
             hint = "Rechercher…"
             contentDescription = "Rechercher une station ou un récitateur"
             setSingleLine(true)
-            textSize = 14f
+            textSize = if (television) 17f else 14f
             setTextColor(textColor)
             setHintTextColor(muted)
             setText(query)
             background = getDrawable(R.drawable.radio_control)
+            remoteFocus()
             setPadding(dp(12), 0, dp(12), 0)
+            setCompoundDrawablesRelativeWithIntrinsicBounds(R.drawable.ic_radio_search, 0, 0, 0)
+            compoundDrawablePadding = dp(9)
             imeOptions = EditorInfo.IME_ACTION_SEARCH or EditorInfo.IME_FLAG_NO_EXTRACT_UI
             setOnEditorActionListener { _, action, _ ->
                 if (action != EditorInfo.IME_ACTION_SEARCH) return@setOnEditorActionListener false
@@ -313,25 +352,38 @@ class RadioActivity : ComponentActivity() {
                 }
             })
         }
-        radioFilter = button("★ Favoris") {
+        radioFilter = button("Favoris") {
             radioFavoritesOnly = !radioFavoritesOnly
             updateDirectory(resetScroll = true)
+        }.apply {
+            setPadding(dp(8), 0, dp(6), 0)
+            setCompoundDrawablesRelativeWithIntrinsicBounds(R.drawable.ic_tab_favorites, 0, 0, 0)
         }
         countryButton = button("") { chooseContinent() }.apply {
             maxLines = 2
             ellipsize = TextUtils.TruncateAt.END
+            setPadding(dp(8), 0, dp(6), 0)
+            setCompoundDrawablesRelativeWithIntrinsicBounds(R.drawable.ic_tab_world, 0, 0, 0)
         }
         addView(row().apply {
             addView(stationSearch, LinearLayout.LayoutParams(0, -1, 1f))
             addView(countryButton, LinearLayout.LayoutParams(dp(128), -1).apply { marginStart = dp(6) })
             addView(radioFilter, LinearLayout.LayoutParams(dp(94), -1).apply { marginStart = dp(6) })
-        }, LinearLayout.LayoutParams(-1, dp(48)).apply { bottomMargin = dp(6) })
+        }, LinearLayout.LayoutParams(-1, dp(if (television) 52 else 48)).apply { bottomMargin = dp(6) })
         addView(FrameLayout(context).apply {
             empty = label("", 15, muted).apply { gravity = Gravity.CENTER; setPadding(dp(10), 0, dp(10), 0) }
             list = ListView(context).apply {
+                id = View.generateViewId()
                 divider = ColorDrawable(getColor(R.color.radio_list_rule))
                 dividerHeight = dp(1)
-                itemsCanFocus = true
+                itemsCanFocus = !television
+                if (television) {
+                    setSelector(R.drawable.radio_focus)
+                    setDrawSelectorOnTop(true)
+                    setOnItemClickListener { _, _, position, _ ->
+                        (listEntries.getOrNull(position) as? ListEntry.Station)?.radio?.let(::select)
+                    }
+                }
                 contentDescription = "Liste des stations"
                 adapter = stationAdapter
             }
@@ -340,7 +392,7 @@ class RadioActivity : ComponentActivity() {
             list.emptyView = empty
         }, LinearLayout.LayoutParams(-1, 0, 1f))
         directoryAction = button("") { directory.loadMore() }
-        addView(directoryAction, LinearLayout.LayoutParams(-1, dp(44)).apply { topMargin = dp(4) })
+        addView(directoryAction, LinearLayout.LayoutParams(-1, dp(if (television) 48 else 44)).apply { topMargin = dp(4) })
     }
 
     private fun chooseContinent() {
@@ -376,11 +428,13 @@ class RadioActivity : ComponentActivity() {
         val adapter = ArrayAdapter<String>(this, android.R.layout.simple_list_item_1)
         val dialog = AlertDialog.Builder(this).setTitle("Pays · ${continent.label}")
             .setNegativeButton("Continents") { _, _ -> chooseContinent() }.create()
+        lateinit var countryList: ListView
         val content = column().apply {
             setPadding(dp(16), 0, dp(16), 0)
             val input = EditText(context).apply {
                 hint = "Rechercher un pays"
                 setSingleLine(true)
+                remoteFocus()
                 imeOptions = EditorInfo.IME_ACTION_DONE or EditorInfo.IME_FLAG_NO_EXTRACT_UI
                 setOnEditorActionListener { _, action, _ ->
                     if (action != EditorInfo.IME_ACTION_DONE) return@setOnEditorActionListener false
@@ -390,15 +444,17 @@ class RadioActivity : ComponentActivity() {
                 }
             }
             addView(input, LinearLayout.LayoutParams(-1, dp(48)))
-            addView(ListView(context).apply {
+            countryList = ListView(context).apply {
                 this.adapter = adapter
+                if (television) setSelector(R.drawable.radio_focus)
                 setOnItemClickListener { _, _, position, _ ->
                     country = shown[position]
                     prefs.edit().putString("world_country", country).apply()
                     dialog.dismiss()
                     if (query.isEmpty()) updateDirectory(resetScroll = true) else stationSearch.setText("")
                 }
-            }, LinearLayout.LayoutParams(-1, dp(200)))
+            }
+            addView(countryList, LinearLayout.LayoutParams(-1, dp(200)))
             adapter.addAll(shown.map(StationDirectory::countryName))
             input.addTextChangedListener(object : TextWatcher {
                 override fun beforeTextChanged(text: CharSequence?, start: Int, count: Int, after: Int) = Unit
@@ -417,16 +473,18 @@ class RadioActivity : ComponentActivity() {
         dialog.window?.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN)
         dialog.show()
         dialog.window?.setBackgroundDrawableResource(R.drawable.radio_dialog)
+        if (television) countryList.requestFocus()
     }
 
     private fun stationPanel(wide: Boolean): View = column().apply {
         background = getDrawable(R.drawable.radio_player)
-        setPadding(dp(12), dp(if (wide) 8 else 6), dp(12), dp(8))
+        val padding = dp(if (television) 16 else 12)
+        setPadding(padding, dp(if (television) 12 else 8), padding, dp(if (television) 14 else 8))
         val compactLandscape = wide && resources.configuration.screenHeightDp < 420
         val presentation = (if (wide) column() else row()).apply {
             playerPanel = this
             gravity = if (wide) Gravity.CENTER else Gravity.START or Gravity.CENTER_VERTICAL
-            if (wide) addView(label("", 11, accent, bold = true).apply {
+            if (wide) addView(label("", if (television) 13 else 11, accent, bold = true).apply {
                 gravity = Gravity.CENTER
                 letterSpacing = .08f
                 playerCategory = this
@@ -435,12 +493,14 @@ class RadioActivity : ComponentActivity() {
             val artworkSize = dp(when {
                 !wide -> 48
                 compactLandscape -> 54
+                television -> 92
                 else -> 76
             })
             val motifHeight = dp(when {
                 !wide -> 56
                 compactLandscape -> 72
-                else -> 148
+                television -> 130
+                else -> 122
             })
             addView(FrameLayout(context).apply {
                 addView(PremiumRadioMotif(context), FrameLayout.LayoutParams(-1, -1))
@@ -456,6 +516,7 @@ class RadioActivity : ComponentActivity() {
                 val titleSize = when {
                     !wide -> 17
                     compactLandscape -> 19
+                    television -> 25
                     else -> 21
                 }
                 playerTitle = label("", titleSize, textColor, bold = true).apply {
@@ -464,7 +525,7 @@ class RadioActivity : ComponentActivity() {
                     ellipsize = TextUtils.TruncateAt.END
                 }
                 addView(playerTitle, LinearLayout.LayoutParams(-1, -2))
-                playerSubtitle = label("", 12, muted).apply {
+                playerSubtitle = label("", if (television) 16 else 12, muted).apply {
                     textAlignment = alignment
                     maxLines = if (compactLandscape) 1 else 2
                     ellipsize = TextUtils.TruncateAt.END
@@ -492,7 +553,7 @@ class RadioActivity : ComponentActivity() {
             liveIndicator = row().apply {
                 gravity = Gravity.CENTER_VERTICAL
                 visibility = View.GONE
-                val lineColor = 0xFF587185.toInt()
+                val lineColor = 0xFF658F8C.toInt()
                 fun line() = View(context).apply {
                     setBackgroundColor(lineColor)
                     importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
@@ -519,25 +580,37 @@ class RadioActivity : ComponentActivity() {
             else LinearLayout.LayoutParams(0, -2, 1f).apply { marginEnd = dp(6) })
         addView(row().apply {
             gravity = Gravity.CENTER
+            val controlHeight = dp(if (television) 54 else 48)
             previous = transportButton(R.drawable.ic_radio_previous, "Station précédente") { skip(-1) }
             playButton = transportButton(R.drawable.ic_radio_play, "Écouter", primary = true) { toggle() }
             next = transportButton(R.drawable.ic_radio_next, "Station suivante") { skip(1) }
-            addView(previous, LinearLayout.LayoutParams(dp(48), dp(48)))
-            addView(playButton, LinearLayout.LayoutParams(dp(56), dp(48)).apply {
+            addView(previous, LinearLayout.LayoutParams(controlHeight, controlHeight))
+            addView(playButton, LinearLayout.LayoutParams(dp(if (television) 66 else 56), controlHeight).apply {
                 marginStart = dp(6)
                 marginEnd = dp(6)
             })
-            addView(next, LinearLayout.LayoutParams(dp(48), dp(48)))
-        }, LinearLayout.LayoutParams(if (wide) -1 else -2, dp(48)))
+            addView(next, LinearLayout.LayoutParams(controlHeight, controlHeight))
+            if (television) {
+                val favoriteButton = transportButton(R.drawable.ic_tab_favorites, "Favori") {
+                    val current = findStation(controller?.currentMediaItem?.mediaId) ?: savedStation
+                    current?.let(::toggleFavorite)
+                }
+                playerFavorite = favoriteButton
+                addView(favoriteButton, LinearLayout.LayoutParams(controlHeight, controlHeight).apply { marginStart = dp(6) })
+            }
+        }, LinearLayout.LayoutParams(if (wide) -1 else -2, dp(if (television) 54 else 48)))
     }
 
     private fun transportButton(icon: Int, description: String, primary: Boolean = false, action: () -> Unit) =
         ImageButton(this).apply {
+            id = View.generateViewId()
             setImageResource(icon)
+            if (primary) imageTintList = ColorStateList.valueOf(0xFF132A2A.toInt())
             scaleType = ImageView.ScaleType.CENTER
             background = pressable(if (primary) R.drawable.radio_primary else R.drawable.radio_control)
             contentDescription = description
             isFocusable = true
+            remoteFocus()
             setOnClickListener { action() }
         }
 
@@ -556,7 +629,7 @@ class RadioActivity : ComponentActivity() {
         override fun getItemViewType(position: Int): Int = if (isEnabled(position)) 0 else 1
         override fun getView(position: Int, recycled: View?, parent: ViewGroup): View = when (val item = getItem(position)) {
             is ListEntry.Heading -> (recycled as? TextView ?: label("", 14, accent, bold = true).apply {
-                layoutParams = AbsListView.LayoutParams(-1, dp(32))
+                layoutParams = AbsListView.LayoutParams(-1, dp(if (television) 36 else 32))
                 layoutDirection = View.LAYOUT_DIRECTION_RTL
                 gravity = Gravity.START or Gravity.CENTER_VERTICAL
                 setPaddingRelative(dp(12), 0, dp(12), 0)
@@ -585,22 +658,26 @@ class RadioActivity : ComponentActivity() {
                 setColor(accent)
             }
         }
-        private val badge = StationArtwork(12)
-        private val name = label("", 17, textColor, bold = true).apply {
+        private val badge = StationArtwork(if (television) 17 else 12)
+        private val name = label("", if (television) 21 else 17, textColor, bold = true).apply {
             textAlignment = View.TEXT_ALIGNMENT_VIEW_START
             maxLines = 2
             ellipsize = TextUtils.TruncateAt.END
         }
-        private val subtitle = label("", 12, muted).apply {
+        private val subtitle = label("", if (television) 15 else 12, muted).apply {
             textAlignment = View.TEXT_ALIGNMENT_VIEW_START
             maxLines = 1
             ellipsize = TextUtils.TruncateAt.END
         }
-        private val star = button("☆") {}.apply { background = null; textSize = 21f }
+        private val star = if (television) null else ImageButton(context).apply {
+            scaleType = ImageView.ScaleType.CENTER
+            background = pressable(R.drawable.radio_tab)
+            isFocusable = true
+        }
 
         init {
             layoutParams = AbsListView.LayoutParams(-1, -2)
-            minimumHeight = dp(52)
+            minimumHeight = dp(if (television) 66 else 54)
             gravity = Gravity.CENTER_VERTICAL
             background = RippleDrawable(ColorStateList.valueOf(0x2EFFFFFF), null, ColorDrawable(Color.WHITE))
             addView(FrameLayout(context).apply {
@@ -609,9 +686,18 @@ class RadioActivity : ComponentActivity() {
                 addView(number, FrameLayout.LayoutParams(-1, -1))
                 addView(playingIcon, FrameLayout.LayoutParams(dp(18), dp(18), Gravity.CENTER))
             }, LinearLayout.LayoutParams(dp(38), dp(44)))
-            addView(badge, LinearLayout.LayoutParams(dp(46), dp(38)).apply { marginEnd = dp(9) })
+            addView(badge, LinearLayout.LayoutParams(dp(if (television) 54 else 44), dp(if (television) 50 else 40)).apply {
+                marginEnd = dp(if (television) 12 else 9)
+            })
             addView(column().apply { addView(name); addView(subtitle) }, LinearLayout.LayoutParams(0, -2, 1f))
-            addView(star, LinearLayout.LayoutParams(dp(48), dp(48)))
+            if (television) {
+                addView(ImageView(context).apply {
+                    setImageResource(R.drawable.ic_radio_play)
+                    imageTintList = ColorStateList.valueOf(muted)
+                    scaleType = ImageView.ScaleType.CENTER
+                    importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+                }, LinearLayout.LayoutParams(dp(48), dp(48)))
+            } else addView(star, LinearLayout.LayoutParams(dp(48), dp(48)))
         }
 
         fun bind(station: RadioStation, position: Int) {
@@ -620,7 +706,7 @@ class RadioActivity : ComponentActivity() {
             layoutDirection = directionOf(station.name)
             selectionMark.visibility = if (selected) View.VISIBLE else View.GONE
             contentDescription = "Écouter ${station.name}"
-            setOnClickListener { select(station) }
+            if (!television) setOnClickListener { select(station) }
             number.text = position.toString().padStart(2, '0')
             number.visibility = if (playing) View.INVISIBLE else View.VISIBLE
             number.setTextColor(if (selected) accent else muted)
@@ -632,14 +718,9 @@ class RadioActivity : ComponentActivity() {
             val audience = if (tab == StationTab.MOROCCO) Stations.audienceLabel(station) else null
             subtitle.text = if (audience == null) detail else "$detail · $audience (T2 2025)"
             subtitle.setTextColor(if (playing) accent else muted)
-            val favorite = station.url in favorites
-            star.text = if (favorite) "★" else "☆"
-            star.setTextColor(if (favorite) amber else muted)
-            star.contentDescription = if (favorite) "Retirer ${station.name} des favoris" else "Ajouter ${station.name} aux favoris"
-            star.setOnClickListener {
-                favorites = if (favorite) favorites - station.url else favorites + station.url
-                persistStations(station)
-                renderRows()
+            star?.let {
+                bindFavorite(it, station)
+                it.setOnClickListener { toggleFavorite(station) }
             }
         }
     }
@@ -655,6 +736,7 @@ class RadioActivity : ComponentActivity() {
             background = getDrawable(R.drawable.radio_control)
             clipToOutline = true
             importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
+            if (showCredits) remoteFocus()
             addView(initials, LayoutParams(-1, -1))
             addView(logo, LayoutParams(-1, -1).apply { setMargins(dp(3), dp(3), dp(3), dp(3)) })
         }
@@ -680,6 +762,11 @@ class RadioActivity : ComponentActivity() {
                 logo.visibility = View.VISIBLE
                 initials.visibility = View.GONE
                 return
+            }
+            if (station == null || Stations.isReciter(station)) {
+                logo.setImageResource(if (station == null) R.drawable.ic_radio else R.drawable.ic_tab_quran)
+                logo.visibility = View.VISIBLE
+                initials.visibility = View.GONE
             }
             logoWork = artwork.load(station?.logoUrl) { bitmap ->
                 if (artworkKey == station?.url && bitmap != null) {
@@ -765,8 +852,8 @@ class RadioActivity : ComponentActivity() {
             if (radioFavoritesOnly) "Afficher toutes les radios marocaines" else "Afficher les radios marocaines favorites"
         radioFilter.background = pressable(if (radioFavoritesOnly) R.drawable.radio_selected else R.drawable.radio_control)
         empty.text = when {
-            onRadioTab && radioFavoritesOnly && query.isBlank() -> "Ajoute une radio marocaine avec ☆"
-            tab == StationTab.FAVORITES && favorites.isEmpty() -> "Ajoute une station avec ☆"
+            onRadioTab && radioFavoritesOnly && query.isBlank() -> "Aucune radio marocaine favorite"
+            tab == StationTab.FAVORITES && favorites.isEmpty() -> "Utilise l’étoile pour ajouter une station"
             directory.loading -> "Chargement des radios…"
             directory.failed -> "Annuaire indisponible"
             tab == StationTab.WORLD && query.isBlank() -> "Aucune station HTTPS disponible pour ce pays"
@@ -834,8 +921,8 @@ class RadioActivity : ComponentActivity() {
         statusBadge.backgroundTintList = ColorStateList.valueOf(when {
             waitingForNetwork && !playing -> 0xFF3A2B1C.toInt()
             live -> Color.TRANSPARENT
-            playing -> 0xFF1B3143.toInt()
-            else -> 0xFF202A36.toInt()
+            playing -> 0xFF1C3637.toInt()
+            else -> 0xFF203034.toInt()
         })
         updateLiveDot(live)
         playButton.setImageResource(if (requesting) R.drawable.ic_radio_pause else R.drawable.ic_radio_play)
@@ -843,6 +930,7 @@ class RadioActivity : ComponentActivity() {
         enable(playButton, (player != null && (station != null || rows.isNotEmpty())) || connectionFailed)
         enable(previous, player != null && rows.size > 1)
         enable(next, player != null && rows.size > 1)
+        playerFavorite?.let { bindFavorite(it, station) }
         val highlight = (active ?: savedStation?.url) to playing
         if (highlighted != highlight) {
             highlighted = highlight
@@ -909,6 +997,24 @@ class RadioActivity : ComponentActivity() {
     private fun findStation(url: String?): RadioStation? =
         Stations.all.firstOrNull { it.url == url } ?: directoryBookmarks.firstOrNull { it.url == url }
 
+    private fun bindFavorite(button: ImageButton, station: RadioStation?) {
+        val favorite = station?.url in favorites
+        button.setImageResource(if (favorite) R.drawable.ic_radio_favorite_filled else R.drawable.ic_tab_favorites)
+        button.imageTintList = ColorStateList.valueOf(if (favorite) amber else muted)
+        button.contentDescription = when {
+            station == null -> "Favori"
+            favorite -> "Retirer ${station.name} des favoris"
+            else -> "Ajouter ${station.name} aux favoris"
+        }
+        enable(button, station != null)
+    }
+
+    private fun toggleFavorite(station: RadioStation) {
+        favorites = if (station.url in favorites) favorites - station.url else favorites + station.url
+        persistStations(station)
+        renderRows()
+    }
+
     private fun persistStations(station: RadioStation) {
         if (station.countryCode != null) {
             directoryBookmarks = listOf(station) + directoryBookmarks.filter { it.url != station.url }
@@ -947,7 +1053,12 @@ class RadioActivity : ComponentActivity() {
         gravity = Gravity.CENTER
         background = pressable(R.drawable.radio_control)
         isFocusable = true
+        remoteFocus()
         setOnClickListener { action() }
+    }
+
+    private fun View.remoteFocus() {
+        if (television) foreground = getDrawable(R.drawable.radio_focus)
     }
 
     private fun row() = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }

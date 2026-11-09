@@ -5,6 +5,7 @@ import android.util.AtomicFile
 import com.autodrive.launcher.RadioBrowser
 import com.autodrive.launcher.RadioCatalogue
 import com.autodrive.launcher.RadioStation
+import com.autodrive.launcher.readUpTo
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -21,14 +22,14 @@ internal class StationDirectory(context: Context) {
 
     fun cached(country: String): List<RadioStation> = synchronized(cacheLock) {
         runCatching {
-            val bytes = cache(country).openRead().use { it.readNBytes(CACHE_LIMIT + 1) }
+            val bytes = cache(country).openRead().use { it.readUpTo(CACHE_LIMIT + 1) }
             if (bytes.size > CACHE_LIMIT) emptyList() else decode(bytes.toString(Charsets.UTF_8))
         }.getOrDefault(emptyList())
     }
 
     fun fetch(query: Query, offset: Int): Page {
         require(query.country in countries)
-        val name = URLEncoder.encode(query.name.trim().take(80), Charsets.UTF_8)
+        val name = URLEncoder.encode(query.name.trim().take(80), Charsets.UTF_8.name())
         val path = "stations/search?countrycode=${query.country}&name=$name&hidebroken=true" +
             "&order=clickcount&reverse=true&limit=$PAGE_SIZE&offset=$offset"
         val page = RadioBrowser.read(path, userAgent) { parsePage(it, query.country, offset) }

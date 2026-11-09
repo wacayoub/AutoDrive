@@ -1,6 +1,7 @@
 package com.autodrive.radiomaroc
 
 import com.autodrive.launcher.RadioStation
+import com.autodrive.launcher.readUpTo
 import org.json.JSONObject
 import org.jsoup.Jsoup
 import java.net.HttpURLConnection
@@ -30,7 +31,7 @@ internal object BroadcastProgrammes {
             connection.setRequestProperty("User-Agent", "RadioMarocCoran")
             connection.setRequestProperty("Cache-Control", "no-cache")
             if (connection.responseCode != 200) return null
-            val data = connection.inputStream.use { it.readNBytes(MAX_BYTES + 1) }
+            val data = connection.inputStream.use { it.readUpTo(MAX_BYTES + 1) }
             if (data.size > MAX_BYTES) return null
             val text = data.toString(Charsets.UTF_8)
             if (source == RADIO_2M_FEED) radio2m(text) else snrt(text)

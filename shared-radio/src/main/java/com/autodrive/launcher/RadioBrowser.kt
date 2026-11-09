@@ -20,7 +20,7 @@ internal object RadioBrowser {
                     connection.setRequestProperty("User-Agent", userAgent)
                     connection.setRequestProperty("Accept", "application/json")
                     if (connection.responseCode != 200) throw IOException("Radio Browser unavailable")
-                    connection.inputStream.use { it.readNBytes(MAX_BYTES + 1) }
+                    connection.inputStream.use { it.readUpTo(MAX_BYTES + 1) }
                 } finally {
                     connection.disconnect()
                 }

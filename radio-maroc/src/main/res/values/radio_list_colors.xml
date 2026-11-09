@@ -1,3 +1,4 @@
 <resources>
-    <color name="radio_list_rule">#293845</color>
+    <color name="radio_list_rule">#26393D</color>
+    <color name="radio_icon_background">#143A3C</color>
 </resources>
