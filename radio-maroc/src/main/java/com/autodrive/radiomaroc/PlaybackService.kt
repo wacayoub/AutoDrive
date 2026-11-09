@@ -12,6 +12,7 @@ import androidx.annotation.OptIn
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
+import androidx.media3.common.Metadata
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
@@ -20,6 +21,7 @@ import androidx.media3.datasource.ResolvingDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.extractor.metadata.icy.IcyInfo
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import com.google.common.util.concurrent.Futures
@@ -29,6 +31,8 @@ import com.google.common.util.concurrent.ListenableFuture
 internal class PlaybackService : MediaSessionService() {
     companion object {
         const val NETWORK_UNAVAILABLE = "com.autodrive.radiomaroc.NETWORK_UNAVAILABLE"
+        const val STREAM_STATION = "com.autodrive.radiomaroc.STREAM_STATION"
+        const val STREAM_TITLE = "com.autodrive.radiomaroc.STREAM_TITLE"
     }
 
     private var session: MediaSession? = null
@@ -36,6 +40,7 @@ internal class PlaybackService : MediaSessionService() {
     private var validatedNetwork: Network? = null
     private var networkUnavailable = false
     private var retryAfterOutage = false
+    private var streamInfo: Pair<String, String>? = null
     private val networkCallback = object : ConnectivityManager.NetworkCallback() {
         override fun onCapabilitiesChanged(network: Network, capabilities: NetworkCapabilities) {
             val validated = capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
@@ -51,6 +56,17 @@ internal class PlaybackService : MediaSessionService() {
     }
 
     private val recoveryListener = object : Player.Listener {
+        override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+            updateStreamInfo(null)
+        }
+
+        override fun onMetadata(metadata: Metadata) {
+            val icy = (0 until metadata.length()).firstNotNullOfOrNull { metadata[it] as? IcyInfo } ?: return
+            val station = session?.player?.currentMediaItem?.mediaId ?: return
+            val title = icy.title?.trim()?.takeIf { it.isNotEmpty() && it.length <= 160 }
+            updateStreamInfo(title?.let { station to it })
+        }
+
         override fun onEvents(player: Player, events: Player.Events) {
             if (events.contains(Player.EVENT_PLAYBACK_STATE_CHANGED) && player.isPlaying) retryAfterOutage = false
             recoverPlayback(player)
@@ -94,7 +110,7 @@ internal class PlaybackService : MediaSessionService() {
         player.addListener(recoveryListener)
         val reopen = PendingIntent.getActivity(this, 0, Intent(this, RadioActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
         session = MediaSession.Builder(this, player).setSessionActivity(reopen)
-            .setSessionExtras(networkExtras())
+            .setSessionExtras(sessionExtras())
             .setCallback(object : MediaSession.Callback {
                 override fun onAddMediaItems(session: MediaSession, controller: MediaSession.ControllerInfo,
                     mediaItems: List<MediaItem>): ListenableFuture<List<MediaItem>> = Futures.immediateFuture(
@@ -111,13 +127,25 @@ internal class PlaybackService : MediaSessionService() {
         connectivity.registerDefaultNetworkCallback(networkCallback, Handler(Looper.getMainLooper()))
     }
 
-    private fun networkExtras() = Bundle().apply { putBoolean(NETWORK_UNAVAILABLE, networkUnavailable) }
+    private fun sessionExtras() = Bundle().apply {
+        putBoolean(NETWORK_UNAVAILABLE, networkUnavailable)
+        streamInfo?.let { (station, title) ->
+            putString(STREAM_STATION, station)
+            putString(STREAM_TITLE, title)
+        }
+    }
+
+    private fun updateStreamInfo(info: Pair<String, String>?) {
+        if (streamInfo == info) return
+        streamInfo = info
+        session?.setSessionExtras(sessionExtras())
+    }
 
     private fun setNetworkUnavailable(unavailable: Boolean) {
         val current = session ?: return
         if (networkUnavailable == unavailable) return
         networkUnavailable = unavailable
-        current.setSessionExtras(networkExtras())
+        current.setSessionExtras(sessionExtras())
         recoverPlayback(current.player)
     }
 

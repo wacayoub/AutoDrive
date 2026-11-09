@@ -796,8 +796,9 @@ class RadioActivity : ComponentActivity() {
         val playing = player?.isPlaying == true
         val live = playing && !recording
         followProgramme(station.takeIf { player != null && !piconsOffline })
+        val streamInfo = player?.sessionExtras?.takeIf { it.getString(PlaybackService.STREAM_STATION) == active }
         val programme = publishedProgramme ?: station?.takeIf { live && it.url == active }
-            ?.let { BroadcastProgrammes.fromStream(it, player?.mediaMetadata?.title) }
+            ?.let { BroadcastProgrammes.fromStream(it, streamInfo?.getString(PlaybackService.STREAM_TITLE)) }
         playerCategory?.text = when {
             recording -> "تلاوات الحرم"
             programme != null -> programme.source
