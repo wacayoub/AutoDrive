@@ -25,7 +25,11 @@ class StationsTest {
 
     @Test fun favoritesSearchAndStationControlsUseTheVisibleList() {
         val morocco = Stations.visible(StationTab.MOROCCO, emptySet(), "")
-        assertEquals("Radio Mars", RadioQueue.neighbor(morocco, morocco.first().url, 1)?.name)
+        assertEquals(
+            listOf("Med Radio", "HIT RADIO", "Radio Aswat", "Chada FM", "Radio Mars", "Medina FM"),
+            morocco.take(6).map { it.name },
+        )
+        assertEquals("HIT RADIO", RadioQueue.neighbor(morocco, morocco.first().url, 1)?.name)
         assertEquals(morocco.last(), RadioQueue.neighbor(morocco, morocco.first().url, -1))
         assertEquals("Radio Aswat", Stations.visible(StationTab.MOROCCO, emptySet(), "aswat").single().name)
         val quran = Stations.visible(StationTab.QURAN, emptySet(), "قَزَابْرِي").single()

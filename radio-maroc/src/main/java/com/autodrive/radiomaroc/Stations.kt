@@ -12,14 +12,16 @@ internal enum class StationTab(val label: String) {
 
 internal object Stations {
     private val morocco = listOf(
+        // Radiométrie Maroc, Q2 2025: descending audience share among these stations.
+        RadioStation("Med Radio", "https://medradio.ice.infomaniak.ch/medradio-128.mp3", tags = setOf("Débats")),
         RadioStation("HIT RADIO", "https://hitradio-maroc.ice.infomaniak.ch/hitradio-maroc-128.mp3",
             logoUrl = "https://www.hitradio.ma/logo/small-logo-hitradio.webp", tags = setOf("Musique")),
-        RadioStation("Radio Mars", "https://radiomars.ice.infomaniak.ch/radiomars-128.mp3", tags = setOf("Sport")),
-        RadioStation("Chada FM", "https://chadafm.ice.infomaniak.ch/chadafm-128.aac", tags = setOf("Musique")),
         RadioStation("Radio Aswat", "https://aswat.ice.infomaniak.ch/aswat-high.mp3", tags = setOf("Débats")),
-        RadioStation("Med Radio", "https://medradio.ice.infomaniak.ch/medradio-128.mp3", tags = setOf("Débats")),
-        RadioStation("Skyrock Casablanca", "https://icecast.skyrock.net/s/casa_aac_64k", tags = setOf("Rap")),
+        RadioStation("Chada FM", "https://chadafm.ice.infomaniak.ch/chadafm-128.aac", tags = setOf("Musique")),
+        RadioStation("Radio Mars", "https://radiomars.ice.infomaniak.ch/radiomars-128.mp3", tags = setOf("Sport")),
         RadioStation("Medina FM", "https://medinafm.ice.infomaniak.ch/medinafm-64.mp3", tags = setOf("Généraliste")),
+        // Regional and web stations without a comparable individual measurement.
+        RadioStation("Skyrock Casablanca", "https://icecast.skyrock.net/s/casa_aac_64k", tags = setOf("Rap")),
         RadioStation("Radio Plus Agadir", "https://stream-158.zeno.fm/bqdbb6hd0neuv", tags = setOf("Agadir")),
         RadioStation("Radio Azawan", "https://az-maroc.ice.infomaniak.ch/az-maroc-64.aac", tags = setOf("Musique")),
         RadioStation("U Dance", "https://udance.ice.infomaniak.ch/udance-128.aac", tags = setOf("Dance")),
