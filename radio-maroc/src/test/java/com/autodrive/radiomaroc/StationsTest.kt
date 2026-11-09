@@ -37,6 +37,19 @@ class StationsTest {
         assertEquals(listOf(quran), Stations.visible(StationTab.FAVORITES, setOf(quran.url), ""))
     }
 
+    @Test fun radioFavoritesKeepAudienceOrderAndExcludeOtherTabs() {
+        val morocco = Stations.visible(StationTab.MOROCCO, emptySet(), "")
+        val med = morocco.first()
+        val mars = morocco.single { it.name == "Radio Mars" }
+        val quran = Stations.visible(StationTab.QURAN, emptySet(), "").first()
+        val favorites = setOf(mars.url, quran.url, med.url)
+        val visible = Stations.visible(StationTab.MOROCCO, favorites, "", radioFavoritesOnly = true)
+        assertEquals(listOf(med, mars), visible)
+        assertEquals(mars, RadioQueue.neighbor(visible, med.url, 1))
+        assertEquals(listOf(mars), Stations.visible(StationTab.MOROCCO, favorites, "mars", radioFavoritesOnly = true))
+        assertEquals(listOf(med, mars, quran), Stations.visible(StationTab.FAVORITES, favorites, ""))
+    }
+
     @Test fun badrAndTajwidCanBeFoundAndPreviousFavoritesSurviveTheMove() {
         val badr = Stations.visible(StationTab.QURAN, emptySet(), "Badr Turki").single()
         assertEquals("بدر التركي", badr.name)

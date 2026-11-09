@@ -14,6 +14,7 @@ import android.os.Bundle
 import android.text.Editable
 import android.text.SpannableStringBuilder
 import android.text.Spanned
+import android.text.TextDirectionHeuristics
 import android.text.TextUtils
 import android.text.TextWatcher
 import android.text.method.LinkMovementMethod
@@ -48,6 +49,7 @@ class RadioActivity : Activity() {
     private lateinit var prefs: SharedPreferences
     private lateinit var artwork: RadioArtwork
     private var tab = StationTab.MOROCCO
+    private var radioFavoritesOnly = false
     private var favorites = emptySet<String>()
     private var query = ""
     private var rows = emptyList<RadioStation>()
@@ -57,9 +59,11 @@ class RadioActivity : Activity() {
     private var controller: MediaController? = null
     private var connectionFailed = false
     private lateinit var tabs: Map<StationTab, TextView>
+    private lateinit var radioFilter: TextView
     private lateinit var list: ListView
     private lateinit var empty: TextView
     private lateinit var playerTitle: TextView
+    private lateinit var playerPanel: LinearLayout
     private lateinit var playerSubtitle: TextView
     private var playerCategory: TextView? = null
     private lateinit var playerArtwork: StationArtwork
@@ -82,6 +86,7 @@ class RadioActivity : Activity() {
         favorites = prefs.getStringSet("favorites", emptySet()).orEmpty().toSet()
         savedStation = Stations.all.firstOrNull { it.url == prefs.getString("last_station", null) }
         query = savedInstanceState?.getString("query").orEmpty()
+        radioFavoritesOnly = savedInstanceState?.getBoolean("radio_favorites_only") == true
         volumeControlStream = android.media.AudioManager.STREAM_MUSIC
         window.setDecorFitsSystemWindows(false)
         setContentView(screen())
@@ -90,6 +95,7 @@ class RadioActivity : Activity() {
 
     override fun onSaveInstanceState(outState: Bundle) {
         outState.putString("query", query)
+        outState.putBoolean("radio_favorites_only", radioFavoritesOnly)
         super.onSaveInstanceState(outState)
     }
 
@@ -114,7 +120,11 @@ class RadioActivity : Activity() {
     private fun connectPlayer() {
         connectionFailed = false
         val token = SessionToken(this, ComponentName(this, PlaybackService::class.java))
-        val future = MediaController.Builder(this, token).buildAsync()
+        val future = MediaController.Builder(this, token).setListener(object : MediaController.Listener {
+            override fun onExtrasChanged(controller: MediaController, extras: Bundle) {
+                if (this@RadioActivity.controller === controller) renderPlayer()
+            }
+        }).buildAsync()
         controllerFuture = future
         future.addListener({
             if (controllerFuture === future) {
@@ -183,8 +193,8 @@ class RadioActivity : Activity() {
     }
 
     private fun stationList(): View = column().apply {
-        addView(EditText(context).apply {
-            hint = "Rechercher une station ou un récitateur"
+        val search = EditText(context).apply {
+            hint = "Rechercher…"
             contentDescription = "Rechercher une station ou un récitateur"
             setSingleLine(true)
             textSize = 14f
@@ -208,6 +218,14 @@ class RadioActivity : Activity() {
                     renderRows(resetScroll = true)
                 }
             })
+        }
+        radioFilter = button("★ Favoris") {
+            radioFavoritesOnly = !radioFavoritesOnly
+            renderRows(resetScroll = true)
+        }
+        addView(row().apply {
+            addView(search, LinearLayout.LayoutParams(0, -1, 1f))
+            addView(radioFilter, LinearLayout.LayoutParams(dp(94), -1).apply { marginStart = dp(6) })
         }, LinearLayout.LayoutParams(-1, dp(48)).apply { bottomMargin = dp(6) })
         addView(FrameLayout(context).apply {
             empty = label("", 15, muted).apply { gravity = Gravity.CENTER; setPadding(dp(10), 0, dp(10), 0) }
@@ -225,8 +243,9 @@ class RadioActivity : Activity() {
     }
 
     private fun stationPanel(wide: Boolean): View = (if (wide) column() else row()).apply {
+        playerPanel = this
         background = getDrawable(R.drawable.radio_card)
-        gravity = Gravity.CENTER_VERTICAL
+        gravity = Gravity.START or Gravity.CENTER_VERTICAL
         setPadding(dp(12), dp(6), dp(12), dp(6))
         playerArtwork = StationArtwork(if (wide) 25 else 16, showCredits = true)
         val artworkSize = dp(if (wide) 66 else 42)
@@ -236,11 +255,15 @@ class RadioActivity : Activity() {
         addView(column().apply {
             if (wide) addView(label("", 11, accent, bold = true).also { playerCategory = it })
             playerTitle = label("", if (wide) 22 else 17, textColor, bold = true).apply {
+                textAlignment = View.TEXT_ALIGNMENT_VIEW_START
                 maxLines = 2
                 ellipsize = TextUtils.TruncateAt.END
             }
             addView(playerTitle)
-            playerSubtitle = label("", 12, muted).apply { maxLines = 2 }
+            playerSubtitle = label("", 12, muted).apply {
+                textAlignment = View.TEXT_ALIGNMENT_VIEW_START
+                maxLines = 2
+            }
             addView(playerSubtitle)
         }, if (wide) LinearLayout.LayoutParams(-1, -2) else LinearLayout.LayoutParams(0, -2, 1f))
     }
@@ -273,15 +296,24 @@ class RadioActivity : Activity() {
     private inner class StationCard(context: Context) : LinearLayout(context) {
         private val number = label("", 12, accent, bold = true).apply { gravity = Gravity.CENTER; importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO }
         private val badge = StationArtwork(12)
-        private val name = label("", 15, textColor, bold = true).apply { maxLines = 2; ellipsize = TextUtils.TruncateAt.END }
-        private val subtitle = label("", 11, muted).apply { maxLines = 1; ellipsize = TextUtils.TruncateAt.END }
+        private val name = label("", 17, textColor, bold = true).apply {
+            textAlignment = View.TEXT_ALIGNMENT_VIEW_START
+            maxLines = 2
+            ellipsize = TextUtils.TruncateAt.END
+        }
+        private val subtitle = label("", 12, muted).apply {
+            textAlignment = View.TEXT_ALIGNMENT_VIEW_START
+            maxLines = 1
+            ellipsize = TextUtils.TruncateAt.END
+        }
         private val star = button("☆") {}.apply { background = null; textSize = 21f; setTextColor(amber) }
 
         init {
-            layoutParams = AbsListView.LayoutParams(-1, dp(50))
+            layoutParams = AbsListView.LayoutParams(-1, -2)
+            minimumHeight = dp(52)
             gravity = Gravity.CENTER_VERTICAL
             addView(number, LinearLayout.LayoutParams(dp(34), -1))
-            addView(badge, LinearLayout.LayoutParams(dp(34), dp(34)).apply { marginEnd = dp(8) })
+            addView(badge, LinearLayout.LayoutParams(dp(36), dp(36)).apply { marginEnd = dp(8) })
             addView(column().apply { addView(name); addView(subtitle) }, LinearLayout.LayoutParams(0, -2, 1f))
             addView(star, LinearLayout.LayoutParams(dp(48), dp(48)))
         }
@@ -289,11 +321,12 @@ class RadioActivity : Activity() {
         fun bind(station: RadioStation, position: Int) {
             val selected = station.url == highlighted?.first
             val playing = selected && highlighted?.second == true
+            layoutDirection = directionOf(station.name)
             background = pressable(if (selected) R.drawable.radio_selected else R.drawable.radio_card)
             isActivated = selected
             contentDescription = "Écouter ${station.name}"
             setOnClickListener { select(station) }
-            number.text = position.toString().padStart(2, '0')
+            number.text = if (playing) "▶" else position.toString().padStart(2, '0')
             badge.bind(station)
             name.text = station.name
             subtitle.text = if (playing && !Stations.isRecording(station)) "En lecture" else Stations.subtitle(station)
@@ -392,8 +425,18 @@ class RadioActivity : Activity() {
     }
 
     private fun renderRows(resetScroll: Boolean = false) {
-        rows = Stations.visible(tab, favorites, query)
-        empty.text = if (tab == StationTab.FAVORITES && favorites.isEmpty()) "Ajoute une station avec ☆" else "Aucune station trouvée"
+        rows = Stations.visible(tab, favorites, query, radioFavoritesOnly)
+        val onRadioTab = tab == StationTab.MOROCCO
+        radioFilter.visibility = if (onRadioTab) View.VISIBLE else View.GONE
+        radioFilter.isSelected = radioFavoritesOnly
+        radioFilter.contentDescription =
+            if (radioFavoritesOnly) "Afficher toutes les radios marocaines" else "Afficher les radios marocaines favorites"
+        radioFilter.background = pressable(if (radioFavoritesOnly) R.drawable.radio_selected else R.drawable.radio_control)
+        empty.text = when {
+            onRadioTab && radioFavoritesOnly && query.isBlank() -> "Ajoute une radio marocaine avec ☆"
+            tab == StationTab.FAVORITES && favorites.isEmpty() -> "Ajoute une station avec ☆"
+            else -> "Aucune station trouvée"
+        }
         for ((choice, button) in tabs) {
             button.isSelected = choice == tab
             button.background = pressable(if (choice == tab) R.drawable.radio_selected else R.drawable.radio_control)
@@ -409,15 +452,18 @@ class RadioActivity : Activity() {
         val station = Stations.all.firstOrNull { it.url == active } ?: savedStation
         val recording = station?.let(Stations::isRecording) == true
         val ended = player?.playbackState == Player.STATE_ENDED
-        val requesting = player?.playWhenReady == true && player.playerError == null && !ended
+        val waitingForNetwork = player?.let(::waitingForNetwork) == true
+        val requesting = player?.playWhenReady == true && (player.playerError == null || waitingForNetwork) && !ended
         val playing = player?.isPlaying == true
         playerCategory?.text = if (recording) "تلاوات من المسجد الحرام" else "RADIO INTERNET"
+        playerPanel.layoutDirection = directionOf(station?.name.orEmpty())
         playerTitle.text = station?.name ?: "Choisir une station"
         playerSubtitle.text = station?.let(Stations::subtitle) ?: "Sélectionne une chaîne dans la liste"
         playerArtwork.bind(station)
         playerStatus.text = when {
             connectionFailed -> "Lecteur indisponible · réessayer"
             player == null -> "Connexion au lecteur…"
+            waitingForNetwork && !playing -> "Connexion perdue · reprise automatique"
             player.playerError != null -> "Flux indisponible · vérifier Internet ou réessayer"
             playing -> if (recording) "● En lecture" else "● En direct"
             ended && recording -> "Lecture terminée"
@@ -454,11 +500,18 @@ class RadioActivity : Activity() {
         val current = Stations.all.firstOrNull { it.url == player.currentMediaItem?.mediaId }
         val playable = player.playerError == null && player.playbackState != Player.STATE_ENDED
         when {
-            playable && player.playWhenReady -> player.pause()
+            (playable || waitingForNetwork(player)) && player.playWhenReady -> player.pause()
             playable && player.playbackState == Player.STATE_READY && current?.let(Stations::isRecording) == true -> player.play()
             else -> (current ?: savedStation ?: rows.firstOrNull())?.let(::select)
         }
     }
+
+    private fun waitingForNetwork(player: MediaController): Boolean =
+        player.sessionExtras.getBoolean(PlaybackService.NETWORK_UNAVAILABLE) &&
+            player.currentMediaItem != null && player.playWhenReady && player.playbackState != Player.STATE_ENDED
+
+    private fun directionOf(text: String): Int =
+        if (TextDirectionHeuristics.FIRSTSTRONG_LTR.isRtl(text, 0, text.length)) View.LAYOUT_DIRECTION_RTL else View.LAYOUT_DIRECTION_LTR
 
     private fun skip(direction: Int) {
         val current = controller?.currentMediaItem?.mediaId ?: savedStation?.url

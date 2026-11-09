@@ -8,7 +8,9 @@ La version **1.2.0** s’inspire de l’interface de chaînes de **Metrix FHD Ne
 - **القرآن** propose 12 flux de récitation, dont بدر التركي, العيون الكوشي, عمر القزابري et محمود خليل الحصري en lecture Warsh. [Flux publiés par MP3Quran](https://www.mp3quran.net/api/v3/radios?language=ar).
 - **التجويد** regroupe quatre flux du **المصحف المجوّد**. On y retrouve عبد الباسط عبد الصمد, محمد صديق المنشاوي, محمود خليل الحصري et محمود علي البنا. Le flux مجوّد d’Al-Minshawi garde son adresse de lecture pour préserver les favoris enregistrés.
 - **تلاوات الحرم** rassemble six extraits coraniques du Fajr, du Maghrib et de l’Isha à la Mosquée sacrée de La Mecque. Chaque extrait commence après la Fatiha et s’arrête avant le passage au rukūʿ. L’entrée indique le récitant, la sourate, la prière et la date. Le lecteur utilise les liens publics de Haramain Salaah Recordings, hébergés par QuranicAudio pour l’écoute personnelle. [Archives Haramain](https://haramain.info/) · [Conditions d’utilisation de QuranicAudio](https://quranicaudio.com/about).
-- Les étoiles enregistrent les favoris. La recherche et les commandes précédente/suivante suivent la liste affichée. La dernière station est mémorisée pour une reprise manuelle. La lecture active continue en arrière-plan et peut être mise en pause depuis les commandes média Android.
+- Les étoiles enregistrent les favoris. Le bouton **★ Favoris** à côté de la recherche dans Radio Maroc affiche les radios marocaines étoilées, dans l’ordre d’audience. Les commandes précédente/suivante suivent la liste affichée. L’onglet **★ Favoris** rassemble les favoris de toutes les catégories.
+- Les titres arabes et leurs portraits se lisent de droite à gauche dans la liste. Le titre de la station en cours apparaît aussi dans le lecteur et sa ligne est surlignée.
+- La dernière station est mémorisée pour une reprise manuelle au lancement. Pendant la lecture, l’application signale une coupure quand le flux ne joue plus et retente automatiquement au retour du réseau tant que la session reste active. Une pause manuelle annule cette reprise. Les commandes média Android restent accessibles en arrière-plan.
 
 Le catalogue est embarqué et les flux sont lus directement depuis leurs hébergeurs. Les lecteurs officiels de certains diffuseurs sont les sources de leurs URL publiques. Les autres entrées de la sélection marocaine proviennent de l’[annuaire Radio Browser](https://www.radio-browser.info/). Les stations et horaires peuvent évoluer. [HIT RADIO](https://www.hitradio.ma/live) · [Radio Mars](https://radiomars.ma/radio-live/) · [Chada FM](https://chada.ma/test-live/) · [Radio Aswat](https://radioaswat.ma/).
 
@@ -41,6 +43,10 @@ Le portrait du lecteur ouvre les crédits. Les images proviennent de Wikimedia C
 | أحمد العجمي | أحمد زين, CC BY-SA 3.0 | [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Ahmad_bin_Ali_Al-Ajmi.png) |
 | ياسر الدوسري | أحمد زين, CC BY-SA 3.0 | [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Yasser_Al-Dosari.png) |
 | عبد الله الجهني | الشيخ هيثم الدخين, CC BY-SA 4.0 | [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Abdullah_Al_Juhany_%28Cropped%29.png) |
+
+## Vérifications de la version 1.5.0
+
+L’installation signée de 1.4.2 vers 1.5.0 conserve les favoris. L’émulateur Android 13 a confirmé le filtre Radio Maroc et les commandes précédente/suivante dans la liste filtrée. Le rendu a été inspecté à 800 × 480 en 160 et 213 dpi, ainsi qu’en portrait. Après désactivation du Wi-Fi et des données mobiles, HIT RADIO a affiché le message de coupure et a repris après le retour du réseau, alors que l’application était en arrière-plan. Une pause volontaire pendant la coupure a empêché la reprise automatique. Six tests unitaires ont réussi. Lint a signalé 0 erreur et 6 avertissements. La reprise reste à vérifier sur l’Incarlink.
 
 ## Vérifications de la version 1.4.0
 

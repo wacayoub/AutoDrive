@@ -92,8 +92,10 @@ internal object Stations {
     fun reciterName(station: RadioStation): String = station.name.substringBefore(" ·")
     fun isRecording(station: RadioStation): Boolean = station.url in haram
 
-    fun visible(tab: StationTab, favorites: Set<String>, query: String): List<RadioStation> = when (tab) {
-        StationTab.MOROCCO -> morocco
+    fun visible(
+        tab: StationTab, favorites: Set<String>, query: String, radioFavoritesOnly: Boolean = false,
+    ): List<RadioStation> = when (tab) {
+        StationTab.MOROCCO -> if (radioFavoritesOnly) morocco.filter { it.url in favorites } else morocco
         StationTab.QURAN -> quran
         StationTab.TAJWID -> tajwid
         StationTab.HARAM -> haramStations
