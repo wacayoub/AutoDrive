@@ -2,13 +2,17 @@
 
 Application Android 13+ indépendante pour l’Incarlink et les téléphones compatibles. Après l’installation de l’APK signé, ouvrir **Radio Maroc & Coran** depuis la grille d’applications de Quickstep. Une connexion Internet est nécessaire pour écouter.
 
-La version **1.1.0** reprend l’apparence de Quickstep dans Radio, avec un fond ardoise, des cartes gris fumé arrondies et une sélection bleue. Installe-la sur la version 1.0.0 pour garder les favoris et la dernière station enregistrée.
+La version **1.2.0** s’inspire de l’interface de chaînes de **Metrix FHD Neo** sur Enigma2. En paysage, elle affiche les informations de la station à gauche, une liste numérotée à droite et un bandeau de lecture en bas. La sélection est surlignée en bleu. Installer l’APK sur la version précédente conserve les favoris et la dernière station enregistrée. [Skin de référence](https://www.sat-4-all.com/board/topic/341110-skin-metrixfhd-neo/).
 
 - **Radio Maroc** affiche une sélection de 12 flux directs, notamment HIT RADIO, Radio Mars, Chada FM, Aswat, Med Radio, Skyrock Casablanca, Radio Plus Agadir et Medina FM.
 - **القرآن** propose 12 flux de récitation, dont العيون الكوشي, عمر القزابري et محمود خليل الحصري en lecture Warsh. La sélection suit les [flux publiés par MP3Quran](https://www.mp3quran.net/api/v3/radios?language=ar).
 - Les étoiles enregistrent les favoris. La recherche et les commandes précédente/suivante suivent la liste affichée. La dernière station est mémorisée pour une reprise manuelle. La lecture active continue en arrière-plan et peut être mise en pause depuis les commandes média Android.
 
 Le catalogue est embarqué et les flux sont lus directement depuis leurs hébergeurs. Les lecteurs officiels de certains diffuseurs sont les sources de leurs URL publiques. Les autres entrées de la sélection marocaine proviennent de l’[annuaire Radio Browser](https://www.radio-browser.info/). Les stations et horaires peuvent évoluer. [HIT RADIO](https://www.hitradio.ma/live) · [Radio Mars](https://radiomars.ma/radio-live/) · [Chada FM](https://chada.ma/test-live/) · [Radio Aswat](https://radioaswat.ma/).
+
+## Vérifications de la version 1.2.0
+
+L’installation signée par-dessus 1.1.0 a conservé le favori et l’onglet de test. Sur l’émulateur Android 13, HIT RADIO, Radio Mars et العيون الكوشي ont atteint l’état de lecture. Les commandes précédente/suivante, la pause et la lecture après Home ont répondu. Le rendu a été inspecté en 800 × 480 à 160 et 213 dpi, ainsi qu’en portrait. Deux tests unitaires ont réussi et lint a signalé 0 erreur et 7 avertissements.
 
 ## Vérifications de la version 1.1.0
 

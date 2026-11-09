@@ -22,9 +22,9 @@ import android.widget.AbsListView
 import android.widget.BaseAdapter
 import android.widget.EditText
 import android.widget.FrameLayout
-import android.widget.GridView
 import android.widget.ImageView
 import android.widget.LinearLayout
+import android.widget.ListView
 import android.widget.TextView
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
@@ -36,9 +36,9 @@ import com.google.common.util.concurrent.ListenableFuture
 import kotlinx.coroutines.Job
 
 class RadioActivity : Activity() {
-    private val accent = 0xFF8ED6FF.toInt()
+    private val accent = 0xFF79D3F6.toInt()
     private val textColor = 0xFFF5F6F7.toInt()
-    private val muted = 0xFFD1D6DD.toInt()
+    private val muted = 0xFFB0BDC7.toInt()
     private val amber = 0xFFFFCF73.toInt()
     private lateinit var prefs: SharedPreferences
     private lateinit var artwork: RadioArtwork
@@ -52,9 +52,11 @@ class RadioActivity : Activity() {
     private var controller: MediaController? = null
     private var connectionFailed = false
     private lateinit var tabs: Map<StationTab, TextView>
-    private lateinit var grid: GridView
+    private lateinit var list: ListView
     private lateinit var empty: TextView
     private lateinit var playerTitle: TextView
+    private lateinit var playerSubtitle: TextView
+    private lateinit var playerArtwork: StationArtwork
     private lateinit var playerStatus: TextView
     private lateinit var playButton: TextView
     private lateinit var previous: TextView
@@ -128,15 +130,17 @@ class RadioActivity : Activity() {
             view.setPadding(edges.left + dp(10), edges.top + dp(4), edges.right + dp(10), edges.bottom + dp(8))
             insets
         }
-        addView(row().apply {
+        val wide = resources.configuration.screenWidthDp >= 560 && resources.configuration.screenWidthDp > resources.configuration.screenHeightDp
+        val masthead = row().apply {
             gravity = Gravity.CENTER_VERTICAL
-            background = getDrawable(R.drawable.radio_header)
-            setPadding(dp(6), 0, dp(6), 0)
-            addView(ImageView(context).apply { setImageResource(R.drawable.ic_radio) }, LinearLayout.LayoutParams(dp(34), dp(34)))
-            addView(label(getString(R.string.app_name), 19, textColor, bold = true).apply { setPadding(dp(8), 0, 0, 0) },
-                LinearLayout.LayoutParams(0, -2, 1f))
-        }, LinearLayout.LayoutParams(-1, dp(38)).apply { bottomMargin = dp(6) })
-        addView(row().apply {
+            setPadding(dp(6), 0, dp(8), 0)
+            addView(ImageView(context).apply { setImageResource(R.drawable.ic_radio) }, LinearLayout.LayoutParams(dp(32), dp(32)))
+            addView(label(getString(R.string.app_name), 16, textColor, bold = true).apply {
+                setPadding(dp(8), 0, 0, 0)
+                maxLines = 2
+            }, LinearLayout.LayoutParams(0, -2, 1f))
+        }
+        val categories = row().apply {
             tabs = StationTab.entries.associateWith { choice ->
                 button(choice.label) {
                     tab = choice
@@ -146,17 +150,31 @@ class RadioActivity : Activity() {
                     addView(view, LinearLayout.LayoutParams(0, dp(48), 1f).apply { marginEnd = dp(4) })
                 }
             }
-        }, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(8) })
-        val wide = resources.configuration.screenWidthDp >= 560 && resources.configuration.screenWidthDp > resources.configuration.screenHeightDp
+        }
+        if (wide) {
+            addView(row().apply {
+                background = getDrawable(R.drawable.radio_header)
+                addView(masthead, LinearLayout.LayoutParams(dp(205), -1))
+                addView(categories, LinearLayout.LayoutParams(0, -1, 1f))
+            }, LinearLayout.LayoutParams(-1, dp(48)).apply { bottomMargin = dp(8) })
+        } else {
+            addView(masthead, LinearLayout.LayoutParams(-1, dp(36)))
+            addView(categories, LinearLayout.LayoutParams(-1, dp(48)).apply { bottomMargin = dp(8) })
+        }
         val content = if (wide) row() else column()
-        content.addView(stationList(wide), if (wide) LinearLayout.LayoutParams(0, -1, 1f) else LinearLayout.LayoutParams(-1, 0, 1f))
-        content.addView(playerPanel(), if (wide) LinearLayout.LayoutParams(dp(198), -1).apply { marginStart = dp(8) }
-            else LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+        if (wide) {
+            content.addView(stationPanel(true), LinearLayout.LayoutParams(0, -1, .32f).apply { marginEnd = dp(8) })
+            content.addView(stationList(), LinearLayout.LayoutParams(0, -1, .68f))
+        } else {
+            content.addView(stationList(), LinearLayout.LayoutParams(-1, 0, 1f))
+            content.addView(stationPanel(false), LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(6) })
+        }
         addView(content, LinearLayout.LayoutParams(-1, 0, 1f))
+        addView(playbackBar(), LinearLayout.LayoutParams(-1, dp(52)).apply { topMargin = dp(6) })
         requestFocus()
     }
 
-    private fun stationList(wide: Boolean): View = column().apply {
+    private fun stationList(): View = column().apply {
         addView(EditText(context).apply {
             hint = "Rechercher une station ou un récitateur"
             contentDescription = "Rechercher une station ou un récitateur"
@@ -185,37 +203,55 @@ class RadioActivity : Activity() {
         }, LinearLayout.LayoutParams(-1, dp(48)).apply { bottomMargin = dp(6) })
         addView(FrameLayout(context).apply {
             empty = label("", 15, muted).apply { gravity = Gravity.CENTER; setPadding(dp(10), 0, dp(10), 0) }
-            grid = GridView(context).apply {
-                numColumns = if (wide) 2 else 1
-                horizontalSpacing = dp(6)
-                verticalSpacing = dp(6)
-                stretchMode = GridView.STRETCH_COLUMN_WIDTH
+            list = ListView(context).apply {
+                divider = android.graphics.drawable.ColorDrawable(0xFF263747.toInt())
+                dividerHeight = dp(1)
+                itemsCanFocus = true
                 contentDescription = "Liste des stations"
                 adapter = stationAdapter
             }
-            addView(grid, FrameLayout.LayoutParams(-1, -1))
+            addView(list, FrameLayout.LayoutParams(-1, -1))
             addView(empty, FrameLayout.LayoutParams(-1, -1))
-            grid.emptyView = empty
+            list.emptyView = empty
         }, LinearLayout.LayoutParams(-1, 0, 1f))
     }
 
-    private fun playerPanel(): View = column().apply {
+    private fun stationPanel(wide: Boolean): View = (if (wide) column() else row()).apply {
         background = getDrawable(R.drawable.radio_card)
         gravity = Gravity.CENTER_VERTICAL
-        setPadding(dp(10), dp(8), dp(10), dp(8))
-        addView(label("ÉCOUTE EN DIRECT", 11, accent, bold = true))
-        playerTitle = label("", 19, textColor, bold = true).apply { maxLines = 2; ellipsize = TextUtils.TruncateAt.END }
-        addView(playerTitle, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(4) })
-        playerStatus = label("", 13, muted).apply { maxLines = 2 }
-        addView(playerStatus, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(8) })
-        addView(row().apply {
-            previous = button("‹") { skip(-1) }.apply { contentDescription = "Station précédente"; textSize = 24f }
-            playButton = button("▶") { toggle() }.apply { textSize = 20f }
-            next = button("›") { skip(1) }.apply { contentDescription = "Station suivante"; textSize = 24f }
-            addView(previous, LinearLayout.LayoutParams(dp(48), dp(48)))
-            addView(playButton, LinearLayout.LayoutParams(0, dp(48), 1f).apply { marginStart = dp(4); marginEnd = dp(4) })
-            addView(next, LinearLayout.LayoutParams(dp(48), dp(48)))
+        setPadding(dp(12), dp(6), dp(12), dp(6))
+        playerArtwork = StationArtwork(if (wide) 25 else 16)
+        val artworkSize = dp(if (wide) 66 else 42)
+        addView(playerArtwork, LinearLayout.LayoutParams(artworkSize, artworkSize).apply {
+            if (wide) bottomMargin = dp(9) else marginEnd = dp(8)
         })
+        addView(column().apply {
+            if (wide) addView(label("RADIO INTERNET", 11, accent, bold = true))
+            playerTitle = label("", if (wide) 22 else 17, textColor, bold = true).apply {
+                maxLines = 2
+                ellipsize = TextUtils.TruncateAt.END
+            }
+            addView(playerTitle)
+            playerSubtitle = label("", 12, muted).apply { maxLines = 2 }
+            addView(playerSubtitle)
+        }, if (wide) LinearLayout.LayoutParams(-1, -2) else LinearLayout.LayoutParams(0, -2, 1f))
+    }
+
+    private fun playbackBar(): View = row().apply {
+        background = getDrawable(R.drawable.radio_header)
+        gravity = Gravity.CENTER_VERTICAL
+        setPadding(dp(10), 0, dp(2), 0)
+        playerStatus = label("", 13, muted, bold = true).apply { maxLines = 2; ellipsize = TextUtils.TruncateAt.END }
+        addView(playerStatus, LinearLayout.LayoutParams(0, -2, 1f).apply { marginEnd = dp(6) })
+        previous = button("‹") { skip(-1) }.apply { contentDescription = "Station précédente"; textSize = 24f }
+        playButton = button("▶") { toggle() }.apply {
+            textSize = 20f
+            background = pressable(R.drawable.radio_selected)
+        }
+        next = button("›") { skip(1) }.apply { contentDescription = "Station suivante"; textSize = 24f }
+        addView(previous, LinearLayout.LayoutParams(dp(48), dp(48)))
+        addView(playButton, LinearLayout.LayoutParams(dp(58), dp(48)).apply { marginStart = dp(4); marginEnd = dp(4) })
+        addView(next, LinearLayout.LayoutParams(dp(48), dp(48)))
     }
 
     private val stationAdapter = object : BaseAdapter() {
@@ -223,39 +259,34 @@ class RadioActivity : Activity() {
         override fun getItem(position: Int): RadioStation = rows[position]
         override fun getItemId(position: Int): Long = position.toLong()
         override fun getView(position: Int, recycled: View?, parent: ViewGroup): View =
-            (recycled as? StationCard ?: StationCard(parent.context)).apply { bind(getItem(position)) }
+            (recycled as? StationCard ?: StationCard(parent.context)).apply { bind(getItem(position), position + 1) }
     }
 
     private inner class StationCard(context: Context) : LinearLayout(context) {
-        private val initials = label("", 13, accent, bold = true).apply { gravity = Gravity.CENTER }
-        private val logo = ImageView(context).apply { scaleType = ImageView.ScaleType.FIT_CENTER; visibility = View.GONE }
+        private val number = label("", 12, accent, bold = true).apply { gravity = Gravity.CENTER; importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO }
+        private val badge = StationArtwork(12)
         private val name = label("", 15, textColor, bold = true).apply { maxLines = 2; ellipsize = TextUtils.TruncateAt.END }
         private val subtitle = label("", 11, muted).apply { maxLines = 1; ellipsize = TextUtils.TruncateAt.END }
-        private val star = button("☆") {}.apply { textSize = 22f; setTextColor(amber) }
-        private var logoWork: Job? = null
-        private var artworkKey: String? = null
+        private val star = button("☆") {}.apply { background = null; textSize = 21f; setTextColor(amber) }
 
         init {
-            layoutParams = AbsListView.LayoutParams(-1, dp(62))
+            layoutParams = AbsListView.LayoutParams(-1, dp(50))
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(6), 0, dp(3), 0)
-            addView(FrameLayout(context).apply {
-                background = getDrawable(R.drawable.radio_control)
-                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
-                addView(initials, FrameLayout.LayoutParams(-1, -1))
-                addView(logo, FrameLayout.LayoutParams(-1, -1).apply { setMargins(dp(3), dp(3), dp(3), dp(3)) })
-            }, LinearLayout.LayoutParams(dp(34), dp(34)).apply { marginEnd = dp(6) })
+            addView(number, LinearLayout.LayoutParams(dp(34), -1))
+            addView(badge, LinearLayout.LayoutParams(dp(28), dp(28)).apply { marginEnd = dp(8) })
             addView(column().apply { addView(name); addView(subtitle) }, LinearLayout.LayoutParams(0, -2, 1f))
             addView(star, LinearLayout.LayoutParams(dp(48), dp(48)))
         }
 
-        fun bind(station: RadioStation) {
+        fun bind(station: RadioStation, position: Int) {
             val selected = station.url == highlighted?.first
             val playing = selected && highlighted?.second == true
             background = pressable(if (selected) R.drawable.radio_selected else R.drawable.radio_card)
             isActivated = selected
             contentDescription = "Écouter ${station.name}"
             setOnClickListener { select(station) }
+            number.text = position.toString().padStart(2, '0')
+            badge.bind(station)
             name.text = station.name
             subtitle.text = if (playing) "En lecture" else Stations.subtitle(station)
             subtitle.setTextColor(if (playing) accent else muted)
@@ -267,19 +298,39 @@ class RadioActivity : Activity() {
                 prefs.edit().putStringSet("favorites", favorites).apply()
                 renderRows()
             }
-            if (artworkKey != station.url) {
-                artworkKey = station.url
-                logoWork?.cancel()
-                initials.text = if (station.tags.isEmpty()) "ق" else station.name.split(' ').take(2).joinToString("") { it.take(1) }
-                initials.visibility = View.VISIBLE
-                logo.visibility = View.GONE
-                logo.setImageDrawable(null)
-                logoWork = artwork.load(station.logoUrl) { bitmap ->
-                    if (artworkKey == station.url && bitmap != null) {
-                        logo.setImageBitmap(bitmap)
-                        logo.visibility = View.VISIBLE
-                        initials.visibility = View.GONE
-                    }
+        }
+    }
+
+    private inner class StationArtwork(textSize: Int) : FrameLayout(this@RadioActivity) {
+        private val initials = label("FM", textSize, accent, bold = true).apply { gravity = Gravity.CENTER }
+        private val logo = ImageView(context).apply { scaleType = ImageView.ScaleType.FIT_CENTER; visibility = View.GONE }
+        private var logoWork: Job? = null
+        private var artworkKey: String? = null
+
+        init {
+            background = getDrawable(R.drawable.radio_control)
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
+            addView(initials, LayoutParams(-1, -1))
+            addView(logo, LayoutParams(-1, -1).apply { setMargins(dp(3), dp(3), dp(3), dp(3)) })
+        }
+
+        fun bind(station: RadioStation?) {
+            if (artworkKey == station?.url) return
+            artworkKey = station?.url
+            logoWork?.cancel()
+            initials.text = when {
+                station == null -> "FM"
+                station.tags.isEmpty() -> "ق"
+                else -> station.name.split(' ').take(2).joinToString("") { it.take(1) }
+            }
+            initials.visibility = View.VISIBLE
+            logo.visibility = View.GONE
+            logo.setImageDrawable(null)
+            logoWork = artwork.load(station?.logoUrl) { bitmap ->
+                if (artworkKey == station?.url && bitmap != null) {
+                    logo.setImageBitmap(bitmap)
+                    logo.visibility = View.VISIBLE
+                    initials.visibility = View.GONE
                 }
             }
         }
@@ -299,7 +350,7 @@ class RadioActivity : Activity() {
             button.background = pressable(if (choice == tab) R.drawable.radio_selected else R.drawable.radio_control)
         }
         stationAdapter.notifyDataSetChanged()
-        if (resetScroll) grid.setSelection(0)
+        if (resetScroll) list.setSelection(0)
         renderPlayer()
     }
 
@@ -310,11 +361,13 @@ class RadioActivity : Activity() {
         val requesting = player?.playWhenReady == true && player.playerError == null
         val playing = player?.isPlaying == true
         playerTitle.text = station?.name ?: "Choisir une station"
+        playerSubtitle.text = station?.let(Stations::subtitle) ?: "Sélectionne une chaîne dans la liste"
+        playerArtwork.bind(station)
         playerStatus.text = when {
             connectionFailed -> "Lecteur indisponible · réessayer"
             player == null -> "Connexion au lecteur…"
             player.playerError != null -> "Flux indisponible · vérifier Internet ou réessayer"
-            playing -> "En lecture · Internet"
+            playing -> "● En direct"
             requesting && player.playbackState == Player.STATE_BUFFERING -> "Connexion au flux…"
             requesting -> "Lecture suspendue"
             active != null -> "En pause"
@@ -381,6 +434,6 @@ class RadioActivity : Activity() {
     private fun row() = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
     private fun column() = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
     private fun pressable(drawable: Int) = RippleDrawable(ColorStateList.valueOf(0x2EFFFFFF), getDrawable(drawable),
-        GradientDrawable().apply { setColor(Color.WHITE); cornerRadius = dp(12).toFloat() })
+        GradientDrawable().apply { setColor(Color.WHITE); cornerRadius = dp(3).toFloat() })
     private fun dp(value: Int) = (value * resources.displayMetrics.density + .5f).toInt()
 }
