@@ -2,11 +2,17 @@
 
 Application Android 13+ indépendante pour l’Incarlink et les téléphones compatibles. Après l’installation de l’APK signé, ouvrir **Radio Maroc & Coran** depuis la grille d’applications de Quickstep. Une connexion Internet est nécessaire pour écouter.
 
+La version **1.1.0** reprend l’apparence de Quickstep dans Radio, avec un fond ardoise, des cartes gris fumé arrondies et une sélection bleue. Installe-la sur la version 1.0.0 pour garder les favoris et la dernière station enregistrée.
+
 - **Radio Maroc** affiche une sélection de 12 flux directs, notamment HIT RADIO, Radio Mars, Chada FM, Aswat, Med Radio, Skyrock Casablanca, Radio Plus Agadir et Medina FM.
 - **القرآن** propose 12 flux de récitation, dont العيون الكوشي, عمر القزابري et محمود خليل الحصري en lecture Warsh. La sélection suit les [flux publiés par MP3Quran](https://www.mp3quran.net/api/v3/radios?language=ar).
 - Les étoiles enregistrent les favoris. La recherche et les commandes précédente/suivante suivent la liste affichée. La dernière station est mémorisée pour une reprise manuelle. La lecture active continue en arrière-plan et peut être mise en pause depuis les commandes média Android.
 
 Le catalogue est embarqué et les flux sont lus directement depuis leurs hébergeurs. Les lecteurs officiels de certains diffuseurs sont les sources de leurs URL publiques. Les autres entrées de la sélection marocaine proviennent de l’[annuaire Radio Browser](https://www.radio-browser.info/). Les stations et horaires peuvent évoluer. [HIT RADIO](https://www.hitradio.ma/live) · [Radio Mars](https://radiomars.ma/radio-live/) · [Chada FM](https://chada.ma/test-live/) · [Radio Aswat](https://radioaswat.ma/).
+
+## Vérifications de la version 1.1.0
+
+La mise à jour signée de 1.0.0 vers 1.1.0 a conservé le favori et l’onglet de test. Sur l’émulateur Android 13 en 800 × 480, les essais ont confirmé la lecture de HIT RADIO, Radio Mars et العيون الكوشي, les commandes précédente/suivante, la pause et la lecture après Home. Le rendu a été contrôlé à 160 et 213 dpi. Les deux tests unitaires Radio ont réussi et lint a signalé 0 erreur et 6 avertissements.
 
 ## Vérifications de la version 1.0.0
 

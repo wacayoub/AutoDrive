@@ -36,13 +36,9 @@ import com.google.common.util.concurrent.ListenableFuture
 import kotlinx.coroutines.Job
 
 class RadioActivity : Activity() {
-    private val backgroundColor = 0xFF0D151E.toInt()
-    private val surface = 0xFF172330.toInt()
-    private val raised = 0xFF233548.toInt()
-    private val accent = 0xFF52D6A1.toInt()
-    private val selectedColor = 0xFF1B463C.toInt()
-    private val textColor = 0xFFF5F7FA.toInt()
-    private val muted = 0xFFB2C1D0.toInt()
+    private val accent = 0xFF8ED6FF.toInt()
+    private val textColor = 0xFFF5F6F7.toInt()
+    private val muted = 0xFFD1D6DD.toInt()
     private val amber = 0xFFFFCF73.toInt()
     private lateinit var prefs: SharedPreferences
     private lateinit var artwork: RadioArtwork
@@ -125,7 +121,7 @@ class RadioActivity : Activity() {
 
     private fun screen(): LinearLayout = column().apply {
         layoutDirection = View.LAYOUT_DIRECTION_LTR
-        setBackgroundColor(backgroundColor)
+        background = getDrawable(R.drawable.radio_background)
         isFocusableInTouchMode = true
         setOnApplyWindowInsetsListener { view, insets ->
             val edges = insets.getInsets(WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout() or WindowInsets.Type.ime())
@@ -134,10 +130,12 @@ class RadioActivity : Activity() {
         }
         addView(row().apply {
             gravity = Gravity.CENTER_VERTICAL
+            background = getDrawable(R.drawable.radio_header)
+            setPadding(dp(6), 0, dp(6), 0)
             addView(ImageView(context).apply { setImageResource(R.drawable.ic_radio) }, LinearLayout.LayoutParams(dp(34), dp(34)))
             addView(label(getString(R.string.app_name), 19, textColor, bold = true).apply { setPadding(dp(8), 0, 0, 0) },
                 LinearLayout.LayoutParams(0, -2, 1f))
-        }, LinearLayout.LayoutParams(-1, dp(38)))
+        }, LinearLayout.LayoutParams(-1, dp(38)).apply { bottomMargin = dp(6) })
         addView(row().apply {
             tabs = StationTab.entries.associateWith { choice ->
                 button(choice.label) {
@@ -167,7 +165,7 @@ class RadioActivity : Activity() {
             setTextColor(textColor)
             setHintTextColor(muted)
             setText(query)
-            background = shape(surface)
+            background = getDrawable(R.drawable.radio_control)
             setPadding(dp(12), 0, dp(12), 0)
             imeOptions = EditorInfo.IME_ACTION_SEARCH or EditorInfo.IME_FLAG_NO_EXTRACT_UI
             setOnEditorActionListener { _, action, _ ->
@@ -202,7 +200,7 @@ class RadioActivity : Activity() {
     }
 
     private fun playerPanel(): View = column().apply {
-        background = shape(surface)
+        background = getDrawable(R.drawable.radio_card)
         gravity = Gravity.CENTER_VERTICAL
         setPadding(dp(10), dp(8), dp(10), dp(8))
         addView(label("ÉCOUTE EN DIRECT", 11, accent, bold = true))
@@ -242,7 +240,7 @@ class RadioActivity : Activity() {
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(6), 0, dp(3), 0)
             addView(FrameLayout(context).apply {
-                background = shape(raised)
+                background = getDrawable(R.drawable.radio_control)
                 importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
                 addView(initials, FrameLayout.LayoutParams(-1, -1))
                 addView(logo, FrameLayout.LayoutParams(-1, -1).apply { setMargins(dp(3), dp(3), dp(3), dp(3)) })
@@ -254,7 +252,7 @@ class RadioActivity : Activity() {
         fun bind(station: RadioStation) {
             val selected = station.url == highlighted?.first
             val playing = selected && highlighted?.second == true
-            background = pressable(if (selected) selectedColor else surface)
+            background = pressable(if (selected) R.drawable.radio_selected else R.drawable.radio_card)
             isActivated = selected
             contentDescription = "Écouter ${station.name}"
             setOnClickListener { select(station) }
@@ -298,7 +296,7 @@ class RadioActivity : Activity() {
         empty.text = if (tab == StationTab.FAVORITES && favorites.isEmpty()) "Ajoute une station avec ☆" else "Aucune station trouvée"
         for ((choice, button) in tabs) {
             button.isSelected = choice == tab
-            button.background = pressable(if (choice == tab) selectedColor else raised)
+            button.background = pressable(if (choice == tab) R.drawable.radio_selected else R.drawable.radio_control)
         }
         stationAdapter.notifyDataSetChanged()
         if (resetScroll) grid.setSelection(0)
@@ -375,14 +373,14 @@ class RadioActivity : Activity() {
 
     private fun button(value: String, action: () -> Unit) = label(value, 14, textColor, bold = true).apply {
         gravity = Gravity.CENTER
-        background = pressable(raised)
+        background = pressable(R.drawable.radio_control)
         isFocusable = true
         setOnClickListener { action() }
     }
 
     private fun row() = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
     private fun column() = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-    private fun shape(color: Int) = GradientDrawable().apply { setColor(color); cornerRadius = dp(10).toFloat() }
-    private fun pressable(color: Int) = RippleDrawable(ColorStateList.valueOf(0x2EFFFFFF), shape(color), shape(Color.WHITE))
+    private fun pressable(drawable: Int) = RippleDrawable(ColorStateList.valueOf(0x2EFFFFFF), getDrawable(drawable),
+        GradientDrawable().apply { setColor(Color.WHITE); cornerRadius = dp(12).toFloat() })
     private fun dp(value: Int) = (value * resources.displayMetrics.density + .5f).toInt()
 }
