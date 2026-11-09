@@ -91,6 +91,15 @@ internal object Stations {
         badr,
         quranStation("محمود خليل الحصري · ورش", "mahmoud_khalil_alhussary_warsh"),
         quranStation("إبراهيم الدوسري", "ibrahim_aldosari"),
+        quranStation("فارس عباد", "fares_abbad"),
+        quranStation("ناصر القطامي", "nasser_alqatami"),
+        quranStation("أحمد نعينع", "ahmad_nauina"),
+        quranStation("صلاح البدير", "salah_albudair"),
+        quranStation("عبد الله بصفر", "abdullah_basfer"),
+        quranStation("عبد الله الجهني", "abdullah_aljohany"),
+        quranStation("عبد الرشيد صوفي", "abdulrasheed_soufi_khalaf"),
+        quranStation("عبد المحسن القاسم", "abdulmohsen_alqasim"),
+        quranStation("علي الحذيفي", "ali_alhuthaifi"),
     )).sortedBy { station ->
         when (station.url.substringAfterLast('/')) {
             "aloyoon_alkoshi" -> 0
@@ -128,6 +137,14 @@ internal object Stations {
     private val haramStations = haram.values.map { it.station }
     private val aliases = mapOf(
         "بدر التركي" to listOf("Badr Turki", "Badr Al Turki", "Bader Alturki"),
+        "فارس عباد" to listOf("Fares Abbad", "Faris Abbad"),
+        "ناصر القطامي" to listOf("Nasser Al Qatami"),
+        "أحمد نعينع" to listOf("Ahmed Nuainaa", "Ahmad Nauina"),
+        "صلاح البدير" to listOf("Salah Al Budair"),
+        "عبد الله بصفر" to listOf("Abdullah Basfar"),
+        "عبد الرشيد صوفي" to listOf("Abdul Rashid Sufi", "Abdulrasheed Soufi"),
+        "عبد المحسن القاسم" to listOf("Abdul Mohsen Al Qasim"),
+        "علي الحذيفي" to listOf("Ali Al Hudhaifi", "Ali Al Huthaifi"),
         "العيون الكوشي" to listOf("Laayoun El Kouchi", "Al Oyoun Al Koshi"),
         "عبد الباسط عبد الصمد" to listOf("Abdelbaset Abdelssamad", "Abdulbasit Abdulsamad", "عبدالباسط عبدالصمد"),
         "محمد صديق المنشاوي" to listOf("Mohamed Siddiq Al Minshawi"),

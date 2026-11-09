@@ -13,8 +13,8 @@ android {
         applicationId 'com.autodrive.radiomaroc'
         minSdk 33
         targetSdk 35
-        versionCode providers.gradleProperty('radioMarocVersionCode').getOrElse('21').toInteger()
-        versionName providers.gradleProperty('radioMarocVersionName').getOrElse('1.9.7')
+        versionCode providers.gradleProperty('radioMarocVersionCode').getOrElse('22').toInteger()
+        versionName providers.gradleProperty('radioMarocVersionName').getOrElse('1.10.0')
     }
 
     signingConfigs {
@@ -44,6 +44,7 @@ dependencies {
     implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.8.7'
     implementation 'androidx.media3:media3-exoplayer-hls:1.8.1'
     implementation 'androidx.media3:media3-session:1.8.1'
+    implementation 'org.jsoup:jsoup:1.24.1'
     implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2'
     testImplementation 'junit:junit:4.13.2'
     testImplementation 'org.json:json:20240303'

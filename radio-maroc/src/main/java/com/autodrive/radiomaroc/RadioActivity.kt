@@ -38,6 +38,7 @@ import android.widget.LinearLayout
 import android.widget.ListView
 import android.widget.TextView
 import androidx.activity.ComponentActivity
+import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
@@ -47,7 +48,12 @@ import com.autodrive.launcher.RadioCatalogue
 import com.autodrive.launcher.RadioQueue
 import com.autodrive.launcher.RadioStation
 import com.google.common.util.concurrent.ListenableFuture
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class RadioActivity : ComponentActivity() {
     private val accent = 0xFF79D3F6.toInt()
@@ -72,6 +78,9 @@ class RadioActivity : ComponentActivity() {
     private var controller: MediaController? = null
     private var connectionFailed = false
     private var piconsOffline = false
+    private var programmeJob: Job? = null
+    private var programmeSource: String? = null
+    private var publishedProgramme: BroadcastProgramme? = null
     private lateinit var tabs: Map<StationTab, TextView>
     private lateinit var radioFilter: TextView
     private lateinit var countryButton: TextView
@@ -87,6 +96,7 @@ class RadioActivity : ComponentActivity() {
     private lateinit var playerArtwork: StationArtwork
     private lateinit var playerStatus: TextView
     private lateinit var statusBadge: LinearLayout
+    private lateinit var liveIndicator: LinearLayout
     private lateinit var liveDot: View
     private var livePulse: ObjectAnimator? = null
     private lateinit var playButton: ImageButton
@@ -135,6 +145,7 @@ class RadioActivity : ComponentActivity() {
         controller = null
         controllerFuture?.let(MediaController::releaseFuture)
         controllerFuture = null
+        followProgramme(null)
         updateLiveDot(false)
         super.onStop()
     }
@@ -478,16 +489,30 @@ class RadioActivity : ComponentActivity() {
             gravity = Gravity.CENTER
             background = getDrawable(R.drawable.radio_status)
             setPadding(dp(6), dp(if (wide) 0 else 4), dp(6), dp(if (wide) 0 else 4))
-            liveDot = View(context).apply {
+            liveIndicator = row().apply {
+                gravity = Gravity.CENTER_VERTICAL
                 visibility = View.GONE
-                contentDescription = "Radio en direct"
-                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
-                background = GradientDrawable().apply {
-                    shape = GradientDrawable.OVAL
-                    setColor(0xFFFF4054.toInt())
+                val lineColor = 0xFF587185.toInt()
+                fun line() = View(context).apply {
+                    setBackgroundColor(lineColor)
+                    importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
                 }
+                addView(line(), LinearLayout.LayoutParams(dp(20), dp(1)))
+                liveDot = View(context).apply {
+                    contentDescription = "Radio en direct"
+                    importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
+                    background = GradientDrawable().apply {
+                        shape = GradientDrawable.OVAL
+                        setColor(0xFFFF4054.toInt())
+                    }
+                }
+                addView(liveDot, LinearLayout.LayoutParams(dp(12), dp(12)).apply {
+                    marginStart = dp(7)
+                    marginEnd = dp(7)
+                })
+                addView(line(), LinearLayout.LayoutParams(dp(20), dp(1)))
             }
-            addView(liveDot, LinearLayout.LayoutParams(dp(12), dp(12)))
+            addView(liveIndicator, LinearLayout.LayoutParams(-2, -2))
             addView(playerStatus, LinearLayout.LayoutParams(-2, -2))
         }
         addView(statusBadge, if (wide) LinearLayout.LayoutParams(-1, dp(33)).apply { bottomMargin = dp(4) }
@@ -770,10 +795,19 @@ class RadioActivity : ComponentActivity() {
         val requesting = player?.playWhenReady == true && (player.playerError == null || waitingForNetwork) && !ended
         val playing = player?.isPlaying == true
         val live = playing && !recording
-        playerCategory?.text = if (recording) "تلاوات الحرم" else "LECTEUR RADIO"
+        followProgramme(station.takeIf { player != null && !piconsOffline })
+        val programme = publishedProgramme ?: station?.takeIf { live && it.url == active }
+            ?.let { BroadcastProgrammes.fromStream(it, player?.mediaMetadata?.title) }
+        playerCategory?.text = when {
+            recording -> "تلاوات الحرم"
+            programme != null -> programme.source
+            else -> "LECTEUR RADIO"
+        }
         playerPanel.layoutDirection = directionOf(station?.name.orEmpty())
         playerTitle.text = station?.name ?: "Choisir une station"
-        playerSubtitle.text = station?.let(Stations::subtitle) ?: "Sélectionne une chaîne dans la liste"
+        playerSubtitle.text = programme?.let {
+            listOfNotNull(it.title, it.hours, it.source.takeIf { playerCategory == null }).joinToString(" · ")
+        } ?: station?.let(Stations::subtitle) ?: "Sélectionne une chaîne dans la liste"
         playerArtwork.bind(station)
         playerStatus.visibility = if (live) View.GONE else View.VISIBLE
         playerStatus.text = when {
@@ -781,7 +815,7 @@ class RadioActivity : ComponentActivity() {
             player == null -> "Connexion au lecteur…"
             waitingForNetwork && !playing -> "Connexion perdue · reprise automatique"
             player.playerError?.errorCode == PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS ->
-                "Source inaccessible · réessayer"
+                if (station in Stations.snrt) "Flux SNRT inaccessible · réessayer" else "Source inaccessible · réessayer"
             player.playerError != null -> "Flux indisponible · réessayer"
             live -> ""
             playing -> "● En lecture"
@@ -815,8 +849,27 @@ class RadioActivity : ComponentActivity() {
         }
     }
 
+    private fun followProgramme(station: RadioStation?) {
+        val source = BroadcastProgrammes.source(station)
+        if (source == programmeSource) return
+        programmeSource = source
+        programmeJob?.cancel()
+        publishedProgramme = null
+        programmeJob = source?.let { url ->
+            lifecycleScope.launch {
+                while (isActive) {
+                    publishedProgramme = withContext(Dispatchers.IO) {
+                        runCatching { BroadcastProgrammes.fetch(url) }.getOrNull()
+                    }
+                    renderPlayer()
+                    delay(120_000)
+                }
+            }
+        }
+    }
+
     private fun updateLiveDot(live: Boolean) {
-        liveDot.visibility = if (live) View.VISIBLE else View.GONE
+        liveIndicator.visibility = if (live) View.VISIBLE else View.GONE
         if (!live || !ValueAnimator.areAnimatorsEnabled()) {
             livePulse?.cancel()
             livePulse = null

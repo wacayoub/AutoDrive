@@ -15,8 +15,8 @@ class StationsTest {
         val tajwid = quran.filter { Stations.quranSection(it) == QuranSection.TAJWID }
         assertEquals(17, morocco.size)
         assertEquals(17, morocco.mapNotNull { it.logoUrl?.let(RadioStation::validUrl) }.toSet().size)
-        assertEquals(22, quran.size)
-        assertEquals(12, quran.count { Stations.quranSection(it) == QuranSection.MURATTAL })
+        assertEquals(31, quran.size)
+        assertEquals(21, quran.count { Stations.quranSection(it) == QuranSection.MURATTAL })
         assertEquals(4, tajwid.size)
         assertEquals(Stations.all.size, Stations.all.map { it.url }.toSet().size)
         assertTrue(Stations.all.all { RadioStation.validUrl(it.url) == it.url })
@@ -157,7 +157,10 @@ class StationsTest {
             assertEquals(quran.filter { Stations.quranSection(it) == section },
                 Stations.visible(StationTab.QURAN, emptySet(), section.label))
         }
-        assertEquals(quran[12], RadioQueue.neighbor(quran, quran[11].url, 1))
+        val endOfMurattal = quran.last { Stations.quranSection(it) == QuranSection.MURATTAL }
+        val firstTajwid = quran.first { Stations.quranSection(it) == QuranSection.TAJWID }
+        assertEquals(firstTajwid, RadioQueue.neighbor(quran, endOfMurattal.url, 1))
+        assertEquals("فارس عباد", Stations.visible(StationTab.QURAN, emptySet(), "Fares Abbad").single().name)
         assertEquals(StationTab.QURAN, StationTab.restore("TAJWID"))
         assertEquals(StationTab.QURAN, StationTab.restore("HARAM"))
         assertEquals(StationTab.WORLD, StationTab.restore("WORLD"))
