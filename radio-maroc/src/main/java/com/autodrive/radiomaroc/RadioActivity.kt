@@ -432,13 +432,14 @@ class RadioActivity : ComponentActivity() {
             setPadding(dp(6), dp(if (wide) 0 else 4), dp(6), dp(if (wide) 0 else 4))
             liveDot = View(context).apply {
                 visibility = View.GONE
-                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+                contentDescription = "Radio en direct"
+                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
                 background = GradientDrawable().apply {
                     shape = GradientDrawable.OVAL
-                    setColor(0xFFFF6674.toInt())
+                    setColor(0xFFFF4054.toInt())
                 }
             }
-            addView(liveDot, LinearLayout.LayoutParams(dp(8), dp(8)).apply { marginEnd = dp(6) })
+            addView(liveDot, LinearLayout.LayoutParams(dp(12), dp(12)))
             addView(playerStatus, LinearLayout.LayoutParams(-2, -2))
         }
         addView(statusBadge, if (wide) LinearLayout.LayoutParams(-1, dp(33)).apply { bottomMargin = dp(4) }
@@ -676,6 +677,7 @@ class RadioActivity : ComponentActivity() {
         playerTitle.text = station?.name ?: "Choisir une station"
         playerSubtitle.text = station?.let(Stations::subtitle) ?: "Sélectionne une chaîne dans la liste"
         playerArtwork.bind(station)
+        playerStatus.visibility = if (live) View.GONE else View.VISIBLE
         playerStatus.text = when {
             connectionFailed -> "Lecteur indisponible · réessayer"
             player == null -> "Connexion au lecteur…"
@@ -683,7 +685,7 @@ class RadioActivity : ComponentActivity() {
             player.playerError?.errorCode == PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS ->
                 "Source inaccessible · réessayer"
             player.playerError != null -> "Flux indisponible · réessayer"
-            live -> "EN DIRECT"
+            live -> ""
             playing -> "● En lecture"
             ended && recording -> "Lecture terminée"
             requesting && player.playbackState == Player.STATE_BUFFERING -> "Connexion au flux…"
@@ -693,13 +695,12 @@ class RadioActivity : ComponentActivity() {
         }
         playerStatus.setTextColor(when {
             waitingForNetwork && !playing -> amber
-            live -> Color.WHITE
             playing -> accent
             else -> muted
         })
         statusBadge.backgroundTintList = ColorStateList.valueOf(when {
             waitingForNetwork && !playing -> 0xFF3A2B1C.toInt()
-            live -> 0xFF981D32.toInt()
+            live -> Color.TRANSPARENT
             playing -> 0xFF1B3143.toInt()
             else -> 0xFF202A36.toInt()
         })
