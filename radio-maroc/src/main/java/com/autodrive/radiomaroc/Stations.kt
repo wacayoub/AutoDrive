@@ -42,6 +42,18 @@ internal object Stations {
     )
     val snrt = RadioCatalogue.featured.filter { RadioCatalogue.officialPlayer(it) != null }
     private val radio2m = RadioStation("Radio 2M", "https://radio2m.ma/", logoUrl = "https://radio2m.ma/favRadio2M.png")
+    const val SNRT_STREAM_HOST = "cdn.live.easybroadcast.io"
+    const val RADIO_2M_STREAM_HOST = "cdn-globecast.akamaized.net"
+    // Keep the catalogue URLs as station IDs so saved stations and favourites survive updates.
+    private val snrtStreams = mapOf(
+        "alidaa-alwatania" to "radio_nationale",
+        "alidaa-alamazighia" to "radio_amazigh",
+        "chaine-inter" to "radio_inter",
+        "idaat-mohammed-assadiss" to "radio_med_VI",
+    ).mapKeys { (slug, _) -> "https://snrtlive.ma/fr/$slug" }
+        .mapValues { (_, path) -> "https://$SNRT_STREAM_HOST/live/$path/playlist.m3u8" }
+    private val officialStreams = snrtStreams + (radio2m.url to
+        "https://$RADIO_2M_STREAM_HOST/live/eds/radio_2m/radio_hls_ts_hy217612tge1f21j83/radio_2m.m3u8")
     private val localRadios = morocco + snrt + radio2m
     private val localRadioNames = localRadios.map { RadioCatalogue.searchKey(it.name) }.toSet()
     // Radiométrie Maroc, Q2 2025, audience share in hundredths of a percentage point.
@@ -119,8 +131,8 @@ internal object Stations {
     fun reciterName(station: RadioStation): String = station.name.substringBefore(" ·")
     fun isRecording(station: RadioStation): Boolean = station.url in haram
     fun isReciter(station: RadioStation): Boolean = station in quran || station in tajwid || isRecording(station)
-    fun officialPlayer(station: RadioStation?): String? =
-        RadioCatalogue.officialPlayer(station) ?: radio2m.url.takeIf { station?.url == it }
+    fun streamUrl(station: RadioStation): String = officialStreams[station.url] ?: station.url
+    fun isHls(station: RadioStation): Boolean = station.isHls || station.url in officialStreams
 
     fun visible(
         tab: StationTab, favorites: Set<String>, query: String, radioFavoritesOnly: Boolean = false,
@@ -148,8 +160,8 @@ internal object Stations {
     }
 
     fun subtitle(station: RadioStation): String = when {
-        station in snrt -> "SNRT Live · lecteur officiel"
-        station == radio2m -> "Radio 2M · lecteur officiel"
+        station.url in snrtStreams -> "SNRT Live · Maroc"
+        station.url == radio2m.url -> "SOREAD 2M · Maroc"
         station.countryCode != null -> StationDirectory.countryName(station.countryCode)
         isRecording(station) -> "${station.tags.single()} · المسجد الحرام · ${station.url.removeSuffix(".mp3").takeLast(10)}"
         station in tajwid -> "المصحف المجوّد · MP3Quran"
@@ -159,10 +171,10 @@ internal object Stations {
 
     fun item(station: RadioStation): MediaItem = MediaItem.Builder()
         .setMediaId(station.url)
-        .setUri(station.url)
+        .setUri(streamUrl(station))
         .setMediaMetadata(MediaMetadata.Builder().setTitle(station.name).setArtist(subtitle(station)).build())
         .apply {
-            if (station.isHls) setMimeType(MimeTypes.APPLICATION_M3U8)
+            if (isHls(station)) setMimeType(MimeTypes.APPLICATION_M3U8)
             if (station.countryCode != null) setRequestMetadata(MediaItem.RequestMetadata.Builder()
                 .setMediaUri(Uri.parse(station.url))
                 .setExtras(Bundle().apply { putBoolean("hls", station.isHls) })

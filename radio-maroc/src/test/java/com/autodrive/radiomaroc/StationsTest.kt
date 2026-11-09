@@ -9,7 +9,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class StationsTest {
-    @Test fun categoriesUseDistinctHttpsSourcesAndOfficialSnrtPlayers() {
+    @Test fun categoriesUseDistinctHttpsSourcesAndKeepBroadcastStationIds() {
         val morocco = Stations.visible(StationTab.MOROCCO, emptySet(), "")
         val quran = Stations.visible(StationTab.QURAN, emptySet(), "")
         val tajwid = Stations.visible(StationTab.TAJWID, emptySet(), "")
@@ -22,6 +22,25 @@ class StationsTest {
         assertEquals(4, Stations.snrt.size)
         assertTrue(Stations.snrt.all { it.url.startsWith("https://snrtlive.ma/") })
         assertEquals(Stations.snrt.toSet(), Stations.visible(StationTab.MOROCCO, emptySet(), "SNRT").toSet())
+        val streams = mapOf(
+            "https://snrtlive.ma/fr/alidaa-alwatania" to "radio_nationale",
+            "https://snrtlive.ma/fr/alidaa-alamazighia" to "radio_amazigh",
+            "https://snrtlive.ma/fr/chaine-inter" to "radio_inter",
+            "https://snrtlive.ma/fr/idaat-mohammed-assadiss" to "radio_med_VI",
+        )
+        Stations.snrt.forEach { station ->
+            assertEquals("https://cdn.live.easybroadcast.io/live/${streams.getValue(station.url)}/playlist.m3u8", Stations.streamUrl(station))
+            assertTrue(Stations.isHls(station))
+            assertEquals("SNRT Live · Maroc", Stations.subtitle(station))
+        }
+        val twoM = morocco.single { it.url == "https://radio2m.ma/" }
+        assertEquals("Radio 2M", twoM.name)
+        assertEquals("SOREAD 2M · Maroc", Stations.subtitle(twoM))
+        assertTrue(Stations.isHls(twoM))
+        assertTrue(Stations.streamUrl(twoM).startsWith("https://cdn-globecast.akamaized.net/live/eds/radio_2m/"))
+        val savedStations = Stations.snrt + twoM
+        assertEquals(savedStations.toSet(),
+            Stations.visible(StationTab.FAVORITES, savedStations.map { it.url }.toSet(), "").toSet())
         assertEquals("العيون الكوشي", quran.first().name)
         assertTrue(tajwid.all { it.url.endsWith("_mojawwad") && it !in quran })
         assertEquals("عبد الباسط عبد الصمد", tajwid.first().name)

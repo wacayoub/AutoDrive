@@ -16,6 +16,7 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.datasource.ResolvingDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
@@ -70,8 +71,20 @@ internal class PlaybackService : MediaSessionService() {
             .setUserAgent("RadioMarocCoran/1.0.0")
             .setConnectTimeoutMs(7_000)
             .setReadTimeoutMs(10_000)
+        val broadcastNetwork = ResolvingDataSource.Factory(network) { request ->
+            val origin = when {
+                request.uri.scheme != "https" -> null
+                request.uri.host == Stations.RADIO_2M_STREAM_HOST &&
+                    request.uri.path?.startsWith("/live/eds/radio_2m/") == true -> "https://radio2m.ma"
+                request.uri.host == Stations.SNRT_STREAM_HOST -> "https://snrtlive.ma"
+                else -> null
+            }
+            if (origin == null) request else request.withAdditionalHeaders(
+                mapOf("Origin" to origin, "Referer" to "$origin/"),
+            )
+        }
         val player = ExoPlayer.Builder(this)
-            .setMediaSourceFactory(DefaultMediaSourceFactory(network))
+            .setMediaSourceFactory(DefaultMediaSourceFactory(broadcastNetwork))
             .setLoadControl(DefaultLoadControl.Builder().setBufferDurationsMs(3_000, 12_000, 900, 1_600).build())
             .setAudioAttributes(AudioAttributes.Builder().setUsage(C.USAGE_MEDIA)
                 .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC).build(), true)
@@ -88,7 +101,7 @@ internal class PlaybackService : MediaSessionService() {
                     mediaItems.mapNotNull { item ->
                         val station = Stations.all.firstOrNull { it.url == item.mediaId }
                         when {
-                            station != null -> if (Stations.officialPlayer(station) == null) Stations.item(station) else null
+                            station != null -> Stations.item(station)
                             controller.uid == applicationInfo.uid && controller.packageName == packageName -> Stations.directoryItem(item)
                             else -> null
                         }

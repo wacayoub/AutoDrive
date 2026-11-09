@@ -2,17 +2,14 @@ package com.autodrive.radiomaroc
 
 import android.app.Activity
 import android.app.AlertDialog
-import android.content.ActivityNotFoundException
 import android.content.ComponentName
 import android.content.Context
-import android.content.Intent
 import android.content.SharedPreferences
 import android.content.res.ColorStateList
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.RippleDrawable
-import android.net.Uri
 import android.os.Bundle
 import android.text.Editable
 import android.text.SpannableStringBuilder
@@ -37,7 +34,7 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ListView
 import android.widget.TextView
-import android.widget.Toast
+import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
@@ -479,18 +476,14 @@ class RadioActivity : Activity() {
             layoutDirection = directionOf(station.name)
             background = pressable(if (selected) R.drawable.radio_selected else R.drawable.radio_card)
             isActivated = selected
-            contentDescription = when {
-                station in Stations.snrt -> "Ouvrir ${station.name} sur SNRT Live"
-                Stations.officialPlayer(station) != null -> "Ouvrir le lecteur officiel de ${station.name}"
-                else -> "Écouter ${station.name}"
-            }
+            contentDescription = "Écouter ${station.name}"
             setOnClickListener { select(station) }
             number.text = if (playing) "▶" else position.toString().padStart(2, '0')
             badge.bind(station)
             name.text = station.name
-            val detail = if (playing && !Stations.isRecording(station)) "En lecture" else Stations.subtitle(station)
+            val detail = Stations.subtitle(station)
             val audience = if (tab == StationTab.MOROCCO) Stations.audienceLabel(station) else null
-            subtitle.text = if (audience == null) detail else "$detail · $audience"
+            subtitle.text = if (audience == null) detail else "$detail · $audience (T2 2025)"
             subtitle.setTextColor(if (playing) accent else muted)
             val favorite = station.url in favorites
             star.text = if (favorite) "★" else "☆"
@@ -642,7 +635,6 @@ class RadioActivity : Activity() {
         val player = controller
         val active = player?.currentMediaItem?.mediaId
         val station = findStation(active) ?: savedStation
-        val official = Stations.officialPlayer(station) != null
         val recording = station?.let(Stations::isRecording) == true
         val ended = player?.playbackState == Player.STATE_ENDED
         val waitingForNetwork = player?.let(::waitingForNetwork) == true
@@ -654,12 +646,12 @@ class RadioActivity : Activity() {
         playerSubtitle.text = station?.let(Stations::subtitle) ?: "Sélectionne une chaîne dans la liste"
         playerArtwork.bind(station)
         playerStatus.text = when {
-            station in Stations.snrt -> "Écouter sur SNRT Live"
-            official -> "Ouvrir le lecteur officiel"
             connectionFailed -> "Lecteur indisponible · réessayer"
             player == null -> "Connexion au lecteur…"
             waitingForNetwork && !playing -> "Connexion perdue · reprise automatique"
-            player.playerError != null -> "Flux indisponible · vérifier Internet ou réessayer"
+            player.playerError?.errorCode == PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS ->
+                "Source inaccessible · réessayer"
+            player.playerError != null -> "Flux indisponible · réessayer"
             playing -> if (recording) "● En lecture" else "● En direct"
             ended && recording -> "Lecture terminée"
             requesting && player.playbackState == Player.STATE_BUFFERING -> "Connexion au flux…"
@@ -680,13 +672,8 @@ class RadioActivity : Activity() {
             else -> 0xFF202A36.toInt()
         })
         playButton.setImageResource(if (requesting) R.drawable.ic_radio_pause else R.drawable.ic_radio_play)
-        playButton.contentDescription = when {
-            station in Stations.snrt -> "Ouvrir le lecteur officiel SNRT"
-            official -> "Ouvrir le lecteur officiel"
-            requesting -> "Mettre en pause"
-            else -> "Écouter"
-        }
-        enable(playButton, official || (player != null && (station != null || rows.isNotEmpty())) || connectionFailed)
+        playButton.contentDescription = if (requesting) "Mettre en pause" else "Écouter"
+        enable(playButton, (player != null && (station != null || rows.isNotEmpty())) || connectionFailed)
         enable(previous, player != null && rows.size > 1)
         enable(next, player != null && rows.size > 1)
         val highlight = (active ?: savedStation?.url) to playing
@@ -697,19 +684,6 @@ class RadioActivity : Activity() {
     }
 
     private fun select(station: RadioStation) {
-        Stations.officialPlayer(station)?.let { url ->
-            try {
-                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-                controller?.pause()
-                controller?.clearMediaItems()
-                savedStation = station
-                persistStations(station)
-                renderPlayer()
-            } catch (_: ActivityNotFoundException) {
-                Toast.makeText(this, "Aucun navigateur disponible pour le lecteur officiel", Toast.LENGTH_LONG).show()
-            }
-            return
-        }
         val player = controller ?: return
         savedStation = station
         persistStations(station)
@@ -720,11 +694,6 @@ class RadioActivity : Activity() {
     }
 
     private fun toggle() {
-        val official = savedStation?.takeIf { Stations.officialPlayer(it) != null }
-        if (official != null) {
-            select(official)
-            return
-        }
         val player = controller ?: run { if (connectionFailed) connectPlayer(); return }
         val current = findStation(player.currentMediaItem?.mediaId)
         val playable = player.playerError == null && player.playbackState != Player.STATE_ENDED
