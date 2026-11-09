@@ -46,4 +46,10 @@ class UpdatePolicyTest {
             try { release.validate(); fail("Wrong radio release asset accepted") } catch (_: IllegalArgumentException) { }
         }
     }
+
+    @Test fun radioVersionsSortNumerically() {
+        val tags = listOf("radio-maroc-v1.9.7", "radio-maroc-v2.0.0", "radio-maroc-v1.10.1", "radio-maroc-v1.10.0")
+        assertEquals(listOf(tags[0], tags[3], tags[2], tags[1]), tags.sortedBy(UpdatePolicy::radioVersionOrder))
+        assertNull(UpdatePolicy.radioVersionOrder("radio-maroc-v1.10.1-test"))
+    }
 }

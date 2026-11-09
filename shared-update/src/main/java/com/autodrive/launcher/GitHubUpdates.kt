@@ -50,22 +50,27 @@ internal class GitHubUpdates(private val context: Context) : UpdateSource {
     private fun radioManifestUrl(): String? {
         // The radio uses its own published prereleases. AutoDrive's stable latest stays independent.
         val pageSize = 25
+        var newestVersion = -1L
+        var newestUrl: String? = null
         for (page in 1..4) {
             val releases = JSONArray(read("${UpdatePolicy.RELEASES_API}?per_page=$pageSize&page=$page", 1024 * 1024))
             for (index in 0 until releases.length()) {
                 val release = releases.getJSONObject(index)
                 val tag = release.optString("tag_name")
-                if (release.optBoolean("draft") || !UpdatePolicy.radioTag(tag)) continue
+                if (release.optBoolean("draft")) continue
+                val version = UpdatePolicy.radioVersionOrder(tag) ?: continue
+                if (version <= newestVersion) continue
                 val asset = manifestAsset(release) ?: continue
                 val url = asset.optString("browser_download_url")
                 require(url == "${UpdatePolicy.REPO_URL}/releases/download/$tag/$manifestName") {
                     "Source de mise à jour incorrecte"
                 }
-                return url
+                newestVersion = version
+                newestUrl = url
             }
             if (releases.length() < pageSize) break
         }
-        return null
+        return newestUrl
     }
 
     private fun manifestAsset(release: JSONObject): JSONObject? {

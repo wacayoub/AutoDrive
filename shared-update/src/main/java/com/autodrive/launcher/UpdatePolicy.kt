@@ -37,7 +37,13 @@ internal object UpdatePolicy {
     const val RADIO_MANIFEST = "radio-maroc-update.json"
     const val MAX_APK_BYTES = 128L * 1024 * 1024
 
-    fun radioTag(tag: String) = Regex("radio-maroc-v[0-9]{1,6}\\.[0-9]{1,6}\\.[0-9]{1,6}").matches(tag)
+    private val radioTagPattern = Regex("radio-maroc-v([0-9]{1,6})\\.([0-9]{1,6})\\.([0-9]{1,6})")
+
+    fun radioTag(tag: String) = radioTagPattern.matches(tag)
+
+    fun radioVersionOrder(tag: String): Long? = radioTagPattern.matchEntire(tag)?.destructured?.let { (major, minor, patch) ->
+        major.toLong() * 1_000_000_000_000L + minor.toLong() * 1_000_000L + patch.toLong()
+    }
 
     fun releaseAsset(url: String, name: String): Boolean {
         val uri = runCatching { URI(url) }.getOrNull() ?: return false
