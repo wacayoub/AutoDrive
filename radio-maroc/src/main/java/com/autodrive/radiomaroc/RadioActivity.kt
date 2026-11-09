@@ -206,25 +206,24 @@ class RadioActivity : ComponentActivity() {
         val categories = categoryBar()
         val headerHeight = dp(48)
         if (wide) {
-            addView(row().apply {
+            addView(wideColumns(masthead, categories).apply {
                 background = getDrawable(R.drawable.radio_header)
-                addView(masthead, LinearLayout.LayoutParams(dp(if (resources.configuration.screenWidthDp < 650) 196 else 222), -1))
-                addView(categories, LinearLayout.LayoutParams(0, -1, 1f))
             }, LinearLayout.LayoutParams(-1, headerHeight).apply { bottomMargin = dp(8) })
         } else {
             addView(masthead, LinearLayout.LayoutParams(-1, dp(48)))
             addView(categories, LinearLayout.LayoutParams(-1, headerHeight).apply { bottomMargin = dp(8) })
         }
-        val content = if (wide) row() else column()
-        if (wide) {
-            content.addView(stationPanel(true), LinearLayout.LayoutParams(0, -1, .36f).apply { marginEnd = dp(8) })
-            content.addView(stationList(), LinearLayout.LayoutParams(0, -1, .64f))
-        } else {
-            content.addView(stationList(), LinearLayout.LayoutParams(-1, 0, 1f))
-            content.addView(stationPanel(false), LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(6) })
+        val content = if (wide) wideColumns(stationPanel(true), stationList()) else column().apply {
+            addView(stationList(), LinearLayout.LayoutParams(-1, 0, 1f))
+            addView(stationPanel(false), LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(6) })
         }
         addView(content, LinearLayout.LayoutParams(-1, 0, 1f))
         requestFocus()
+    }
+
+    private fun wideColumns(left: View, right: View): LinearLayout = row().apply {
+        addView(left, LinearLayout.LayoutParams(0, -1, .36f).apply { marginEnd = dp(8) })
+        addView(right, LinearLayout.LayoutParams(0, -1, .64f))
     }
 
     private fun categoryBar(): LinearLayout = row().apply {
