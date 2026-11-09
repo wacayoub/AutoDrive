@@ -1,5 +1,7 @@
 package com.autodrive.radiomaroc
 
+import android.animation.ObjectAnimator
+import android.animation.ValueAnimator
 import android.app.AlertDialog
 import android.content.ComponentName
 import android.content.Context
@@ -81,6 +83,9 @@ class RadioActivity : ComponentActivity() {
     private var playerCategory: TextView? = null
     private lateinit var playerArtwork: StationArtwork
     private lateinit var playerStatus: TextView
+    private lateinit var statusBadge: LinearLayout
+    private lateinit var liveDot: View
+    private var livePulse: ObjectAnimator? = null
     private lateinit var playButton: ImageButton
     private lateinit var previous: ImageButton
     private lateinit var next: ImageButton
@@ -127,6 +132,7 @@ class RadioActivity : ComponentActivity() {
         controller = null
         controllerFuture?.let(MediaController::releaseFuture)
         controllerFuture = null
+        updateLiveDot(false)
         super.onStop()
     }
 
@@ -419,10 +425,23 @@ class RadioActivity : ComponentActivity() {
             gravity = Gravity.CENTER
             maxLines = 2
             ellipsize = TextUtils.TruncateAt.END
+        }
+        statusBadge = row().apply {
+            gravity = Gravity.CENTER
             background = getDrawable(R.drawable.radio_status)
             setPadding(dp(6), dp(if (wide) 0 else 4), dp(6), dp(if (wide) 0 else 4))
+            liveDot = View(context).apply {
+                visibility = View.GONE
+                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+                background = GradientDrawable().apply {
+                    shape = GradientDrawable.OVAL
+                    setColor(0xFFFF6674.toInt())
+                }
+            }
+            addView(liveDot, LinearLayout.LayoutParams(dp(8), dp(8)).apply { marginEnd = dp(6) })
+            addView(playerStatus, LinearLayout.LayoutParams(-2, -2))
         }
-        addView(playerStatus, if (wide) LinearLayout.LayoutParams(-1, dp(33)).apply { bottomMargin = dp(4) }
+        addView(statusBadge, if (wide) LinearLayout.LayoutParams(-1, dp(33)).apply { bottomMargin = dp(4) }
             else LinearLayout.LayoutParams(0, -2, 1f).apply { marginEnd = dp(6) })
         addView(row().apply {
             gravity = Gravity.CENTER
@@ -651,6 +670,7 @@ class RadioActivity : ComponentActivity() {
         val waitingForNetwork = player?.let(::waitingForNetwork) == true
         val requesting = player?.playWhenReady == true && (player.playerError == null || waitingForNetwork) && !ended
         val playing = player?.isPlaying == true
+        val live = playing && !recording
         playerCategory?.text = if (recording) "تلاوات الحرم" else "LECTEUR RADIO"
         playerPanel.layoutDirection = directionOf(station?.name.orEmpty())
         playerTitle.text = station?.name ?: "Choisir une station"
@@ -663,7 +683,8 @@ class RadioActivity : ComponentActivity() {
             player.playerError?.errorCode == PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS ->
                 "Source inaccessible · réessayer"
             player.playerError != null -> "Flux indisponible · réessayer"
-            playing -> if (recording) "● En lecture" else "● En direct"
+            live -> "EN DIRECT"
+            playing -> "● En lecture"
             ended && recording -> "Lecture terminée"
             requesting && player.playbackState == Player.STATE_BUFFERING -> "Connexion au flux…"
             requesting -> "Lecture suspendue"
@@ -672,16 +693,17 @@ class RadioActivity : ComponentActivity() {
         }
         playerStatus.setTextColor(when {
             waitingForNetwork && !playing -> amber
-            playing && !recording -> 0xFF79E4AD.toInt()
+            live -> Color.WHITE
             playing -> accent
             else -> muted
         })
-        playerStatus.backgroundTintList = ColorStateList.valueOf(when {
+        statusBadge.backgroundTintList = ColorStateList.valueOf(when {
             waitingForNetwork && !playing -> 0xFF3A2B1C.toInt()
-            playing && !recording -> 0xFF18332D.toInt()
+            live -> 0xFF981D32.toInt()
             playing -> 0xFF1B3143.toInt()
             else -> 0xFF202A36.toInt()
         })
+        updateLiveDot(live)
         playButton.setImageResource(if (requesting) R.drawable.ic_radio_pause else R.drawable.ic_radio_play)
         playButton.contentDescription = if (requesting) "Mettre en pause" else "Écouter"
         enable(playButton, (player != null && (station != null || rows.isNotEmpty())) || connectionFailed)
@@ -691,6 +713,22 @@ class RadioActivity : ComponentActivity() {
         if (highlighted != highlight) {
             highlighted = highlight
             stationAdapter.notifyDataSetChanged()
+        }
+    }
+
+    private fun updateLiveDot(live: Boolean) {
+        liveDot.visibility = if (live) View.VISIBLE else View.GONE
+        if (!live || !ValueAnimator.areAnimatorsEnabled()) {
+            livePulse?.cancel()
+            livePulse = null
+            liveDot.alpha = 1f
+        } else if (livePulse == null) {
+            livePulse = ObjectAnimator.ofFloat(liveDot, View.ALPHA, 1f, .2f).apply {
+                duration = 650
+                repeatMode = ValueAnimator.REVERSE
+                repeatCount = ValueAnimator.INFINITE
+                start()
+            }
         }
     }
 
