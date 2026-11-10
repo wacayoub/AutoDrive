@@ -65,7 +65,7 @@ internal object Stations {
         RadioStation("Medina FM Tarab", "https://medinatarab.ice.infomaniak.ch/medinatarab-128.mp3",
             logoUrl = "https://api.medinafm.ma/uploads/f0b5829f-c5ed-4acc-a775-d921ecd2edc7-w320.webp", tags = setOf("Tarab")),
     )
-    val snrt = RadioCatalogue.featured.filter { RadioCatalogue.officialPlayer(it) != null }
+    val snrtNational = RadioCatalogue.featured.filter { RadioCatalogue.officialPlayer(it) != null }
     private val radio2m = RadioStation("Radio 2M", "https://radio2m.ma/", logoUrl = "https://radio2m.ma/favRadio2M.png")
     val luxe = RadioStation("Luxe Radio", "https://open.luxeradio.ma/radio/live",
         logoUrl = "https://www.haca.ma/sites/default/files/upload/images/logo-luxeradio.PNG", tags = setOf("Musique"))
@@ -78,9 +78,32 @@ internal object Stations {
         "chaine-inter" to "radio_inter",
         "idaat-mohammed-assadiss" to "radio_med_VI",
     )
-    val snrtStreamDirectories = snrtPaths.values.toSet()
     private val snrtStreams = snrtPaths.mapKeys { (slug, _) -> "https://snrtlive.ma/fr/$slug" }
         .mapValues { (_, path) -> "https://$SNRT_STREAM_HOST/live/$path/playlist.m3u8" }
+    // Streams published by the official SNRT Live regional player.
+    private val snrtRegional = listOf(
+        snrtRegional("Agadir", "agadir", "Souss–Massa", "أكادير"),
+        snrtRegional("Al Hoceïma", "houceima", "Tanger–Tétouan–Al Hoceïma", "الحسيمة"),
+        snrtRegional("Casablanca", "casablanca", "Casablanca–Settat", "الدار البيضاء"),
+        snrtRegional("Dakhla", "dakhla", "Dakhla–Oued Ed-Dahab", "الداخلة"),
+        snrtRegional("Fès", "fes", "Fès–Meknès", "فاس"),
+        snrtRegional("Laâyoune", "laayoune", "Laâyoune–Sakia El Hamra", "العيون"),
+        snrtRegional("Marrakech", "marrakech", "Marrakech–Safi", "مراكش"),
+        snrtRegional("Meknès", "meknes", "Fès–Meknès", "مكناس"),
+        snrtRegional("Oujda", "oujda", "Oriental", "وجدة"),
+        snrtRegional("Tanger", "tanger", "Tanger–Tétouan–Al Hoceïma", "طنجة"),
+        snrtRegional("Tétouan", "tetouan", "Tanger–Tétouan–Al Hoceïma", "تطوان"),
+    ).toMap()
+    val snrt = snrtNational + snrtRegional.keys
+    val snrtStreamDirectories = snrtPaths.values.toSet() + snrtRegional.keys.map {
+        it.url.substringAfter("/live/").substringBefore('/')
+    }
+
+    private fun snrtRegional(city: String, mount: String, area: String, arabicCity: String) =
+        RadioStation("SNRT Radio $city", "https://$SNRT_STREAM_HOST/live/radio_$mount/playlist.m3u8",
+            logoUrl = "https://www.haca.ma/sites/default/files/upload/images/rn.jpg",
+            tags = setOf(arabicCity), isHls = true) to area
+
     private val officialStreams = snrtStreams + (radio2m.url to
         "https://$RADIO_2M_STREAM_HOST/live/eds/radio_2m/radio_hls_ts_hy217612tge1f21j83/radio_2m.m3u8")
     private val regional = listOf(
@@ -100,7 +123,7 @@ internal object Stations {
         "marrakechplus" to "Marrakech–Safi",
         "radioplusagadir" to "Souss–Massa",
         "skyrockcasablanca" to "Casablanca–Settat",
-    )
+    ) + snrtRegional.mapKeys { (station, _) -> StationFamilies.directoryKey(station) }
     private val localRadios = morocco + snrt + radio2m + luxe + StationFamilies.hit + StationFamilies.medi + regional
     private val localRadioNames = localRadios.map(StationFamilies::directoryKey).toSet()
     private val hitGroupNames = (StationFamilies.hit + morocco.filter { it.name == "HIT RADIO" || it.name == "Radio Azawan" })
@@ -260,7 +283,9 @@ internal object Stations {
         }
     }
 
-    fun subtitle(station: RadioStation): String = region(station) ?: when {
+    fun subtitle(station: RadioStation): String = region(station)?.let {
+        if (station in snrtRegional) "SNRT Live · $it" else it
+    } ?: when {
         station.url in snrtStreams -> "SNRT Live · Maroc"
         station.url == radio2m.url -> "SOREAD 2M · Maroc"
         station == luxe -> "Luxe Radio · Maroc"

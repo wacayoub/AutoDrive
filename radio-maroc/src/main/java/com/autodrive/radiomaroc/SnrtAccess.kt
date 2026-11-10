@@ -8,7 +8,7 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLDecoder
 
-/** Resolves temporary access issued by the SNRT Live player's CDN for its four radio playlists. */
+/** Resolves temporary access issued by the SNRT Live player's CDN for its radio playlists. */
 internal class SnrtAccess {
     private val grants = LruCache<String, Grant>(Stations.snrtStreamDirectories.size)
 

@@ -98,9 +98,7 @@ class RadioActivity : ComponentActivity() {
     private var tab = StationTab.MOROCCO
     private var displayLayout = DisplayLayout.GUIDE
     private var catalogueLayout = DisplayLayout.GUIDE
-    private var regionalOnly = false
     private var catalogueStation: String? = null
-    private var regionalButton: TextView? = null
     private lateinit var displayLayoutButton: TextView
     private lateinit var catalogueButton: TextView
     private var radioFavoritesOnly = false
@@ -189,7 +187,6 @@ class RadioActivity : ComponentActivity() {
         displayLayout = DisplayLayout.restore(savedInstanceState?.getString("display_screen") ?: prefs.getString(DISPLAY_LAYOUT, null))
         catalogueLayout = DisplayLayout.restore(prefs.getString(CATALOGUE_LAYOUT, null))
             .takeUnless { it == DisplayLayout.LISTENING } ?: DisplayLayout.GUIDE
-        regionalOnly = tab == StationTab.MOROCCO && savedInstanceState?.getBoolean("regional_only") == true
         catalogueStation = savedInstanceState?.getString("catalogue_station")
         onBackPressedDispatcher.addCallback(this, returnFromListening)
         returnFromListening.isEnabled = !showingCatalogue
@@ -207,7 +204,6 @@ class RadioActivity : ComponentActivity() {
         outState.putLong("startup_deadline", startupDeadline)
         if (television) rememberTvFocus()
         outState.putString("display_screen", displayLayout.name)
-        outState.putBoolean("regional_only", regionalOnly)
         outState.putString("catalogue_station", catalogueStation)
         radioUpdates.save(outState)
         super.onSaveInstanceState(outState)
@@ -455,19 +451,13 @@ class RadioActivity : ComponentActivity() {
             })
         }
         tabs = StationTab.entries.associateWith { choice ->
-            val button = addCategory(choice.label, stationTabIcon(choice)) { selectTab(choice) }
-            if (choice == StationTab.MOROCCO) {
-                regionalButton = addCategory("Régionales", R.drawable.ic_radio_region) { selectTab(choice, regional = true) }
-            }
-            button
+            addCategory(choice.label, stationTabIcon(choice)) { selectTab(choice) }
         }
     }
 
-    private fun selectTab(choice: StationTab, regional: Boolean = false) {
-        if (tab != choice || regionalOnly != regional) catalogueStation = null
+    private fun selectTab(choice: StationTab) {
+        if (tab != choice) catalogueStation = null
         tab = choice
-        regionalOnly = regional
-        if (regional) radioFavoritesOnly = false
         prefs.edit().putString("tab", choice.name).apply()
         updateDirectory(resetScroll = true)
     }
@@ -535,7 +525,7 @@ class RadioActivity : ComponentActivity() {
             if (television) list.requestFocus()
             list.setSelection(position)
         } else if (television) {
-            (if (regionalOnly) regionalButton else tabs[tab])?.requestFocus()
+            tabs[tab]?.requestFocus()
         }
     }
 
@@ -579,15 +569,9 @@ class RadioActivity : ComponentActivity() {
             }
         }
         tabs = StationTab.entries.associateWith { choice ->
-            val button = addCategory(choice.label, stationTabIcon(choice), if (choice == StationTab.MOROCCO) 1.3f else 1f) {
+            addCategory(choice.label, stationTabIcon(choice), if (choice == StationTab.MOROCCO) 1.3f else 1f) {
                 selectTab(choice)
             }
-            if (choice == StationTab.MOROCCO) {
-                regionalButton = addCategory("Régionales", R.drawable.ic_radio_region, 1.25f) {
-                    selectTab(choice, regional = true)
-                }
-            }
-            button
         }
     }
 
@@ -1266,7 +1250,7 @@ class RadioActivity : ComponentActivity() {
 
     private fun updateDirectory(resetScroll: Boolean = false) {
         val code = when {
-            tab == StationTab.MOROCCO && !radioFavoritesOnly && !regionalOnly -> "MA"
+            tab == StationTab.MOROCCO && !radioFavoritesOnly -> "MA"
             tab == StationTab.WORLD -> country
             else -> null
         }
@@ -1277,7 +1261,6 @@ class RadioActivity : ComponentActivity() {
     private fun renderRows(resetScroll: Boolean = false) {
         val sort = activeSort()
         rows = Stations.visible(tab, favorites, query, radioFavoritesOnly, directory.stations, directoryBookmarks, sort)
-        if (regionalOnly) rows = rows.filter { Stations.region(it) != null }
         PlaybackService.setVisibleStations(rows)
         listEntries = buildList {
             var previousSection: String? = null
@@ -1306,7 +1289,7 @@ class RadioActivity : ComponentActivity() {
             shortLandscape) View.GONE else View.VISIBLE
         sortButton.visibility = if (tab == StationTab.QURAN) View.GONE else View.VISIBLE
         listContext.text = when (tab) {
-            StationTab.MOROCCO -> if (regionalOnly) "RADIOS RÉGIONALES" else "RADIO MAROC"
+            StationTab.MOROCCO -> "RADIO MAROC"
             StationTab.WORLD -> "MONDE · ${WorldContinent.forCountry(country)?.label.orEmpty()}"
             StationTab.FAVORITES -> "FAVORIS"
             StationTab.QURAN -> "القرآن"
@@ -1315,7 +1298,7 @@ class RadioActivity : ComponentActivity() {
         countryButton.visibility = if (tab == StationTab.WORLD) View.VISIBLE else View.GONE
         countryButton.text = "${StationDirectory.countryName(country)} ▾"
         countryButton.contentDescription = "Choisir un continent ou un pays · ${StationDirectory.countryName(country)}"
-        radioFilter.visibility = if (onRadioTab && !regionalOnly && !television) View.VISIBLE else View.GONE
+        radioFilter.visibility = if (onRadioTab && !television) View.VISIBLE else View.GONE
         radioFilter.isSelected = radioFavoritesOnly
         radioFilter.contentDescription =
             if (radioFavoritesOnly) "Afficher toutes les radios marocaines" else "Afficher les radios marocaines favorites"
@@ -1336,20 +1319,15 @@ class RadioActivity : ComponentActivity() {
         directoryAction.visibility = if (directory.hasMore) View.VISIBLE else View.GONE
         enable(directoryAction, !directory.loading)
         for ((choice, button) in tabs) {
-            button.isSelected = choice == tab && !regionalOnly
+            button.isSelected = choice == tab
             if (television) styleTvCategory(button)
         }
-        regionalButton?.let {
-            it.isSelected = regionalOnly
-            if (television) styleTvCategory(it)
-        }
         if (television) {
-            val category = if (regionalOnly) regionalButton else tabs[tab]
+            val category = tabs[tab]
             displayLayoutButton.nextFocusDownId = category?.id ?: View.NO_ID
             if (displayLayout == DisplayLayout.GUIDE) {
                 list.nextFocusLeftId = category?.id ?: View.NO_ID
                 tabs.values.forEach { it.nextFocusRightId = list.id }
-                regionalButton?.nextFocusRightId = list.id
             }
         }
         catalogueAdapter.notifyDataSetChanged()

@@ -17,12 +17,12 @@ internal object BroadcastProgrammes {
 
     fun source(station: RadioStation?): String? = when {
         station?.url == RADIO_2M_PAGE -> RADIO_2M_FEED
-        station in Stations.snrt -> station?.url
+        station in Stations.snrtNational -> station?.url
         else -> null
     }
 
     fun fetch(source: String): BroadcastProgramme? {
-        if (source != RADIO_2M_FEED && Stations.snrt.none { it.url == source }) return null
+        if (source != RADIO_2M_FEED && Stations.snrtNational.none { it.url == source }) return null
         val connection = URI(source).toURL().openConnection() as HttpURLConnection
         return try {
             connection.instanceFollowRedirects = false

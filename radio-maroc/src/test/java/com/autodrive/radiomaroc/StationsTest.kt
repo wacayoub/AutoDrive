@@ -12,15 +12,15 @@ class StationsTest {
         val morocco = Stations.visible(StationTab.MOROCCO, emptySet(), "")
         val quran = Stations.visible(StationTab.QURAN, emptySet(), "")
         val tajwid = quran.filter { Stations.quranSection(it) == QuranSection.TAJWID }
-        assertEquals(42, morocco.size)
+        assertEquals(53, morocco.size)
         assertTrue(morocco.all { it.logoUrl?.let(RadioStation::validUrl) != null })
         assertEquals(31, quran.size)
         assertEquals(21, quran.count { Stations.quranSection(it) == QuranSection.MURATTAL })
         assertEquals(4, tajwid.size)
         assertEquals(Stations.all.size, Stations.all.map { it.url }.toSet().size)
         assertTrue(Stations.all.all { RadioStation.validUrl(it.url) == it.url })
-        assertEquals(4, Stations.snrt.size)
-        assertTrue(Stations.snrt.all { it.url.startsWith("https://snrtlive.ma/") })
+        assertEquals(4, Stations.snrtNational.size)
+        assertTrue(Stations.snrtNational.all { it.url.startsWith("https://snrtlive.ma/") })
         assertEquals(Stations.snrt.toSet(), Stations.visible(StationTab.MOROCCO, emptySet(), "SNRT").toSet())
         val streams = mapOf(
             "https://snrtlive.ma/fr/alidaa-alwatania" to "radio_nationale",
@@ -28,7 +28,7 @@ class StationsTest {
             "https://snrtlive.ma/fr/chaine-inter" to "radio_inter",
             "https://snrtlive.ma/fr/idaat-mohammed-assadiss" to "radio_med_VI",
         )
-        Stations.snrt.forEach { station ->
+        Stations.snrtNational.forEach { station ->
             assertEquals("https://cdn.live.easybroadcast.io/live/${streams.getValue(station.url)}/playlist.m3u8", Stations.streamUrl(station))
             assertTrue(Stations.isHls(station))
             assertEquals("SNRT Live · Maroc", Stations.subtitle(station))
@@ -114,14 +114,27 @@ class StationsTest {
 
     @Test fun regionalStationsStayAtTheEndAndAreSearchableByRegion() {
         val capFromDirectory = RadioStation("CAP RADIO", "https://audio.example/cap", countryCode = "MA")
-        val expected = setOf("Cap Radio", "Radio Tanger Med", "Marrakech Plus", "Radio Plus Agadir", "Skyrock Casablanca")
+        val snrtRegional = Stations.snrt - Stations.snrtNational.toSet()
+        assertEquals(11, snrtRegional.size)
+        snrtRegional.forEach { station ->
+            assertEquals(StationGroup.REGIONAL, Stations.group(station))
+            assertTrue(Stations.isHls(station))
+            val directory = Stations.streamUrl(station).removePrefix("https://${Stations.SNRT_STREAM_HOST}/live/")
+                .removeSuffix("/playlist.m3u8")
+            assertTrue(directory in Stations.snrtStreamDirectories)
+            assertEquals(null, BroadcastProgrammes.source(station))
+        }
+        val expected = setOf("Cap Radio", "Radio Tanger Med", "Marrakech Plus", "Radio Plus Agadir", "Skyrock Casablanca") +
+            snrtRegional.map { it.name }
         for (sort in StationSort.options(StationTab.MOROCCO)) {
             val stations = Stations.visible(StationTab.MOROCCO, emptySet(), "", directory = listOf(capFromDirectory), sort = sort)
             assertEquals(expected, stations.takeLast(expected.size).map { it.name }.toSet())
             assertTrue(stations.dropLast(expected.size).none { Stations.region(it) != null })
         }
         val tanger = Stations.visible(StationTab.MOROCCO, emptySet(), "Tétouan")
-        assertEquals(setOf("Cap Radio", "Radio Tanger Med"), tanger.map { it.name }.toSet())
+        assertEquals(setOf("Cap Radio", "Radio Tanger Med", "SNRT Radio Al Hoceïma", "SNRT Radio Tanger", "SNRT Radio Tétouan"),
+            tanger.map { it.name }.toSet())
+        assertEquals("SNRT Radio Oujda", Stations.visible(StationTab.MOROCCO, emptySet(), "وجدة").single().name)
         assertEquals(tanger, Stations.visible(StationTab.MOROCCO, tanger.map { it.url }.toSet(), "Tétouan", true))
     }
 
