@@ -27,3 +27,11 @@ Radio Maroc & Coran vérifie la signature du paquet installé, parcourt le catal
 - **Build**. APK signé avec le certificat du canal Radio Maroc, 16 tests unitaires réussis, 0 erreur et 26 avertissements lint.
 
 La disponibilité de Luxe Radio dans le Play Store du boîtier et la lecture sur l’Incarlink restent à vérifier.
+
+## Distribution de la 2.3.0 suspendue
+
+L’application 2.2.0 a détecté la version GitHub, téléchargé l’APK et ouvert l’installateur Android. Sur l’image Android 13 avec Google Play, l’analyse Play Protect a affiché **Harmful app blocked** pour **Radio Maroc & Coran**. Le message détaillé est resté générique. L’essai s’est arrêté à ce blocage. [Guide Google sur ce message](https://developers.google.com/android/play-protect/warning-dev-guidance?hl=fr#harmful-app-blocked).
+
+L’APK téléchargé correspond à l’empreinte publiée. La signature, l’alignement APK et l’intégrité ZIP ont été vérifiés. Les autorisations du manifeste signé sont identiques à celles de la 2.2.0, dont `REQUEST_INSTALL_PACKAGES` pour transmettre une mise à jour à l’installateur système. Ces contrôles ne déterminent pas la raison du classement Play Protect.
+
+La version 2.3.0 a été repassée en brouillon sur GitHub. Le manifeste de mise à jour de cette version n’est plus accessible publiquement. Le code de l’intégration et cet audit restent consultables. [Procédure officielle de réexamen](https://support.google.com/android/answer/2992033?hl=fr).
