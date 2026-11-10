@@ -24,6 +24,20 @@ internal enum class QuranSection(val label: String) {
     MURATTAL("الترتيل"), TAJWID("التجويد"), HARAM("تلاوات الحرم")
 }
 
+internal enum class StationSort(val label: String) {
+    DEFAULT("Popularité"), NAME_ASC("Nom A–Z"), NAME_DESC("Nom Z–A"), GROUPS("Par groupe");
+
+    fun labelFor(tab: StationTab) = if (this == DEFAULT && tab == StationTab.FAVORITES) "Ordre du catalogue" else label
+
+    companion object {
+        fun options(tab: StationTab) = if (tab == StationTab.MOROCCO) entries else entries.filter { it != GROUPS }
+    }
+}
+
+internal enum class StationGroup(val label: String) {
+    HIT("GROUPE HIT RADIO"), MEDI1("MEDI 1"), SNRT("SNRT"), OTHER("AUTRES RADIOS")
+}
+
 internal object Stations {
     private val morocco = listOf(
         RadioStation("Med Radio", "https://medradio.ice.infomaniak.ch/medradio-128.mp3",
@@ -56,17 +70,22 @@ internal object Stations {
     const val SNRT_STREAM_HOST = "cdn.live.easybroadcast.io"
     const val RADIO_2M_STREAM_HOST = "cdn-globecast.akamaized.net"
     // Keep the catalogue URLs as station IDs so saved stations and favourites survive updates.
-    private val snrtStreams = mapOf(
+    private val snrtPaths = mapOf(
         "alidaa-alwatania" to "radio_nationale",
         "alidaa-alamazighia" to "radio_amazigh",
         "chaine-inter" to "radio_inter",
         "idaat-mohammed-assadiss" to "radio_med_VI",
-    ).mapKeys { (slug, _) -> "https://snrtlive.ma/fr/$slug" }
+    )
+    val snrtStreamDirectories = snrtPaths.values.toSet()
+    private val snrtStreams = snrtPaths.mapKeys { (slug, _) -> "https://snrtlive.ma/fr/$slug" }
         .mapValues { (_, path) -> "https://$SNRT_STREAM_HOST/live/$path/playlist.m3u8" }
     private val officialStreams = snrtStreams + (radio2m.url to
         "https://$RADIO_2M_STREAM_HOST/live/eds/radio_2m/radio_hls_ts_hy217612tge1f21j83/radio_2m.m3u8")
-    private val localRadios = morocco + snrt + radio2m
-    private val localRadioNames = localRadios.map { RadioCatalogue.searchKey(it.name) }.toSet()
+    private val localRadios = morocco + snrt + radio2m + StationFamilies.hit + StationFamilies.medi
+    private val localRadioNames = localRadios.map(StationFamilies::directoryKey).toSet()
+    private val hitGroupNames = (StationFamilies.hit + morocco.filter { it.name == "HIT RADIO" || it.name == "Radio Azawan" })
+        .map(StationFamilies::directoryKey).toSet()
+    private val mediGroupNames = StationFamilies.medi.map(StationFamilies::directoryKey).toSet()
     // Radiométrie Maroc, Q2 2025, audience share in hundredths of a percentage point.
     private val audienceShares = mapOf(
         "محمد السادس للقرآن الكريم" to 1536,
@@ -77,9 +96,6 @@ internal object Stations {
 
     private fun audienceShare(station: RadioStation): Int? = audienceShares[RadioCatalogue.searchKey(station.name)]
 
-    fun audienceLabel(station: RadioStation): String? = audienceShare(station)?.let {
-        "${it / 100},${(it % 100).toString().padStart(2, '0')} %"
-    }
     private fun quranStation(name: String, path: String) = RadioStation(name, "https://backup.qurango.net/radio/$path")
 
     private val badr = quranStation("بدر التركي", "bader")
@@ -169,32 +185,49 @@ internal object Stations {
     fun streamUrl(station: RadioStation): String = officialStreams[station.url] ?: station.url
     fun isHls(station: RadioStation): Boolean = station.isHls || station.url in officialStreams
 
+    fun group(station: RadioStation): StationGroup {
+        if (station.url in snrtStreams) return StationGroup.SNRT
+        return when (StationFamilies.directoryKey(station)) {
+            in hitGroupNames -> StationGroup.HIT
+            in mediGroupNames -> StationGroup.MEDI1
+            else -> StationGroup.OTHER
+        }
+    }
+
     fun visible(
         tab: StationTab, favorites: Set<String>, query: String, radioFavoritesOnly: Boolean = false,
         directory: List<RadioStation> = emptyList(), bookmarks: List<RadioStation> = emptyList(),
+        sort: StationSort = StationSort.DEFAULT,
     ): List<RadioStation> {
         val candidates = when (tab) {
             StationTab.MOROCCO -> {
                 val listed = (directory + bookmarks).filter { it.countryCode == "MA" }.distinctBy { it.url }
-                val clicksByName = listed.groupBy { RadioCatalogue.searchKey(it.name) }
+                val clicksByName = listed.groupBy(StationFamilies::directoryKey)
                     .mapValues { (_, entries) -> entries.maxOf { it.directoryClicks ?: -1 } }
-                (localRadios + listed.filter { RadioCatalogue.searchKey(it.name) !in localRadioNames })
+                (localRadios + listed.filter { StationFamilies.directoryKey(it) !in localRadioNames || it.url in favorites })
                     .distinctBy { it.url }
                     .filter { !radioFavoritesOnly || it.url in favorites }
                     .sortedWith(compareByDescending<RadioStation> { audienceShare(it) ?: -1 }
-                        .thenByDescending { clicksByName[RadioCatalogue.searchKey(it.name)] ?: -1 })
+                        .thenByDescending { clicksByName[StationFamilies.directoryKey(it)] ?: -1 })
             }
             StationTab.WORLD -> directory
             StationTab.QURAN -> quranLibrary
             StationTab.FAVORITES -> (all + bookmarks).distinctBy { it.url }.filter { it.url in favorites }
         }
-        if (query.isBlank()) return candidates
+        val ordered = when (sort) {
+            StationSort.DEFAULT -> candidates
+            StationSort.NAME_ASC -> candidates.sortedBy { RadioCatalogue.searchKey(it.name) }
+            StationSort.NAME_DESC -> candidates.sortedByDescending { RadioCatalogue.searchKey(it.name) }
+            StationSort.GROUPS -> candidates.sortedBy(::group)
+        }
+        if (query.isBlank()) return ordered
         val key = RadioCatalogue.searchKey(query)
         val sections = if (tab == StationTab.QURAN && key.isNotEmpty()) {
             QuranSection.entries.filter { RadioCatalogue.searchKey(it.label).contains(key) }
         } else emptyList()
-        return candidates.filter { station ->
+        return ordered.filter { station ->
             RadioCatalogue.search(station, query) ||
+                (tab == StationTab.MOROCCO && group(station) != StationGroup.OTHER && RadioCatalogue.searchKey(group(station).label).contains(key)) ||
                 aliases[reciterName(station)].orEmpty().any { RadioCatalogue.searchKey(it).contains(key) } ||
                 (sections.isNotEmpty() && quranSection(station) in sections)
         }

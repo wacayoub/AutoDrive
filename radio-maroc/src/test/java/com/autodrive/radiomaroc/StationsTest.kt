@@ -4,7 +4,6 @@ import com.autodrive.launcher.RadioQueue
 import com.autodrive.launcher.RadioStation
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -13,8 +12,8 @@ class StationsTest {
         val morocco = Stations.visible(StationTab.MOROCCO, emptySet(), "")
         val quran = Stations.visible(StationTab.QURAN, emptySet(), "")
         val tajwid = quran.filter { Stations.quranSection(it) == QuranSection.TAJWID }
-        assertEquals(17, morocco.size)
-        assertEquals(17, morocco.mapNotNull { it.logoUrl?.let(RadioStation::validUrl) }.toSet().size)
+        assertEquals(38, morocco.size)
+        assertTrue(morocco.all { it.logoUrl?.let(RadioStation::validUrl) != null })
         assertEquals(31, quran.size)
         assertEquals(21, quran.count { Stations.quranSection(it) == QuranSection.MURATTAL })
         assertEquals(4, tajwid.size)
@@ -68,8 +67,8 @@ class StationsTest {
         val morocco = Stations.visible(StationTab.MOROCCO, emptySet(), "")
         assertEquals(
             listOf("محمد السادس للقرآن الكريم", "Med Radio", "HIT RADIO", "Radio Aswat", "Radio Nationale",
-                "Chada FM", "Radio Mars", "Radio 2M", "Radio Amazighe", "Medina FM", "Chaîne Inter"),
-            morocco.take(11).map { it.name },
+                "Medi 1 Radio", "Chada FM", "Radio Mars", "Radio 2M", "Radio Amazighe", "Medina FM", "Chaîne Inter"),
+            morocco.take(12).map { it.name },
         )
         assertEquals("Med Radio", RadioQueue.neighbor(morocco, morocco.first().url, 1)?.name)
         assertEquals(morocco.last(), RadioQueue.neighbor(morocco, morocco.first().url, -1))
@@ -86,13 +85,27 @@ class StationsTest {
         val mfm = RadioStation("MFM Radio", "https://audio.example/mfm", countryCode = "MA", directoryClicks = 2)
         val stations = Stations.visible(StationTab.MOROCCO, emptySet(), "", directory = listOf(low, high, dance, mfm))
         val curatedDance = stations.single { it.name == dance.name }
-        assertEquals("15,36 %", Stations.audienceLabel(stations.first()))
-        assertEquals("8,09 %", Stations.audienceLabel(stations[3]))
-        assertNull(Stations.audienceLabel(high))
-        assertTrue(stations.indexOf(high) > stations.indexOfLast { Stations.audienceLabel(it) != null })
+        assertEquals("محمد السادس للقرآن الكريم", stations.first().name)
+        assertEquals(mfm, stations[3])
+        assertTrue(stations.indexOf(high) > stations.indexOfFirst { it.name == "Chaîne Inter" })
         assertTrue(stations.indexOf(high) < stations.indexOf(curatedDance))
         assertTrue(stations.indexOf(curatedDance) < stations.indexOf(low))
         assertEquals("https://udance.ice.infomaniak.ch/udance-128.aac", curatedDance.url)
+    }
+
+    @Test fun radioFamiliesAreSearchableAndSortIntoContiguousGroups() {
+        val morocco = Stations.visible(StationTab.MOROCCO, emptySet(), "", sort = StationSort.GROUPS)
+        assertEquals(StationGroup.entries, morocco.map(Stations::group).distinct())
+        assertEquals(9, Stations.visible(StationTab.MOROCCO, emptySet(), "hit radio").size)
+        assertEquals(14, Stations.visible(StationTab.MOROCCO, emptySet(), "medi1").size)
+        assertEquals(2, StationFamilies.medi.count(Stations::isHls))
+        val oldJazz = RadioStation("Medi1 Radio - Jazz", "https://audio.example/jazz", countryCode = "MA")
+        assertEquals(1, Stations.visible(StationTab.MOROCCO, emptySet(), "jazz", directory = listOf(oldJazz)).size)
+        assertEquals(listOf(oldJazz), Stations.visible(StationTab.MOROCCO, setOf(oldJazz.url), "", true, bookmarks = listOf(oldJazz)))
+        val ascending = Stations.visible(StationTab.MOROCCO, emptySet(), "", sort = StationSort.NAME_ASC)
+        val descending = Stations.visible(StationTab.MOROCCO, emptySet(), "", sort = StationSort.NAME_DESC)
+        assertEquals(ascending.reversed(), descending)
+        assertFalse(StationSort.GROUPS in StationSort.options(StationTab.WORLD))
     }
 
     @Test fun radioFavoritesKeepAudienceOrderAndExcludeOtherTabs() {

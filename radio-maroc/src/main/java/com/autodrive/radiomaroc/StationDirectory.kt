@@ -14,7 +14,7 @@ import java.text.Collator
 import java.util.Locale
 
 internal class StationDirectory(context: Context) {
-    data class Query(val country: String, val name: String)
+    data class Query(val country: String, val name: String, val sort: StationSort = StationSort.DEFAULT)
     data class Page(val stations: List<RadioStation>, val nextOffset: Int?)
 
     private val folder = File(context.filesDir, "radio-directory")
@@ -30,10 +30,15 @@ internal class StationDirectory(context: Context) {
     fun fetch(query: Query, offset: Int): Page {
         require(query.country in countries)
         val name = URLEncoder.encode(query.name.trim().take(80), Charsets.UTF_8.name())
+        val order = when (query.sort) {
+            StationSort.NAME_ASC -> "name&reverse=false"
+            StationSort.NAME_DESC -> "name&reverse=true"
+            else -> "clickcount&reverse=true"
+        }
         val path = "stations/search?countrycode=${query.country}&name=$name&hidebroken=true" +
-            "&order=clickcount&reverse=true&limit=$PAGE_SIZE&offset=$offset"
+            "&order=$order&limit=$PAGE_SIZE&offset=$offset"
         val page = RadioBrowser.read(path, userAgent) { parsePage(it, query.country, offset) }
-        if (offset == 0 && query.name.isBlank() && page.stations.isNotEmpty()) {
+        if (offset == 0 && query.name.isBlank() && query.sort == StationSort.DEFAULT && page.stations.isNotEmpty()) {
             synchronized(cacheLock) {
                 runCatching {
                     val file = cache(query.country)

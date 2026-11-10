@@ -87,6 +87,8 @@ class RadioActivity : ComponentActivity() {
     private lateinit var countryButton: TextView
     private lateinit var stationSearch: EditText
     private lateinit var listContext: TextView
+    private lateinit var listToolbar: LinearLayout
+    private lateinit var sortButton: TextView
     private lateinit var directoryAction: TextView
     private lateinit var list: ListView
     private lateinit var empty: TextView
@@ -326,7 +328,18 @@ class RadioActivity : ComponentActivity() {
             letterSpacing = .08f
             setPadding(dp(4), 0, 0, 0)
         }
-        addView(listContext, LinearLayout.LayoutParams(-1, dp(24)))
+        sortButton = button("Trier", ::chooseSort).apply {
+            textSize = 12f
+            setPadding(dp(10), 0, dp(10), 0)
+            setCompoundDrawablesRelativeWithIntrinsicBounds(R.drawable.ic_radio_sort, 0, 0, 0)
+            compoundDrawablePadding = dp(6)
+        }
+        listToolbar = row().apply {
+            gravity = Gravity.CENTER_VERTICAL
+            addView(listContext, LinearLayout.LayoutParams(0, -1, 1f))
+            addView(sortButton, LinearLayout.LayoutParams(dp(92), -1))
+        }
+        addView(listToolbar, LinearLayout.LayoutParams(-1, dp(if (television) 40 else 36)).apply { bottomMargin = dp(4) })
         stationSearch = EditText(context).apply {
             hint = "Rechercher…"
             contentDescription = "Rechercher une station ou un récitateur"
@@ -397,6 +410,22 @@ class RadioActivity : ComponentActivity() {
         }, LinearLayout.LayoutParams(-1, 0, 1f))
         directoryAction = button("") { directory.loadMore() }
         addView(directoryAction, LinearLayout.LayoutParams(-1, dp(if (television) 48 else 44)).apply { topMargin = dp(4) })
+    }
+
+    private fun activeSort(): StationSort = StationSort.options(tab)
+        .firstOrNull { it.name == prefs.getString("sort_${tab.name}", null) } ?: StationSort.DEFAULT
+
+    private fun chooseSort() {
+        val options = StationSort.options(tab)
+        val selected = options.indexOf(activeSort())
+        val dialog = AlertDialog.Builder(this).setTitle("Trier les stations")
+            .setSingleChoiceItems(options.map { it.labelFor(tab) }.toTypedArray(), selected) { picker, index ->
+                prefs.edit().putString("sort_${tab.name}", options[index].name).apply()
+                picker.dismiss()
+                updateDirectory(resetScroll = true)
+            }.setNegativeButton("Fermer", null).show()
+        dialog.window?.setBackgroundDrawableResource(R.drawable.radio_dialog)
+        if (television) dialog.listView.requestFocus()
     }
 
     private fun chooseContinent() {
@@ -567,15 +596,26 @@ class RadioActivity : ComponentActivity() {
                     importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
                 }
                 addView(line(), LinearLayout.LayoutParams(dp(20), dp(1)))
-                liveDot = View(context).apply {
+                val badge = row().apply {
+                    gravity = Gravity.CENTER_VERTICAL
+                    background = getDrawable(R.drawable.radio_live)
+                    setPadding(dp(7), 0, dp(7), 0)
                     contentDescription = "Radio en direct"
                     importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
-                    background = GradientDrawable().apply {
-                        shape = GradientDrawable.OVAL
-                        setColor(0xFFFF4054.toInt())
+                    liveDot = View(context).apply {
+                        background = GradientDrawable().apply {
+                            shape = GradientDrawable.OVAL
+                            setColor(Color.WHITE)
+                        }
                     }
+                    addView(liveDot, LinearLayout.LayoutParams(dp(5), dp(5)).apply { marginEnd = dp(5) })
+                    addView(label("LIVE", 11, Color.WHITE, bold = true).apply {
+                        gravity = Gravity.CENTER
+                        letterSpacing = .06f
+                        importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+                    }, LinearLayout.LayoutParams(-2, -1))
                 }
-                addView(liveDot, LinearLayout.LayoutParams(dp(12), dp(12)).apply {
+                addView(badge, LinearLayout.LayoutParams(-2, dp(22)).apply {
                     marginStart = dp(7)
                     marginEnd = dp(7)
                 })
@@ -626,7 +666,7 @@ class RadioActivity : ComponentActivity() {
         }
 
     private sealed interface ListEntry {
-        data class Heading(val section: QuranSection) : ListEntry
+        data class Heading(val title: String, val rightAligned: Boolean) : ListEntry
         data class Station(val radio: RadioStation, val number: Int) : ListEntry
     }
 
@@ -641,11 +681,13 @@ class RadioActivity : ComponentActivity() {
         override fun getView(position: Int, recycled: View?, parent: ViewGroup): View = when (val item = getItem(position)) {
             is ListEntry.Heading -> (recycled as? TextView ?: label("", 14, accent, bold = true).apply {
                 layoutParams = AbsListView.LayoutParams(-1, dp(if (television) 36 else 32))
-                layoutDirection = View.LAYOUT_DIRECTION_RTL
                 gravity = Gravity.START or Gravity.CENTER_VERTICAL
                 setPaddingRelative(dp(12), 0, dp(12), 0)
                 isAccessibilityHeading = true
-            }).apply { text = item.section.label }
+            }).apply {
+                text = item.title
+                layoutDirection = if (item.rightAligned) View.LAYOUT_DIRECTION_RTL else View.LAYOUT_DIRECTION_LTR
+            }
             is ListEntry.Station -> (recycled as? StationLine ?: StationLine(parent.context)).apply {
                 bind(item.radio, item.number)
             }
@@ -726,9 +768,7 @@ class RadioActivity : ComponentActivity() {
             badge.bind(station)
             name.text = station.name
             name.setTextColor(if (selected) accent else textColor)
-            val detail = Stations.subtitle(station)
-            val audience = if (tab == StationTab.MOROCCO) Stations.audienceLabel(station) else null
-            subtitle.text = if (audience == null) detail else "$detail · $audience (T2 2025)"
+            subtitle.text = Stations.subtitle(station)
             subtitle.setTextColor(if (playing) accent else muted)
             star?.let {
                 bindFavorite(it, station)
@@ -836,25 +876,35 @@ class RadioActivity : ComponentActivity() {
             tab == StationTab.WORLD -> country
             else -> null
         }
-        directory.open(code?.let { StationDirectory.Query(it, query) })
+        directory.open(code?.let { StationDirectory.Query(it, query, activeSort()) })
         renderRows(resetScroll)
     }
 
     private fun renderRows(resetScroll: Boolean = false) {
-        rows = Stations.visible(tab, favorites, query, radioFavoritesOnly, directory.stations, directoryBookmarks)
+        val sort = activeSort()
+        rows = Stations.visible(tab, favorites, query, radioFavoritesOnly, directory.stations, directoryBookmarks, sort)
         listEntries = buildList {
-            var previousSection: QuranSection? = null
+            var previousSection: String? = null
             rows.forEachIndexed { index, station ->
-                val section = if (tab == StationTab.QURAN) Stations.quranSection(station) else null
-                if (section != null && section != previousSection) add(ListEntry.Heading(section))
+                val section = when {
+                    tab == StationTab.QURAN -> Stations.quranSection(station)?.label
+                    sort == StationSort.GROUPS -> Stations.group(station).label
+                    else -> null
+                }
+                if (section != null && section != previousSection) add(ListEntry.Heading(section, tab == StationTab.QURAN))
                 previousSection = section
                 add(ListEntry.Station(station, index + 1))
             }
         }
         val onRadioTab = tab == StationTab.MOROCCO
-        listContext.visibility = if (onRadioTab || tab == StationTab.WORLD) View.VISIBLE else View.GONE
-        listContext.text = if (onRadioTab) "RADIO MAROC · POPULARITÉ"
-            else "MONDE · ${WorldContinent.forCountry(country)?.label.orEmpty()}"
+        listToolbar.visibility = if (tab == StationTab.QURAN) View.GONE else View.VISIBLE
+        listContext.text = when (tab) {
+            StationTab.MOROCCO -> "RADIO MAROC"
+            StationTab.WORLD -> "MONDE · ${WorldContinent.forCountry(country)?.label.orEmpty()}"
+            StationTab.FAVORITES -> "FAVORIS"
+            StationTab.QURAN -> ""
+        }
+        sortButton.contentDescription = "Trier les stations · ${sort.labelFor(tab)}"
         countryButton.visibility = if (tab == StationTab.WORLD) View.VISIBLE else View.GONE
         countryButton.text = "${StationDirectory.countryName(country)} ▾"
         countryButton.contentDescription = "Choisir un continent ou un pays · ${StationDirectory.countryName(country)}"
@@ -914,8 +964,8 @@ class RadioActivity : ComponentActivity() {
             connectionFailed -> "Lecteur indisponible · réessayer"
             player == null -> "Connexion au lecteur…"
             waitingForNetwork && !playing -> "Connexion perdue · reprise automatique"
-            player.playerError?.errorCode == PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS ->
-                if (station in Stations.snrt) "Flux SNRT inaccessible · réessayer" else "Source inaccessible · réessayer"
+            player.playerError != null && station in Stations.snrt -> "Flux SNRT inaccessible · réessayer"
+            player.playerError?.errorCode == PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS -> "Source inaccessible · réessayer"
             player.playerError != null -> "Flux indisponible · réessayer"
             live -> ""
             playing -> "● En lecture"

@@ -36,6 +36,7 @@ internal class PlaybackService : MediaSessionService() {
     }
 
     private var session: MediaSession? = null
+    private val snrtAccess = SnrtAccess()
     private lateinit var connectivity: ConnectivityManager
     private var validatedNetwork: Network? = null
     private var networkUnavailable = false
@@ -67,6 +68,13 @@ internal class PlaybackService : MediaSessionService() {
             updateStreamInfo(title?.let { station to it })
         }
 
+        override fun onPlayerError(error: PlaybackException) {
+            val id = session?.player?.currentMediaItem?.mediaId
+            if (error.errorCode == PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS && Stations.snrt.any { it.url == id }) {
+                snrtAccess.clear()
+            }
+        }
+
         override fun onEvents(player: Player, events: Player.Events) {
             if (events.contains(Player.EVENT_PLAYBACK_STATE_CHANGED) && player.isPlaying) retryAfterOutage = false
             recoverPlayback(player)
@@ -88,16 +96,12 @@ internal class PlaybackService : MediaSessionService() {
             .setConnectTimeoutMs(7_000)
             .setReadTimeoutMs(10_000)
         val broadcastNetwork = ResolvingDataSource.Factory(network) { request ->
-            val origin = when {
-                request.uri.scheme != "https" -> null
-                request.uri.host == Stations.RADIO_2M_STREAM_HOST &&
-                    request.uri.path?.startsWith("/live/eds/radio_2m/") == true -> "https://radio2m.ma"
-                request.uri.host == Stations.SNRT_STREAM_HOST -> "https://snrtlive.ma"
-                else -> null
-            }
-            if (origin == null) request else request.withAdditionalHeaders(
-                mapOf("Origin" to origin, "Referer" to "$origin/"),
-            )
+            val authorized = snrtAccess.authorize(request.uri)
+            if (authorized != request.uri) request.withUri(authorized)
+            else if (request.uri.scheme == "https" && request.uri.host == Stations.RADIO_2M_STREAM_HOST &&
+                request.uri.path?.startsWith("/live/eds/radio_2m/") == true) request.withAdditionalHeaders(
+                mapOf("Origin" to "https://radio2m.ma", "Referer" to "https://radio2m.ma/"),
+            ) else request
         }
         val player = ExoPlayer.Builder(this)
             .setMediaSourceFactory(DefaultMediaSourceFactory(broadcastNetwork))
@@ -145,6 +149,7 @@ internal class PlaybackService : MediaSessionService() {
         val current = session ?: return
         if (networkUnavailable == unavailable) return
         networkUnavailable = unavailable
+        if (unavailable) snrtAccess.clear()
         current.setSessionExtras(sessionExtras())
         recoverPlayback(current.player)
     }
