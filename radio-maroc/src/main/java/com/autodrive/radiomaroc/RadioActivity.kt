@@ -64,7 +64,8 @@ import kotlinx.coroutines.Job
 class RadioActivity : ComponentActivity() {
     private companion object {
         const val PREFERENCES = "radio_maroc"
-        const val DAY_APPEARANCE = "day_appearance"
+        const val APPEARANCE = "appearance"
+        const val LEGACY_DAY_APPEARANCE = "day_appearance"
         const val DISPLAY_LAYOUT = "tv_layout"
         const val CATALOGUE_LAYOUT = "tv_catalogue"
     }
@@ -73,6 +74,20 @@ class RadioActivity : ComponentActivity() {
         OFF("Désactivée"),
         AFTER_BOOT("Après redémarrage Android"),
         ON_OPEN("À chaque ouverture"),
+    }
+
+    private enum class Appearance(val label: String, val nightFlag: Int?) {
+        DAY("Jour", Configuration.UI_MODE_NIGHT_NO),
+        NIGHT("Nuit", Configuration.UI_MODE_NIGHT_YES),
+        SYSTEM("Système", null);
+
+        companion object {
+            fun restore(prefs: SharedPreferences): Appearance {
+                val saved = prefs.getString(APPEARANCE, null)
+                return entries.firstOrNull { it.name == saved }
+                    ?: if (prefs.getBoolean(LEGACY_DAY_APPEARANCE, false)) DAY else NIGHT
+            }
+        }
     }
 
     private enum class DisplayLayout(val label: String) {
@@ -161,11 +176,10 @@ class RadioActivity : ComponentActivity() {
     }
 
     override fun attachBaseContext(newBase: Context) {
-        val day = newBase.getSharedPreferences(PREFERENCES, MODE_PRIVATE).getBoolean(DAY_APPEARANCE, false)
-        val configuration = Configuration().apply {
-            uiMode = if (day) Configuration.UI_MODE_NIGHT_NO else Configuration.UI_MODE_NIGHT_YES
-        }
-        super.attachBaseContext(newBase.createConfigurationContext(configuration))
+        val nightFlag = Appearance.restore(newBase.getSharedPreferences(PREFERENCES, MODE_PRIVATE)).nightFlag
+        super.attachBaseContext(if (nightFlag == null) newBase else {
+            newBase.createConfigurationContext(Configuration().apply { uiMode = nightFlag })
+        })
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -1034,6 +1048,8 @@ class RadioActivity : ComponentActivity() {
         } else if (television) (resources.configuration.screenHeightDp * .18).toInt().coerceIn(72, 134)
         else if (shortLandscape) 66 else 96
         private val logo = StationArtwork(18)
+        private val idleBackground = pressable(R.drawable.radio_control)
+        private val selectedBackground = pressable(R.drawable.radio_selected)
         private val name = label("", if (compactTv || shortLandscape) 13 else if (television) 17 else 15, textColor, bold = true).apply {
             gravity = Gravity.CENTER
             includeFontPadding = false
@@ -1051,7 +1067,7 @@ class RadioActivity : ComponentActivity() {
             orientation = VERTICAL
             gravity = Gravity.CENTER
             layoutParams = AbsListView.LayoutParams(-1, dp(heightDp))
-            background = getDrawable(R.drawable.radio_control)
+            background = idleBackground
             setPadding(dp(5), dp(3), dp(5), dp(3))
             val artSize = dp((heightDp - if (compactTv || shortLandscape) 37 else 47).coerceIn(20, 68))
             addView(logo, LinearLayout.LayoutParams(artSize, artSize).apply { bottomMargin = dp(2) })
@@ -1060,16 +1076,22 @@ class RadioActivity : ComponentActivity() {
         }
 
         fun bind(station: RadioStation) {
-            val active = station.url == highlighted?.first && highlighted?.second == true
-            contentDescription = if (active) "Écouter ${station.name} · En écoute" else "Écouter ${station.name}"
+            val selected = station.url == highlighted?.first
+            val playing = selected && highlighted?.second == true
+            val tileBackground = if (selected) selectedBackground else idleBackground
+            if (background !== tileBackground) background = tileBackground
+            contentDescription = "Écouter ${station.name}"
+            stateDescription = if (playing) "En écoute" else if (selected) "Sélectionnée" else null
             logo.bind(station)
             name.text = station.name
-            name.setTextColor(if (active) accent else textColor)
-            subtitle.text = if (active) "En écoute" else Stations.subtitle(station)
+            name.setTextColor(if (selected) accent else textColor)
+            subtitle.text = if (playing) "En écoute" else Stations.subtitle(station)
         }
     }
 
     private inner class StationLine(context: Context) : LinearLayout(context) {
+        private val idleBackground = RippleDrawable(ripple, null, ColorDrawable(Color.WHITE))
+        private val selectedBackground = pressable(R.drawable.radio_selected)
         private val number = label("", 11, muted, bold = true).apply {
             gravity = Gravity.CENTER
             importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
@@ -1107,7 +1129,7 @@ class RadioActivity : ComponentActivity() {
             layoutParams = AbsListView.LayoutParams(-1, -2)
             minimumHeight = dp(if (television && !compactTv) 66 else 54)
             gravity = Gravity.CENTER_VERTICAL
-            background = RippleDrawable(ripple, null, ColorDrawable(Color.WHITE))
+            background = idleBackground
             addView(FrameLayout(context).apply {
                 addView(selectionMark, FrameLayout.LayoutParams(dp(2), dp(20), Gravity.START or Gravity.CENTER_VERTICAL)
                     .apply { marginStart = dp(2) })
@@ -1132,9 +1154,12 @@ class RadioActivity : ComponentActivity() {
         fun bind(station: RadioStation, position: Int) {
             val selected = station.url == highlighted?.first
             val playing = selected && highlighted?.second == true
+            val rowBackground = if (selected) selectedBackground else idleBackground
+            if (background !== rowBackground) background = rowBackground
             layoutDirection = directionOf(station.name)
             selectionMark.visibility = if (selected) View.VISIBLE else View.GONE
             contentDescription = "Écouter ${station.name}"
+            stateDescription = if (playing) "En écoute" else if (selected) "Sélectionnée" else null
             if (!television) setOnClickListener {
                 catalogueStation = station.url
                 select(station)
@@ -1445,14 +1470,15 @@ class RadioActivity : ComponentActivity() {
     }
 
     private fun showAppearance() {
-        val day = prefs.getBoolean(DAY_APPEARANCE, false)
+        val appearance = Appearance.restore(prefs)
+        val options = Appearance.entries
         AlertDialog.Builder(this)
             .setTitle("Apparence")
-            .setSingleChoiceItems(arrayOf("Jour", "Nuit"), if (day) 0 else 1) { dialog, index ->
+            .setSingleChoiceItems(options.map { it.label }.toTypedArray(), appearance.ordinal) { dialog, index ->
                 dialog.dismiss()
-                val selectedDay = index == 0
-                if (selectedDay != day) {
-                    prefs.edit().putBoolean(DAY_APPEARANCE, selectedDay).apply()
+                val selected = options[index]
+                if (selected != appearance) {
+                    prefs.edit().putString(APPEARANCE, selected.name).apply()
                     recreate()
                 }
             }

@@ -26,7 +26,7 @@ python tools/github_release.py --radio-maroc --apk radio-maroc/build/outputs/apk
 
 ## Écoute
 
-Dans **Affichage → Jour / Nuit** (**Affichage TV** sur Android TV), choisis **Jour** pour un fond clair ou **Nuit** pour le thème sombre. La radio mémorise ce choix pour les trois vues.
+Dans **Affichage → Jour / Nuit** (**Affichage TV** sur Android TV), choisis **Jour** pour un fond clair, **Nuit** pour le thème sombre ou **Système** pour suivre le réglage d’Android. La radio mémorise ce choix pour les trois vues.
 
 Le thème graphite et turquoise regroupe les radios, le Coran et les favoris dans une barre de catégories avec icônes. Sur l’Incarlink, le lecteur occupe la colonne de gauche et les catégories commencent au bord de la liste. En portrait, les commandes restent en bas de l’écran.
 
@@ -42,7 +42,7 @@ Ouvre **Affichage** sur le téléphone ou le boîtier, ou **Affichage TV** sur A
 - **التجويد** regroupe quatre flux du **المصحف المجوّد**. On y retrouve عبد الباسط عبد الصمد, محمد صديق المنشاوي, محمود خليل الحصري et محمود علي البنا. Le flux مجوّد d’Al-Minshawi garde son adresse de lecture pour préserver les favoris enregistrés.
 - **تلاوات الحرم** rassemble six extraits coraniques du Fajr, du Maghrib et de l’Isha à la Mosquée sacrée de La Mecque. Chaque extrait commence après la Fatiha et s’arrête avant le passage au rukūʿ. L’entrée indique le récitant, la sourate, la prière et la date. Le lecteur utilise les liens publics de Haramain Salaah Recordings, hébergés par QuranicAudio pour l’écoute personnelle. [Archives Haramain](https://haramain.info/) · [Conditions d’utilisation de QuranicAudio](https://quranicaudio.com/about).
 - Les étoiles enregistrent les favoris. Le bouton **★ Favoris** à côté de la recherche dans Radio Maroc affiche les radios marocaines étoilées dans le même ordre de popularité. Les commandes précédente/suivante suivent la liste affichée. L’onglet **★ Favoris** rassemble les favoris de toutes les catégories.
-- Les titres arabes et leurs portraits se lisent de droite à gauche dans la liste. Le titre de la station en cours apparaît aussi dans le lecteur et sa ligne est surlignée.
+- Les titres arabes et leurs portraits se lisent de droite à gauche dans la liste. La station sélectionnée garde un fond coloré dans le Guide et la Mosaïque, même en pause.
 - La dernière station est mémorisée pour une reprise manuelle au lancement. Pendant la lecture, l’application signale une coupure quand le flux ne joue plus et retente automatiquement au retour du réseau tant que la session reste active. Une pause manuelle annule cette reprise. Les commandes média Android restent accessibles en arrière-plan.
 - Le badge rouge **LIVE** et ses deux traits s’affichent pendant la lecture d’un direct. Le lecteur peut afficher un titre fourni par le flux ou le programme publié par SNRT Live et Radio 2M. Il affiche l’horaire si le diffuseur le publie et sépare cette information de l’état audio. [SNRT Live](https://snrtlive.ma/) · [Données officielles de Radio 2M](https://bo.radio2m.ma/api/live).
 
