@@ -989,7 +989,11 @@ class RadioActivity : ComponentActivity() {
             rows.forEachIndexed { index, station ->
                 val section = when {
                     tab == StationTab.QURAN -> Stations.quranSection(station)?.label
-                    sort == StationSort.GROUPS -> Stations.group(station).label
+                    tab == StationTab.MOROCCO -> {
+                        val group = Stations.group(station)
+                        if (sort == StationSort.GROUPS || group == StationGroup.REGIONAL) group.label
+                        else "RADIOS NATIONALES ET WEBRADIOS"
+                    }
                     else -> null
                 }
                 if (section != null && section != previousSection) add(ListEntry.Heading(section, tab == StationTab.QURAN))

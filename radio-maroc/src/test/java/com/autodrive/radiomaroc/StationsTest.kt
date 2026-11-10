@@ -12,7 +12,7 @@ class StationsTest {
         val morocco = Stations.visible(StationTab.MOROCCO, emptySet(), "")
         val quran = Stations.visible(StationTab.QURAN, emptySet(), "")
         val tajwid = quran.filter { Stations.quranSection(it) == QuranSection.TAJWID }
-        assertEquals(39, morocco.size)
+        assertEquals(42, morocco.size)
         assertTrue(morocco.all { it.logoUrl?.let(RadioStation::validUrl) != null })
         assertEquals(31, quran.size)
         assertEquals(21, quran.count { Stations.quranSection(it) == QuranSection.MURATTAL })
@@ -58,7 +58,7 @@ class StationsTest {
         val allMoroccan = Stations.visible(StationTab.MOROCCO, emptySet(), "", directory = directory)
         assertEquals(1, allMoroccan.count { it.url == pinned.url })
         assertEquals(mfm, allMoroccan[3])
-        assertEquals(moroccan, allMoroccan.last())
+        assertEquals(moroccan, allMoroccan.last { Stations.region(it) == null })
         assertTrue(french !in allMoroccan)
         val bookmarks = listOf(moroccan, french)
         val favorites = bookmarks.map { it.url }.toSet()
@@ -107,8 +107,22 @@ class StationsTest {
         assertEquals(listOf(oldJazz), Stations.visible(StationTab.MOROCCO, setOf(oldJazz.url), "", true, bookmarks = listOf(oldJazz)))
         val ascending = Stations.visible(StationTab.MOROCCO, emptySet(), "", sort = StationSort.NAME_ASC)
         val descending = Stations.visible(StationTab.MOROCCO, emptySet(), "", sort = StationSort.NAME_DESC)
-        assertEquals(ascending.reversed(), descending)
+        val (local, national) = ascending.partition { Stations.region(it) != null }
+        assertEquals(national.reversed() + local.reversed(), descending)
         assertFalse(StationSort.GROUPS in StationSort.options(StationTab.WORLD))
+    }
+
+    @Test fun regionalStationsStayAtTheEndAndAreSearchableByRegion() {
+        val capFromDirectory = RadioStation("CAP RADIO", "https://audio.example/cap", countryCode = "MA")
+        val expected = setOf("Cap Radio", "Radio Tanger Med", "Marrakech Plus", "Radio Plus Agadir", "Skyrock Casablanca")
+        for (sort in StationSort.options(StationTab.MOROCCO)) {
+            val stations = Stations.visible(StationTab.MOROCCO, emptySet(), "", directory = listOf(capFromDirectory), sort = sort)
+            assertEquals(expected, stations.takeLast(expected.size).map { it.name }.toSet())
+            assertTrue(stations.dropLast(expected.size).none { Stations.region(it) != null })
+        }
+        val tanger = Stations.visible(StationTab.MOROCCO, emptySet(), "Tétouan")
+        assertEquals(setOf("Cap Radio", "Radio Tanger Med"), tanger.map { it.name }.toSet())
+        assertEquals(tanger, Stations.visible(StationTab.MOROCCO, tanger.map { it.url }.toSet(), "Tétouan", true))
     }
 
     @Test fun radioFavoritesKeepAudienceOrderAndExcludeOtherTabs() {

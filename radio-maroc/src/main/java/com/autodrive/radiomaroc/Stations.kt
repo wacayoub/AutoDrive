@@ -35,7 +35,7 @@ internal enum class StationSort(val label: String) {
 }
 
 internal enum class StationGroup(val label: String) {
-    HIT("GROUPE HIT RADIO"), MEDI1("MEDI 1"), SNRT("SNRT"), OTHER("AUTRES RADIOS")
+    HIT("GROUPE HIT RADIO"), MEDI1("MEDI 1"), SNRT("SNRT"), OTHER("AUTRES RADIOS"), REGIONAL("RADIOS RÉGIONALES")
 }
 
 internal object Stations {
@@ -83,7 +83,25 @@ internal object Stations {
         .mapValues { (_, path) -> "https://$SNRT_STREAM_HOST/live/$path/playlist.m3u8" }
     private val officialStreams = snrtStreams + (radio2m.url to
         "https://$RADIO_2M_STREAM_HOST/live/eds/radio_2m/radio_hls_ts_hy217612tge1f21j83/radio_2m.m3u8")
-    private val localRadios = morocco + snrt + radio2m + luxe + StationFamilies.hit + StationFamilies.medi
+    private val regional = listOf(
+        RadioStation("Cap Radio", "https://listen.radioking.com/radio/710810/stream/776366",
+            logoUrl = "https://capradiotv.com/wp-content/uploads/2023/11/cropped-LOGO-PNG-CAP-RADIO-192x192.png",
+            tags = setOf("Tanger", "Rif", "الشمال", "طنجة")),
+        RadioStation("Radio Tanger Med", "https://radiotangermed-22.ice.infomaniak.ch/radiotangermed-22-128.mp3",
+            logoUrl = "https://www.radiotangermed.com/wp-content/uploads/2020/11/VERTICAL-LOGO-01-AR-COMP.png",
+            tags = setOf("Tanger", "Infos portuaires", "طنجة المتوسط")),
+        RadioStation("Marrakech Plus", "https://cast5.my-control-panel.com/proxy/marrakec/stream",
+            logoUrl = "https://www.marrakechplus.ma/wp-content/uploads/2025/06/cropped-icon-marrakechplus-512-x-512-px-1.png",
+            tags = setOf("Marrakech", "مراكش بلوس")),
+    )
+    private val regionalAreas = mapOf(
+        "capradio" to "Tanger–Tétouan–Al Hoceïma",
+        "radiotangermed" to "Tanger–Tétouan–Al Hoceïma",
+        "marrakechplus" to "Marrakech–Safi",
+        "radioplusagadir" to "Souss–Massa",
+        "skyrockcasablanca" to "Casablanca–Settat",
+    )
+    private val localRadios = morocco + snrt + radio2m + luxe + StationFamilies.hit + StationFamilies.medi + regional
     private val localRadioNames = localRadios.map(StationFamilies::directoryKey).toSet()
     private val hitGroupNames = (StationFamilies.hit + morocco.filter { it.name == "HIT RADIO" || it.name == "Radio Azawan" })
         .map(StationFamilies::directoryKey).toSet()
@@ -186,10 +204,12 @@ internal object Stations {
     }
     fun streamUrl(station: RadioStation): String = officialStreams[station.url] ?: station.url
     fun isHls(station: RadioStation): Boolean = station.isHls || station.url in officialStreams
+    fun region(station: RadioStation): String? = regionalAreas[StationFamilies.directoryKey(station)]
 
     fun group(station: RadioStation): StationGroup {
         if (station.url in snrtStreams) return StationGroup.SNRT
         return when (StationFamilies.directoryKey(station)) {
+            in regionalAreas -> StationGroup.REGIONAL
             in hitGroupNames -> StationGroup.HIT
             in mediGroupNames -> StationGroup.MEDI1
             else -> StationGroup.OTHER
@@ -220,22 +240,27 @@ internal object Stations {
             StationSort.DEFAULT -> candidates
             StationSort.NAME_ASC -> candidates.sortedBy { RadioCatalogue.searchKey(it.name) }
             StationSort.NAME_DESC -> candidates.sortedByDescending { RadioCatalogue.searchKey(it.name) }
-            StationSort.GROUPS -> candidates.sortedBy(::group)
+            StationSort.GROUPS -> candidates.sortedWith(compareBy<RadioStation>(::group).thenBy { region(it).orEmpty() })
         }
-        if (query.isBlank()) return ordered
+        val displayed = if (tab == StationTab.MOROCCO && sort != StationSort.GROUPS) {
+            val (local, national) = ordered.partition { region(it) != null }
+            national + local
+        } else ordered
+        if (query.isBlank()) return displayed
         val key = RadioCatalogue.searchKey(query)
         val sections = if (tab == StationTab.QURAN && key.isNotEmpty()) {
             QuranSection.entries.filter { RadioCatalogue.searchKey(it.label).contains(key) }
         } else emptyList()
-        return ordered.filter { station ->
+        return displayed.filter { station ->
             RadioCatalogue.search(station, query) ||
                 (tab == StationTab.MOROCCO && group(station) != StationGroup.OTHER && RadioCatalogue.searchKey(group(station).label).contains(key)) ||
+                (tab == StationTab.MOROCCO && region(station)?.let { RadioCatalogue.searchKey(it).contains(key) } == true) ||
                 aliases[reciterName(station)].orEmpty().any { RadioCatalogue.searchKey(it).contains(key) } ||
                 (sections.isNotEmpty() && quranSection(station) in sections)
         }
     }
 
-    fun subtitle(station: RadioStation): String = when {
+    fun subtitle(station: RadioStation): String = region(station) ?: when {
         station.url in snrtStreams -> "SNRT Live · Maroc"
         station.url == radio2m.url -> "SOREAD 2M · Maroc"
         station == luxe -> "Luxe Radio · Maroc"
