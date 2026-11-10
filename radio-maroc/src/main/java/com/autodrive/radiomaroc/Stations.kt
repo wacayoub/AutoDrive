@@ -246,10 +246,24 @@ internal object Stations {
         else -> station.tags.firstOrNull() ?: "القرآن الكريم · MP3Quran"
     }
 
+    private const val DEFAULT_ARTWORK = "android.resource://com.autodrive.radiomaroc/drawable/ic_radio"
+    fun defaultArtwork(): Uri = Uri.parse(DEFAULT_ARTWORK)
+
+    fun metadata(station: RadioStation): MediaMetadata = MediaMetadata.Builder()
+        .setTitle(station.name)
+        .setDisplayTitle(station.name)
+        .setArtist(subtitle(station))
+        .setSubtitle(subtitle(station))
+        .setStation(station.name)
+        .setArtworkUri(Uri.parse(station.logoUrl?.let(RadioStation::validUrl) ?: DEFAULT_ARTWORK))
+        .setIsPlayable(true)
+        .setIsBrowsable(false)
+        .build()
+
     fun item(station: RadioStation): MediaItem = MediaItem.Builder()
         .setMediaId(station.url)
         .setUri(streamUrl(station))
-        .setMediaMetadata(MediaMetadata.Builder().setTitle(station.name).setArtist(subtitle(station)).build())
+        .setMediaMetadata(metadata(station))
         .apply {
             if (isHls(station)) setMimeType(MimeTypes.APPLICATION_M3U8)
             if (station.countryCode != null) setRequestMetadata(MediaItem.RequestMetadata.Builder()

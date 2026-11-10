@@ -2,16 +2,20 @@ package com.autodrive.radiomaroc
 
 import android.app.PendingIntent
 import android.content.Intent
+import android.graphics.Bitmap
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
+import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import androidx.annotation.OptIn
+import androidx.core.graphics.drawable.toBitmap
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Metadata
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
@@ -22,26 +26,54 @@ import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.extractor.metadata.icy.IcyInfo
+import androidx.media3.session.LibraryResult
+import androidx.media3.session.MediaLibraryService
 import androidx.media3.session.MediaSession
-import androidx.media3.session.MediaSessionService
 import androidx.media3.session.SessionCommand
+import androidx.media3.session.SessionError
 import androidx.media3.session.SessionResult
+import com.autodrive.launcher.RadioArtwork
+import com.google.common.collect.ImmutableList
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.ByteArrayOutputStream
 
 @OptIn(UnstableApi::class)
-internal class PlaybackService : MediaSessionService() {
+internal class PlaybackService : MediaLibraryService() {
     companion object {
         const val NETWORK_UNAVAILABLE = "com.autodrive.radiomaroc.NETWORK_UNAVAILABLE"
         const val STREAM_STATION = "com.autodrive.radiomaroc.STREAM_STATION"
         const val STREAM_TITLE = "com.autodrive.radiomaroc.STREAM_TITLE"
+        const val PROGRAMME_SOURCE = "com.autodrive.radiomaroc.PROGRAMME_SOURCE"
+        const val PROGRAMME_HOURS = "com.autodrive.radiomaroc.PROGRAMME_HOURS"
         const val LUXE_STATE = "com.autodrive.radiomaroc.LUXE_STATE"
         val LUXE_OBSERVE = SessionCommand("com.autodrive.radiomaroc.LUXE_OBSERVE", Bundle.EMPTY)
         val LUXE_PLAY = SessionCommand("com.autodrive.radiomaroc.LUXE_PLAY", Bundle.EMPTY)
         val LUXE_PAUSE = SessionCommand("com.autodrive.radiomaroc.LUXE_PAUSE", Bundle.EMPTY)
     }
 
-    private var session: MediaSession? = null
+    private var session: MediaLibrarySession? = null
+    private lateinit var engine: ExoPlayer
+    private lateinit var sessionPlayer: RadioSessionPlayer
+    private lateinit var artwork: RadioArtwork
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private var logoWork: Job? = null
+    private var programmeWork: Job? = null
+    private var activeItem: MediaItem? = null
+    private var activeLogo: ByteArray? = null
+    private var activeLogoUri: Uri? = null
+    private var programme: BroadcastProgramme? = null
+    private var icyTitle: String? = null
+    private val fallbackLogo by lazy { getDrawable(R.drawable.ic_radio)?.toBitmap(128, 128)?.let(::png) }
     private lateinit var luxe: LuxeRadio
     private var luxeState = LuxeRadio.State.IDLE
     private var luxeProgramme: String? = null
@@ -50,7 +82,6 @@ internal class PlaybackService : MediaSessionService() {
     private var validatedNetwork: Network? = null
     private var networkUnavailable = false
     private var retryAfterOutage = false
-    private var streamInfo: Pair<String, String>? = null
     private val networkCallback = object : ConnectivityManager.NetworkCallback() {
         override fun onCapabilitiesChanged(network: Network, capabilities: NetworkCapabilities) {
             val validated = capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
@@ -67,14 +98,15 @@ internal class PlaybackService : MediaSessionService() {
 
     private val recoveryListener = object : Player.Listener {
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
-            updateStreamInfo(null)
+            watchStation(mediaItem)
         }
 
         override fun onMetadata(metadata: Metadata) {
             val icy = (0 until metadata.length()).firstNotNullOfOrNull { metadata[it] as? IcyInfo } ?: return
-            val station = session?.player?.currentMediaItem?.mediaId ?: return
             val title = icy.title?.trim()?.takeIf { it.isNotEmpty() && it.length <= 160 }
-            updateStreamInfo(title?.let { station to it })
+            if (activeItem?.mediaId != engine.currentMediaItem?.mediaId || icyTitle == title) return
+            icyTitle = title
+            publishPresentation()
         }
 
         override fun onPlayerError(error: PlaybackException) {
@@ -92,6 +124,7 @@ internal class PlaybackService : MediaSessionService() {
 
     override fun onCreate() {
         super.onCreate()
+        artwork = RadioArtwork(this, maxImageBytes = 1024 * 1024)
         luxe = LuxeRadio(this) { state, programme ->
             luxeState = state
             luxeProgramme = programme
@@ -117,7 +150,7 @@ internal class PlaybackService : MediaSessionService() {
                 mapOf("Origin" to "https://radio2m.ma", "Referer" to "https://radio2m.ma/"),
             ) else request
         }
-        val player = ExoPlayer.Builder(this)
+        engine = ExoPlayer.Builder(this)
             .setMediaSourceFactory(DefaultMediaSourceFactory(broadcastNetwork))
             .setLoadControl(DefaultLoadControl.Builder().setBufferDurationsMs(3_000, 12_000, 900, 1_600).build())
             .setAudioAttributes(AudioAttributes.Builder().setUsage(C.USAGE_MEDIA)
@@ -125,18 +158,37 @@ internal class PlaybackService : MediaSessionService() {
             .setHandleAudioBecomingNoisy(true)
             .setWakeMode(C.WAKE_MODE_NETWORK)
             .build()
-        player.addListener(recoveryListener)
+        engine.addListener(recoveryListener)
+        sessionPlayer = RadioSessionPlayer(engine)
         val reopen = PendingIntent.getActivity(this, 0, Intent(this, RadioActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
-        session = MediaSession.Builder(this, player).setSessionActivity(reopen)
-            .setSessionExtras(sessionExtras())
-            .setCallback(object : MediaSession.Callback {
+        session = MediaLibrarySession.Builder(this, sessionPlayer, object : MediaLibrarySession.Callback {
                 override fun onConnect(session: MediaSession, controller: MediaSession.ControllerInfo): MediaSession.ConnectionResult {
-                    if (!isOwnController(controller)) return super.onConnect(session, controller)
-                    val commands = MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS.buildUpon()
+                    if (!isOwnController(controller)) {
+                        return if (controller.isTrusted || session.isMediaNotificationController(controller) ||
+                            session.isAutomotiveController(controller)) super.onConnect(session, controller)
+                        else MediaSession.ConnectionResult.reject()
+                    }
+                    val commands = MediaSession.ConnectionResult.DEFAULT_SESSION_AND_LIBRARY_COMMANDS.buildUpon()
                         .add(LUXE_OBSERVE).add(LUXE_PLAY).add(LUXE_PAUSE).build()
                     return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
                         .setAvailableSessionCommands(commands).build()
                 }
+
+                override fun onGetLibraryRoot(session: MediaLibrarySession, browser: MediaSession.ControllerInfo,
+                    params: LibraryParams?): ListenableFuture<LibraryResult<MediaItem>> =
+                    Futures.immediateFuture(LibraryResult.ofItem(CarRadioLibrary.root, params))
+
+                override fun onGetChildren(session: MediaLibrarySession, browser: MediaSession.ControllerInfo,
+                    parentId: String, page: Int, pageSize: Int, params: LibraryParams?):
+                    ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> = Futures.immediateFuture(
+                    LibraryResult.ofItemList(CarRadioLibrary.children(parentId, page, pageSize), params),
+                )
+
+                override fun onGetItem(session: MediaLibrarySession, browser: MediaSession.ControllerInfo,
+                    mediaId: String): ListenableFuture<LibraryResult<MediaItem>> = Futures.immediateFuture(
+                    CarRadioLibrary.item(mediaId)?.let { LibraryResult.ofItem(it, null) }
+                        ?: LibraryResult.ofError(SessionError.ERROR_BAD_VALUE),
+                )
 
                 override fun onCustomCommand(session: MediaSession, controller: MediaSession.ControllerInfo,
                     customCommand: SessionCommand, args: Bundle): ListenableFuture<SessionResult> {
@@ -159,6 +211,9 @@ internal class PlaybackService : MediaSessionService() {
                     mediaItems: List<MediaItem>): ListenableFuture<List<MediaItem>> {
                     val resolved = mediaItems.mapNotNull { item ->
                         val station = Stations.all.firstOrNull { it.url == item.mediaId }
+                            ?: item.requestMetadata.searchQuery?.let { query ->
+                                CarRadioLibrary.stationForQuery(query, lastStationId())
+                            }
                         when {
                             station == Stations.luxe -> null
                             station != null -> Stations.item(station)
@@ -169,27 +224,95 @@ internal class PlaybackService : MediaSessionService() {
                     if (resolved.isNotEmpty() && luxeState != LuxeRadio.State.IDLE) luxe.leave()
                     return Futures.immediateFuture(resolved)
                 }
-            }).build()
+
+                override fun onPlaybackResumption(session: MediaSession, controller: MediaSession.ControllerInfo):
+                    ListenableFuture<MediaSession.MediaItemsWithStartPosition> {
+                    val station = CarRadioLibrary.stationForQuery("", lastStationId())
+                    return Futures.immediateFuture(MediaSession.MediaItemsWithStartPosition(
+                        listOfNotNull(station?.let(Stations::item)), 0, C.TIME_UNSET,
+                    ))
+                }
+            }).setSessionActivity(reopen).setSessionExtras(sessionExtras()).build()
         connectivity.registerDefaultNetworkCallback(networkCallback, Handler(Looper.getMainLooper()))
     }
 
     private fun sessionExtras() = Bundle().apply {
         putBoolean(NETWORK_UNAVAILABLE, networkUnavailable)
         putString(LUXE_STATE, luxeState.name)
-        val currentInfo = luxeProgramme?.let { Stations.luxe.url to it } ?: streamInfo
+        val currentInfo = luxeProgramme?.let { Stations.luxe.url to it }
+            ?: activeItem?.let { item -> (programme?.title ?: icyTitle)?.let { item.mediaId to it } }
         currentInfo?.let { (station, title) ->
             putString(STREAM_STATION, station)
             putString(STREAM_TITLE, title)
+            if (station == activeItem?.mediaId) programme?.let {
+                putString(PROGRAMME_SOURCE, it.source)
+                putString(PROGRAMME_HOURS, it.hours)
+            }
         }
     }
 
     private fun isOwnController(controller: MediaSession.ControllerInfo): Boolean =
         controller.uid == applicationInfo.uid && controller.packageName == packageName
 
-    private fun updateStreamInfo(info: Pair<String, String>?) {
-        if (streamInfo == info) return
-        streamInfo = info
+    private fun lastStationId(): String? = getSharedPreferences("radio_maroc", MODE_PRIVATE).getString("last_station", null)
+
+    private fun watchStation(item: MediaItem?) {
+        logoWork?.cancel()
+        programmeWork?.cancel()
+        activeItem = item
+        activeLogo = null
+        activeLogoUri = CarArtworkProvider.publish(null)
+        programme = null
+        icyTitle = null
+        publishPresentation()
+        if (item == null) return
+        val station = Stations.all.firstOrNull { it.url == item.mediaId }
+        if (station != null) getSharedPreferences("radio_maroc", MODE_PRIVATE)
+            .edit().putString("last_station", station.url).apply()
+        val logo = item.mediaMetadata.artworkUri?.takeIf { it.scheme == "https" }
+        if (logo != null) logoWork = artwork.load(logo.toString()) { bitmap ->
+            if (activeItem === item && bitmap != null) {
+                activeLogo = png(bitmap)
+                activeLogoUri = CarArtworkProvider.publish(activeLogo)
+                publishPresentation()
+            }
+        }
+        val source = BroadcastProgrammes.source(station) ?: return
+        programmeWork = scope.launch {
+            while (isActive) {
+                val current = if (networkUnavailable) null else withContext(Dispatchers.IO) {
+                    runCatching { BroadcastProgrammes.fetch(source) }.getOrNull()
+                }
+                if (activeItem !== item) return@launch
+                if (programme != current) {
+                    programme = current
+                    publishPresentation()
+                }
+                delay(120_000)
+            }
+        }
+    }
+
+    private fun publishPresentation() {
+        val item = activeItem
+        val metadata = item?.mediaMetadata?.let { base ->
+            val title = (programme?.title ?: icyTitle)?.takeUnless { it == base.title?.toString() }
+            base.buildUpon()
+                .setTitle(title ?: base.title)
+                .setDisplayTitle(title ?: base.title)
+                .setArtist(if (title == null) base.artist else base.title)
+                .setSubtitle(if (title == null) base.subtitle else base.title)
+                .setArtworkUri(activeLogoUri ?: Stations.defaultArtwork())
+                .setArtworkData(activeLogo ?: fallbackLogo, MediaMetadata.PICTURE_TYPE_FRONT_COVER)
+                .build()
+        }
+        sessionPlayer.present(item?.mediaId, metadata)
         session?.setSessionExtras(sessionExtras())
+    }
+
+    private fun png(bitmap: Bitmap): ByteArray = ByteArrayOutputStream().use {
+        bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)
+        it.toByteArray()
     }
 
     private fun setNetworkUnavailable(unavailable: Boolean) {
@@ -218,13 +341,16 @@ internal class PlaybackService : MediaSessionService() {
         }
     }
 
-    override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = session
+    override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibrarySession? = session
 
     override fun onDestroy() {
         connectivity.unregisterNetworkCallback(networkCallback)
+        scope.cancel()
+        artwork.close()
+        CarArtworkProvider.publish(null)
         luxe.close()
         session?.let {
-            it.player.removeListener(recoveryListener)
+            engine.removeListener(recoveryListener)
             it.player.release()
             it.release()
         }

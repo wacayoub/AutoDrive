@@ -3,6 +3,7 @@ package com.autodrive.radiomaroc
 import android.animation.ObjectAnimator
 import android.animation.ValueAnimator
 import android.app.AlertDialog
+import android.app.SearchManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -15,6 +16,9 @@ import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.RippleDrawable
 import android.os.Bundle
+import android.os.SystemClock
+import android.provider.Settings
+import android.provider.MediaStore
 import android.text.Editable
 import android.text.SpannableStringBuilder
 import android.text.Spanned
@@ -25,6 +29,7 @@ import android.text.method.LinkMovementMethod
 import android.text.style.URLSpan
 import android.util.TypedValue
 import android.view.Gravity
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowInsets
@@ -41,7 +46,7 @@ import android.widget.ListView
 import android.widget.TextView
 import androidx.activity.ComponentActivity
 import androidx.core.net.toUri
-import androidx.lifecycle.lifecycleScope
+import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
@@ -51,14 +56,11 @@ import com.autodrive.launcher.RadioCatalogue
 import com.autodrive.launcher.RadioQueue
 import com.autodrive.launcher.RadioStation
 import com.google.common.util.concurrent.ListenableFuture
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 class RadioActivity : ComponentActivity() {
+    private var startupDeadline = 0L
+    private var playbackQuery: String? = null
     private val accent = 0xFF75EED8.toInt()
     private val textColor = 0xFFF1F7F6.toInt()
     private val muted = 0xFFA7BABF.toInt()
@@ -81,9 +83,6 @@ class RadioActivity : ComponentActivity() {
     private var controller: MediaController? = null
     private var connectionFailed = false
     private var piconsOffline = false
-    private var programmeJob: Job? = null
-    private var programmeSource: String? = null
-    private var publishedProgramme: BroadcastProgramme? = null
     private lateinit var tabs: Map<StationTab, TextView>
     private lateinit var radioFilter: TextView
     private lateinit var countryButton: TextView
@@ -114,6 +113,10 @@ class RadioActivity : ComponentActivity() {
         get() = television && (resources.configuration.screenHeightDp < 430 || resources.configuration.screenWidthDp < 760)
 
     private val playerListener = object : Player.Listener {
+        override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+            findStation(mediaItem?.mediaId)?.let { savedStation = it }
+        }
+
         override fun onEvents(player: Player, events: Player.Events) {
             renderPlayer()
         }
@@ -130,6 +133,14 @@ class RadioActivity : ComponentActivity() {
         favorites = prefs.getStringSet("favorites", emptySet()).orEmpty().toSet()
         directoryBookmarks = StationDirectory.decode(prefs.getString("directory_bookmarks", null).orEmpty())
         savedStation = findStation(prefs.getString("last_station", null))
+        playbackQuery = voiceQuery(intent)
+        if (savedStation != null && prefs.getBoolean("car_autoplay", false)) {
+            val boot = carBootCount()
+            if (boot >= 0 && boot != prefs.getInt("car_played_boot", -1) &&
+                prefs.edit().putInt("car_played_boot", boot).commit()) {
+                startupDeadline = SystemClock.elapsedRealtime() + 30_000
+            }
+        }
         query = savedInstanceState?.getString("query").orEmpty()
         radioFavoritesOnly = savedInstanceState?.getBoolean("radio_favorites_only") == true
         volumeControlStream = android.media.AudioManager.STREAM_MUSIC
@@ -151,14 +162,37 @@ class RadioActivity : ComponentActivity() {
         connectPlayer()
     }
 
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        playbackQuery = voiceQuery(intent)
+        playFromSearch()
+    }
+
+    private fun voiceQuery(intent: Intent): String? =
+        if (intent.action == MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH)
+            intent.getStringExtra(SearchManager.QUERY).orEmpty() else null
+
+    private fun playFromSearch() {
+        if (controller == null) return
+        val query = playbackQuery ?: return
+        playbackQuery = null
+        startupDeadline = 0L
+        CarRadioLibrary.stationForQuery(query, savedStation?.url)?.let(::select)
+    }
+
     override fun onStop() {
+        startupDeadline = 0L
         controller?.removeListener(playerListener)
         controller = null
         controllerFuture?.let(MediaController::releaseFuture)
         controllerFuture = null
-        followProgramme(null)
         updateLiveDot(false)
         super.onStop()
+    }
+
+    override fun dispatchTouchEvent(event: MotionEvent): Boolean {
+        if (event.actionMasked == MotionEvent.ACTION_DOWN) startupDeadline = 0L
+        return super.dispatchTouchEvent(event)
     }
 
     override fun onDestroy() {
@@ -185,6 +219,7 @@ class RadioActivity : ComponentActivity() {
                 if (savedStation == Stations.luxe) {
                     controller?.sendCustomCommand(PlaybackService.LUXE_OBSERVE, Bundle.EMPTY)
                 }
+                playFromSearch()
                 onNetworkStatus(controller?.sessionExtras ?: Bundle.EMPTY)
             }
         }, mainExecutor)
@@ -199,6 +234,11 @@ class RadioActivity : ComponentActivity() {
             if (directory.failed) directory.loadMore()
         }
         piconsOffline = offline
+        val player = controller
+        if (!offline && startupDeadline > SystemClock.elapsedRealtime() && player != null) {
+            startupDeadline = 0L
+            if (player.currentMediaItem == null) savedStation?.let(::select)
+        }
         renderPlayer()
     }
 
@@ -215,7 +255,7 @@ class RadioActivity : ComponentActivity() {
         }
         val wide = television || (resources.configuration.screenWidthDp >= 560 &&
             resources.configuration.screenWidthDp > resources.configuration.screenHeightDp)
-        val compactMasthead = wide && !television && resources.configuration.screenWidthDp < 720
+        val compactMasthead = wide && !television
         val masthead = row().apply {
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(6), 0, dp(8), 0)
@@ -234,6 +274,15 @@ class RadioActivity : ComponentActivity() {
                     ellipsize = TextUtils.TruncateAt.END
                 })
             }, LinearLayout.LayoutParams(0, -2, 1f))
+            addView(ImageButton(context).apply {
+                setImageResource(R.drawable.ic_radio_car_start)
+                imageTintList = ColorStateList.valueOf(accent)
+                scaleType = ImageView.ScaleType.CENTER
+                background = pressable(R.drawable.radio_control)
+                remoteFocus()
+                contentDescription = "Démarrage voiture"
+                setOnClickListener { showCarStartup() }
+            }, LinearLayout.LayoutParams(dp(48), dp(48)))
             addView(ImageButton(context).apply {
                 setImageResource(R.drawable.ic_radio_update)
                 imageTintList = ColorStateList.valueOf(accent)
@@ -941,7 +990,7 @@ class RadioActivity : ComponentActivity() {
 
     private fun renderPlayer() {
         val player = controller
-        val active = if (savedStation == Stations.luxe) Stations.luxe.url else player?.currentMediaItem?.mediaId
+        val active = player?.currentMediaItem?.mediaId ?: savedStation?.takeIf { it == Stations.luxe }?.url
         val station = findStation(active) ?: savedStation
         val luxe = if (station == Stations.luxe) luxeState() else null
         val recording = station?.let(Stations::isRecording) == true
@@ -951,9 +1000,12 @@ class RadioActivity : ComponentActivity() {
             else player?.playWhenReady == true && (player.playerError == null || waitingForNetwork) && !ended
         val playing = if (luxe != null) luxe == LuxeRadio.State.PLAYING else player?.isPlaying == true
         val live = playing && !recording
-        followProgramme(station.takeIf { player != null && !piconsOffline })
         val streamInfo = player?.sessionExtras?.takeIf { it.getString(PlaybackService.STREAM_STATION) == active }
-        val programme = publishedProgramme ?: station?.takeIf { live && it.url == active }
+        val programme = streamInfo?.getString(PlaybackService.PROGRAMME_SOURCE)?.let { source ->
+            streamInfo.getString(PlaybackService.STREAM_TITLE)?.let { title ->
+                BroadcastProgramme(title, source, streamInfo.getString(PlaybackService.PROGRAMME_HOURS))
+            }
+        } ?: station?.takeIf { live && it.url == active }
             ?.let { BroadcastProgrammes.fromStream(it, streamInfo?.getString(PlaybackService.STREAM_TITLE)) }
         playerCategory?.text = when {
             recording -> "تلاوات الحرم"
@@ -1021,24 +1073,25 @@ class RadioActivity : ComponentActivity() {
         }
     }
 
-    private fun followProgramme(station: RadioStation?) {
-        val source = BroadcastProgrammes.source(station)
-        if (source == programmeSource) return
-        programmeSource = source
-        programmeJob?.cancel()
-        publishedProgramme = null
-        programmeJob = source?.let { url ->
-            lifecycleScope.launch {
-                while (isActive) {
-                    publishedProgramme = withContext(Dispatchers.IO) {
-                        runCatching { BroadcastProgrammes.fetch(url) }.getOrNull()
-                    }
-                    renderPlayer()
-                    delay(120_000)
-                }
+    private fun showCarStartup() {
+        val resume = prefs.getBoolean("car_autoplay", false)
+        AlertDialog.Builder(this)
+            .setTitle("Démarrage voiture")
+            .setMessage("Dans AppBoot ou le menu de démarrage du boîtier, choisis Radio Maroc & Coran. " +
+                "Avec la reprise activée, la dernière station se lance quand le boîtier ouvre la radio après un démarrage Android.")
+            .setNegativeButton("Fermer", null)
+            .setPositiveButton(if (resume) "Désactiver la reprise" else "Activer la reprise") { _, _ ->
+                val boot = carBootCount()
+                prefs.edit().putBoolean("car_autoplay", !resume).apply {
+                    if (boot >= 0) putInt("car_played_boot", boot)
+                }.apply()
+                startupDeadline = 0L
             }
-        }
+            .show()
     }
+
+    private fun carBootCount() = runCatching { Settings.Global.getInt(contentResolver, Settings.Global.BOOT_COUNT, -1) }
+        .getOrDefault(-1)
 
     private fun updateLiveDot(live: Boolean) {
         liveIndicator.visibility = if (live) View.VISIBLE else View.GONE
@@ -1058,6 +1111,7 @@ class RadioActivity : ComponentActivity() {
 
     private fun select(station: RadioStation) {
         val player = controller ?: return
+        startupDeadline = 0L
         savedStation = station
         persistStations(station)
         if (station == Stations.luxe) {
@@ -1072,7 +1126,7 @@ class RadioActivity : ComponentActivity() {
 
     private fun toggle() {
         val player = controller ?: run { if (connectionFailed) connectPlayer(); return }
-        if (savedStation == Stations.luxe) {
+        if (savedStation == Stations.luxe && player.currentMediaItem == null) {
             when (luxeState()) {
                 LuxeRadio.State.CONNECTING, LuxeRadio.State.PLAYING ->
                     player.sendCustomCommand(PlaybackService.LUXE_PAUSE, Bundle.EMPTY)

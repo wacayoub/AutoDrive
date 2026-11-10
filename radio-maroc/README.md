@@ -2,6 +2,14 @@
 
 Application Android 11+ pour les téléphones, les boîtiers Android tels que l’Incarlink et Android TV. Le même APK signé s’adapte à l’écran. Sur l’Incarlink, l’application se lance depuis la grille Quickstep. Sur Android TV, elle apparaît dans la liste des applications avec sa bannière. Une connexion Internet est nécessaire pour écouter. [Lancement des applications sur Android TV](https://developer.android.com/training/tv/get-started/create).
 
+## Démarrage voiture et lecteur Android
+
+Dans **AppBoot** ou le menu d’autodémarrage de l’Incarlink, choisis **Radio Maroc & Coran**. Dans la radio, ouvre le bouton avec l’icône voiture et choisis **Activer la reprise**. Écoute une station pour l’enregistrer. Au premier lancement de la radio après un démarrage Android, l’app attend le réseau jusqu’à 30 secondes et reprend la dernière station. L’option est désactivée à la première installation. Une réouverture après une pause pendant le même démarrage conserve la pause. L’ouverture au démarrage dépend du réglage du boîtier, y compris lorsque le boîtier sort de veille. [Restrictions Android sur l’ouverture d’une activité en arrière-plan](https://developer.android.com/guide/components/activities/background-starts).
+
+Le lecteur système Android reçoit le nom de la station, son logo et le titre de l’émission ou du morceau lorsque le diffuseur le fournit. Le logo de l’application sert de secours. Les programmes disponibles de SNRT et Radio 2M se rafraîchissent dans le service audio pendant la lecture. Luxe Radio fournit ses propres informations de lecture via son application officielle. [Métadonnées et commandes de la session média](https://developer.android.com/media/media3/session/background-playback).
+
+La 2.4.0 déclare une source audio Android Auto avec le catalogue embarqué **Radio Maroc** et **القرآن**. Le lecteur de la voiture choisit la source et les champs qu’il affiche. Le lancement AppBoot, l’affichage sur l’Incarlink et la projection dans un véhicule restent à vérifier sur le matériel. [Découverte des sources audio Android Auto](https://developer.android.com/training/cars/media/auto).
+
 ## Mises à jour en ligne
 
 À l’ouverture, la radio vérifie si une nouvelle version compatible est publiée sur GitHub. La flèche **Mises à jour** en haut permet aussi de lancer la recherche. **OK** télécharge et vérifie l’APK, puis ouvre l’installateur. Au premier passage, Android peut demander d’autoriser **Radio Maroc & Coran** comme source. Revenir ensuite à la radio pour poursuivre et confirmer **Mettre à jour** dans Android. Les favoris et réglages sont conservés. [Autorisation d’installation Android](https://developer.android.com/reference/android/content/pm/PackageManager#canRequestPackageInstalls()).
