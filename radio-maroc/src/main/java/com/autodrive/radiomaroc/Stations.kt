@@ -67,6 +67,8 @@ internal object Stations {
     )
     val snrt = RadioCatalogue.featured.filter { RadioCatalogue.officialPlayer(it) != null }
     private val radio2m = RadioStation("Radio 2M", "https://radio2m.ma/", logoUrl = "https://radio2m.ma/favRadio2M.png")
+    val luxe = RadioStation("Luxe Radio", "https://open.luxeradio.ma/radio/live",
+        logoUrl = "https://www.haca.ma/sites/default/files/upload/images/logo-luxeradio.PNG", tags = setOf("Musique"))
     const val SNRT_STREAM_HOST = "cdn.live.easybroadcast.io"
     const val RADIO_2M_STREAM_HOST = "cdn-globecast.akamaized.net"
     // Keep the catalogue URLs as station IDs so saved stations and favourites survive updates.
@@ -81,7 +83,7 @@ internal object Stations {
         .mapValues { (_, path) -> "https://$SNRT_STREAM_HOST/live/$path/playlist.m3u8" }
     private val officialStreams = snrtStreams + (radio2m.url to
         "https://$RADIO_2M_STREAM_HOST/live/eds/radio_2m/radio_hls_ts_hy217612tge1f21j83/radio_2m.m3u8")
-    private val localRadios = morocco + snrt + radio2m + StationFamilies.hit + StationFamilies.medi
+    private val localRadios = morocco + snrt + radio2m + luxe + StationFamilies.hit + StationFamilies.medi
     private val localRadioNames = localRadios.map(StationFamilies::directoryKey).toSet()
     private val hitGroupNames = (StationFamilies.hit + morocco.filter { it.name == "HIT RADIO" || it.name == "Radio Azawan" })
         .map(StationFamilies::directoryKey).toSet()
@@ -236,6 +238,7 @@ internal object Stations {
     fun subtitle(station: RadioStation): String = when {
         station.url in snrtStreams -> "SNRT Live · Maroc"
         station.url == radio2m.url -> "SOREAD 2M · Maroc"
+        station == luxe -> "Luxe Radio · Maroc"
         station.countryCode != null -> StationDirectory.countryName(station.countryCode)
         isRecording(station) -> "${station.tags.single()} · المسجد الحرام · ${station.url.removeSuffix(".mp3").takeLast(10)}"
         station in tajwid -> "المصحف المجوّد · MP3Quran"

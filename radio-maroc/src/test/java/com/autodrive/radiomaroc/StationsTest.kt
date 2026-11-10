@@ -12,7 +12,7 @@ class StationsTest {
         val morocco = Stations.visible(StationTab.MOROCCO, emptySet(), "")
         val quran = Stations.visible(StationTab.QURAN, emptySet(), "")
         val tajwid = quran.filter { Stations.quranSection(it) == QuranSection.TAJWID }
-        assertEquals(38, morocco.size)
+        assertEquals(39, morocco.size)
         assertTrue(morocco.all { it.logoUrl?.let(RadioStation::validUrl) != null })
         assertEquals(31, quran.size)
         assertEquals(21, quran.count { Stations.quranSection(it) == QuranSection.MURATTAL })
@@ -38,7 +38,10 @@ class StationsTest {
         assertEquals("SOREAD 2M · Maroc", Stations.subtitle(twoM))
         assertTrue(Stations.isHls(twoM))
         assertTrue(Stations.streamUrl(twoM).startsWith("https://cdn-globecast.akamaized.net/live/eds/radio_2m/"))
-        val savedStations = Stations.snrt + twoM
+        val luxe = Stations.visible(StationTab.MOROCCO, emptySet(), "luxe").single()
+        assertEquals(Stations.luxe, luxe)
+        assertFalse(Stations.isHls(luxe))
+        val savedStations = Stations.snrt + twoM + luxe
         assertEquals(savedStations.toSet(),
             Stations.visible(StationTab.FAVORITES, savedStations.map { it.url }.toSet(), "").toSet())
         assertEquals("العيون الكوشي", quran.first().name)

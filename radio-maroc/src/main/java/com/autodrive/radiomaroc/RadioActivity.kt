@@ -5,6 +5,7 @@ import android.animation.ValueAnimator
 import android.app.AlertDialog
 import android.content.ComponentName
 import android.content.Context
+import android.content.Intent
 import android.content.SharedPreferences
 import android.content.res.ColorStateList
 import android.content.res.Configuration
@@ -39,6 +40,7 @@ import android.widget.LinearLayout
 import android.widget.ListView
 import android.widget.TextView
 import androidx.activity.ComponentActivity
+import androidx.core.net.toUri
 import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
@@ -180,6 +182,9 @@ class RadioActivity : ComponentActivity() {
                 controller = runCatching { future.get() }.getOrNull()
                 connectionFailed = controller == null
                 controller?.addListener(playerListener)
+                if (savedStation == Stations.luxe) {
+                    controller?.sendCustomCommand(PlaybackService.LUXE_OBSERVE, Bundle.EMPTY)
+                }
                 onNetworkStatus(controller?.sessionExtras ?: Bundle.EMPTY)
             }
         }, mainExecutor)
@@ -936,13 +941,15 @@ class RadioActivity : ComponentActivity() {
 
     private fun renderPlayer() {
         val player = controller
-        val active = player?.currentMediaItem?.mediaId
+        val active = if (savedStation == Stations.luxe) Stations.luxe.url else player?.currentMediaItem?.mediaId
         val station = findStation(active) ?: savedStation
+        val luxe = if (station == Stations.luxe) luxeState() else null
         val recording = station?.let(Stations::isRecording) == true
         val ended = player?.playbackState == Player.STATE_ENDED
-        val waitingForNetwork = player?.let(::waitingForNetwork) == true
-        val requesting = player?.playWhenReady == true && (player.playerError == null || waitingForNetwork) && !ended
-        val playing = player?.isPlaying == true
+        val waitingForNetwork = luxe == null && player?.let(::waitingForNetwork) == true
+        val requesting = if (luxe != null) luxe == LuxeRadio.State.PLAYING || luxe == LuxeRadio.State.CONNECTING
+            else player?.playWhenReady == true && (player.playerError == null || waitingForNetwork) && !ended
+        val playing = if (luxe != null) luxe == LuxeRadio.State.PLAYING else player?.isPlaying == true
         val live = playing && !recording
         followProgramme(station.takeIf { player != null && !piconsOffline })
         val streamInfo = player?.sessionExtras?.takeIf { it.getString(PlaybackService.STREAM_STATION) == active }
@@ -963,6 +970,15 @@ class RadioActivity : ComponentActivity() {
         playerStatus.text = when {
             connectionFailed -> "Lecteur indisponible · réessayer"
             player == null -> "Connexion au lecteur…"
+            luxe != null -> when (luxe) {
+                LuxeRadio.State.CONNECTING -> "Connexion à Luxe Radio…"
+                LuxeRadio.State.PLAYING -> ""
+                LuxeRadio.State.MISSING -> "Installer Luxe Radio"
+                LuxeRadio.State.SETUP -> "Initialiser Luxe Radio"
+                LuxeRadio.State.UNAVAILABLE -> "Luxe Radio indisponible · réessayer"
+                LuxeRadio.State.PAUSED -> "En pause"
+                LuxeRadio.State.IDLE -> "Prêt à écouter"
+            }
             waitingForNetwork && !playing -> "Connexion perdue · reprise automatique"
             player.playerError != null && station in Stations.snrt -> "Flux SNRT inaccessible · réessayer"
             player.playerError?.errorCode == PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS -> "Source inaccessible · réessayer"
@@ -988,7 +1004,12 @@ class RadioActivity : ComponentActivity() {
         })
         updateLiveDot(live)
         playButton.setImageResource(if (requesting) R.drawable.ic_radio_pause else R.drawable.ic_radio_play)
-        playButton.contentDescription = if (requesting) "Mettre en pause" else "Écouter"
+        playButton.contentDescription = when {
+            requesting -> "Mettre en pause"
+            luxe == LuxeRadio.State.MISSING -> "Installer Luxe Radio"
+            luxe == LuxeRadio.State.SETUP -> "Initialiser Luxe Radio"
+            else -> "Écouter"
+        }
         enable(playButton, (player != null && (station != null || rows.isNotEmpty())) || connectionFailed)
         enable(previous, player != null && rows.size > 1)
         enable(next, player != null && rows.size > 1)
@@ -1039,14 +1060,28 @@ class RadioActivity : ComponentActivity() {
         val player = controller ?: return
         savedStation = station
         persistStations(station)
-        player.setMediaItem(Stations.item(station))
-        player.prepare()
-        player.play()
+        if (station == Stations.luxe) {
+            player.sendCustomCommand(PlaybackService.LUXE_PLAY, Bundle.EMPTY)
+        } else {
+            player.setMediaItem(Stations.item(station))
+            player.prepare()
+            player.play()
+        }
         renderPlayer()
     }
 
     private fun toggle() {
         val player = controller ?: run { if (connectionFailed) connectPlayer(); return }
+        if (savedStation == Stations.luxe) {
+            when (luxeState()) {
+                LuxeRadio.State.CONNECTING, LuxeRadio.State.PLAYING ->
+                    player.sendCustomCommand(PlaybackService.LUXE_PAUSE, Bundle.EMPTY)
+                LuxeRadio.State.MISSING -> offerLuxeSetup(install = true)
+                LuxeRadio.State.SETUP -> offerLuxeSetup(install = false)
+                else -> select(Stations.luxe)
+            }
+            return
+        }
         val current = findStation(player.currentMediaItem?.mediaId)
         val playable = player.playerError == null && player.playbackState != Player.STATE_ENDED
         when {
@@ -1054,6 +1089,28 @@ class RadioActivity : ComponentActivity() {
             playable && player.playbackState == Player.STATE_READY && current?.let(Stations::isRecording) == true -> player.play()
             else -> (current ?: savedStation ?: rows.firstOrNull())?.let(::select)
         }
+    }
+
+    private fun luxeState(): LuxeRadio.State {
+        val value = controller?.sessionExtras?.getString(PlaybackService.LUXE_STATE)
+        return LuxeRadio.State.entries.firstOrNull { it.name == value } ?: LuxeRadio.State.IDLE
+    }
+
+    private fun offerLuxeSetup(install: Boolean) {
+        val title = if (install) "Installer Luxe Radio" else "Initialiser Luxe Radio"
+        AlertDialog.Builder(this).setTitle(title)
+            .setMessage("Ouvre l’application officielle Luxe Radio une première fois, puis reviens pour écouter ici.")
+            .setNegativeButton("Annuler", null)
+            .setNeutralButton("Réessayer") { _, _ -> select(Stations.luxe) }
+            .setPositiveButton(if (install) "Play Store" else "Ouvrir Luxe Radio") { _, _ ->
+                val target = if (install) Intent(Intent.ACTION_VIEW, "market://details?id=${LuxeRadio.PACKAGE}".toUri())
+                    else packageManager.getLaunchIntentForPackage(LuxeRadio.PACKAGE)
+                val opened = target != null && runCatching { startActivity(target) }.isSuccess
+                if (!opened && install) runCatching {
+                    startActivity(Intent(Intent.ACTION_VIEW,
+                        "https://play.google.com/store/apps/details?id=${LuxeRadio.PACKAGE}".toUri()))
+                }
+            }.show()
     }
 
     private fun findStation(url: String?): RadioStation? =

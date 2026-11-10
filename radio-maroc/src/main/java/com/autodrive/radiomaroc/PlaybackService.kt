@@ -24,6 +24,8 @@ import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.extractor.metadata.icy.IcyInfo
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
+import androidx.media3.session.SessionCommand
+import androidx.media3.session.SessionResult
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 
@@ -33,9 +35,16 @@ internal class PlaybackService : MediaSessionService() {
         const val NETWORK_UNAVAILABLE = "com.autodrive.radiomaroc.NETWORK_UNAVAILABLE"
         const val STREAM_STATION = "com.autodrive.radiomaroc.STREAM_STATION"
         const val STREAM_TITLE = "com.autodrive.radiomaroc.STREAM_TITLE"
+        const val LUXE_STATE = "com.autodrive.radiomaroc.LUXE_STATE"
+        val LUXE_OBSERVE = SessionCommand("com.autodrive.radiomaroc.LUXE_OBSERVE", Bundle.EMPTY)
+        val LUXE_PLAY = SessionCommand("com.autodrive.radiomaroc.LUXE_PLAY", Bundle.EMPTY)
+        val LUXE_PAUSE = SessionCommand("com.autodrive.radiomaroc.LUXE_PAUSE", Bundle.EMPTY)
     }
 
     private var session: MediaSession? = null
+    private lateinit var luxe: LuxeRadio
+    private var luxeState = LuxeRadio.State.IDLE
+    private var luxeProgramme: String? = null
     private val snrtAccess = SnrtAccess()
     private lateinit var connectivity: ConnectivityManager
     private var validatedNetwork: Network? = null
@@ -83,6 +92,11 @@ internal class PlaybackService : MediaSessionService() {
 
     override fun onCreate() {
         super.onCreate()
+        luxe = LuxeRadio(this) { state, programme ->
+            luxeState = state
+            luxeProgramme = programme
+            session?.setSessionExtras(sessionExtras())
+        }
         connectivity = getSystemService(ConnectivityManager::class.java)
         val activeNetwork = connectivity.activeNetwork
         val capabilities = connectivity.getNetworkCapabilities(activeNetwork)
@@ -116,28 +130,61 @@ internal class PlaybackService : MediaSessionService() {
         session = MediaSession.Builder(this, player).setSessionActivity(reopen)
             .setSessionExtras(sessionExtras())
             .setCallback(object : MediaSession.Callback {
+                override fun onConnect(session: MediaSession, controller: MediaSession.ControllerInfo): MediaSession.ConnectionResult {
+                    if (!isOwnController(controller)) return super.onConnect(session, controller)
+                    val commands = MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS.buildUpon()
+                        .add(LUXE_OBSERVE).add(LUXE_PLAY).add(LUXE_PAUSE).build()
+                    return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
+                        .setAvailableSessionCommands(commands).build()
+                }
+
+                override fun onCustomCommand(session: MediaSession, controller: MediaSession.ControllerInfo,
+                    customCommand: SessionCommand, args: Bundle): ListenableFuture<SessionResult> {
+                    if (!isOwnController(controller)) return super.onCustomCommand(session, controller, customCommand, args)
+                    when (customCommand) {
+                        LUXE_OBSERVE -> luxe.observe()
+                        LUXE_PLAY -> {
+                            session.player.pause()
+                            session.player.stop()
+                            session.player.clearMediaItems()
+                            luxe.play()
+                        }
+                        LUXE_PAUSE -> luxe.pause()
+                        else -> return super.onCustomCommand(session, controller, customCommand, args)
+                    }
+                    return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
+                }
+
                 override fun onAddMediaItems(session: MediaSession, controller: MediaSession.ControllerInfo,
-                    mediaItems: List<MediaItem>): ListenableFuture<List<MediaItem>> = Futures.immediateFuture(
-                    mediaItems.mapNotNull { item ->
+                    mediaItems: List<MediaItem>): ListenableFuture<List<MediaItem>> {
+                    val resolved = mediaItems.mapNotNull { item ->
                         val station = Stations.all.firstOrNull { it.url == item.mediaId }
                         when {
+                            station == Stations.luxe -> null
                             station != null -> Stations.item(station)
-                            controller.uid == applicationInfo.uid && controller.packageName == packageName -> Stations.directoryItem(item)
+                            isOwnController(controller) -> Stations.directoryItem(item)
                             else -> null
                         }
                     }
-                )
+                    if (resolved.isNotEmpty() && luxeState != LuxeRadio.State.IDLE) luxe.leave()
+                    return Futures.immediateFuture(resolved)
+                }
             }).build()
         connectivity.registerDefaultNetworkCallback(networkCallback, Handler(Looper.getMainLooper()))
     }
 
     private fun sessionExtras() = Bundle().apply {
         putBoolean(NETWORK_UNAVAILABLE, networkUnavailable)
-        streamInfo?.let { (station, title) ->
+        putString(LUXE_STATE, luxeState.name)
+        val currentInfo = luxeProgramme?.let { Stations.luxe.url to it } ?: streamInfo
+        currentInfo?.let { (station, title) ->
             putString(STREAM_STATION, station)
             putString(STREAM_TITLE, title)
         }
     }
+
+    private fun isOwnController(controller: MediaSession.ControllerInfo): Boolean =
+        controller.uid == applicationInfo.uid && controller.packageName == packageName
 
     private fun updateStreamInfo(info: Pair<String, String>?) {
         if (streamInfo == info) return
@@ -175,6 +222,7 @@ internal class PlaybackService : MediaSessionService() {
 
     override fun onDestroy() {
         connectivity.unregisterNetworkCallback(networkCallback)
+        luxe.close()
         session?.let {
             it.player.removeListener(recoveryListener)
             it.player.release()
