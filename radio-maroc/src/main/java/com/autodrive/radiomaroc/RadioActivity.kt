@@ -29,6 +29,7 @@ import android.text.method.LinkMovementMethod
 import android.text.style.URLSpan
 import android.util.TypedValue
 import android.view.Gravity
+import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
@@ -114,7 +115,7 @@ class RadioActivity : ComponentActivity() {
 
     private val playerListener = object : Player.Listener {
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
-            findStation(mediaItem?.mediaId)?.let { savedStation = it }
+            syncPlayingStation(mediaItem)
         }
 
         override fun onEvents(player: Player, events: Player.Events) {
@@ -146,6 +147,7 @@ class RadioActivity : ComponentActivity() {
         volumeControlStream = android.media.AudioManager.STREAM_MUSIC
         window.setDecorFitsSystemWindows(false)
         setContentView(screen())
+        window.decorView.addOnUnhandledKeyEventListener { _, event -> handleStationKey(event) }
         updateDirectory()
         if (television && savedInstanceState == null) tabs.getValue(tab).requestFocus()
     }
@@ -195,6 +197,20 @@ class RadioActivity : ComponentActivity() {
         return super.dispatchTouchEvent(event)
     }
 
+    private fun handleStationKey(event: KeyEvent): Boolean {
+        val command = when (event.keyCode) {
+            KeyEvent.KEYCODE_MEDIA_NEXT, KeyEvent.KEYCODE_MEDIA_SKIP_FORWARD -> Player.COMMAND_SEEK_TO_NEXT
+            KeyEvent.KEYCODE_MEDIA_PREVIOUS, KeyEvent.KEYCODE_MEDIA_SKIP_BACKWARD -> Player.COMMAND_SEEK_TO_PREVIOUS
+            else -> return false
+        }
+        val player = controller ?: return false
+        if (!player.isCommandAvailable(command)) return false
+        if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
+            if (command == Player.COMMAND_SEEK_TO_NEXT) player.seekToNext() else player.seekToPrevious()
+        }
+        return true
+    }
+
     override fun onDestroy() {
         radioUpdates.close()
         directory.close()
@@ -216,6 +232,7 @@ class RadioActivity : ComponentActivity() {
                 controller = runCatching { future.get() }.getOrNull()
                 connectionFailed = controller == null
                 controller?.addListener(playerListener)
+                syncPlayingStation(controller?.currentMediaItem)
                 if (savedStation == Stations.luxe) {
                     controller?.sendCustomCommand(PlaybackService.LUXE_OBSERVE, Bundle.EMPTY)
                 }
@@ -937,6 +954,7 @@ class RadioActivity : ComponentActivity() {
     private fun renderRows(resetScroll: Boolean = false) {
         val sort = activeSort()
         rows = Stations.visible(tab, favorites, query, radioFavoritesOnly, directory.stations, directoryBookmarks, sort)
+        PlaybackService.setVisibleStations(rows)
         listEntries = buildList {
             var previousSection: String? = null
             rows.forEachIndexed { index, station ->
@@ -1169,6 +1187,13 @@ class RadioActivity : ComponentActivity() {
 
     private fun findStation(url: String?): RadioStation? =
         Stations.all.firstOrNull { it.url == url } ?: directoryBookmarks.firstOrNull { it.url == url }
+
+    private fun syncPlayingStation(item: MediaItem?) {
+        val id = item?.mediaId ?: return
+        if (savedStation?.url == id) return
+        directoryBookmarks = StationDirectory.decode(prefs.getString("directory_bookmarks", null).orEmpty())
+        savedStation = findStation(id) ?: savedStation
+    }
 
     private fun bindFavorite(button: ImageButton, station: RadioStation?) {
         val favorite = station?.url in favorites

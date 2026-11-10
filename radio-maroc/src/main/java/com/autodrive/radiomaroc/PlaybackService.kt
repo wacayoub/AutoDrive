@@ -33,6 +33,8 @@ import androidx.media3.session.SessionCommand
 import androidx.media3.session.SessionError
 import androidx.media3.session.SessionResult
 import com.autodrive.launcher.RadioArtwork
+import com.autodrive.launcher.RadioQueue
+import com.autodrive.launcher.RadioStation
 import com.google.common.collect.ImmutableList
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
@@ -42,6 +44,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -59,6 +62,12 @@ internal class PlaybackService : MediaLibraryService() {
         val LUXE_OBSERVE = SessionCommand("com.autodrive.radiomaroc.LUXE_OBSERVE", Bundle.EMPTY)
         val LUXE_PLAY = SessionCommand("com.autodrive.radiomaroc.LUXE_PLAY", Bundle.EMPTY)
         val LUXE_PAUSE = SessionCommand("com.autodrive.radiomaroc.LUXE_PAUSE", Bundle.EMPTY)
+        // The activity and service share a process. Keep the latest view's order when listening in the background.
+        private val visibleStations = MutableStateFlow<List<RadioStation>?>(null)
+
+        fun setVisibleStations(stations: List<RadioStation>) {
+            visibleStations.value = stations.filter { it != Stations.luxe }
+        }
     }
 
     private var session: MediaLibrarySession? = null
@@ -159,7 +168,7 @@ internal class PlaybackService : MediaLibraryService() {
             .setWakeMode(C.WAKE_MODE_NETWORK)
             .build()
         engine.addListener(recoveryListener)
-        sessionPlayer = RadioSessionPlayer(engine)
+        sessionPlayer = RadioSessionPlayer(engine, { stationQueue().size > 1 }, ::changeStation)
         val reopen = PendingIntent.getActivity(this, 0, Intent(this, RadioActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
         session = MediaLibrarySession.Builder(this, sessionPlayer, object : MediaLibrarySession.Callback {
                 override fun onConnect(session: MediaSession, controller: MediaSession.ControllerInfo): MediaSession.ConnectionResult {
@@ -234,6 +243,7 @@ internal class PlaybackService : MediaLibraryService() {
                 }
             }).setSessionActivity(reopen).setSessionExtras(sessionExtras()).build()
         connectivity.registerDefaultNetworkCallback(networkCallback, Handler(Looper.getMainLooper()))
+        scope.launch { visibleStations.collect { sessionPlayer.refreshStationCommands() } }
     }
 
     private fun sessionExtras() = Bundle().apply {
@@ -255,6 +265,28 @@ internal class PlaybackService : MediaLibraryService() {
         controller.uid == applicationInfo.uid && controller.packageName == packageName
 
     private fun lastStationId(): String? = getSharedPreferences("radio_maroc", MODE_PRIVATE).getString("last_station", null)
+
+    private val moroccoStations by lazy { Stations.visible(StationTab.MOROCCO, emptySet(), "").filter { it != Stations.luxe } }
+    private val quranStations by lazy { Stations.visible(StationTab.QURAN, emptySet(), "") }
+
+    private fun stationQueue(): List<RadioStation> {
+        val current = engine.currentMediaItem?.mediaId ?: return emptyList()
+        return visibleStations.value ?: if (quranStations.any { it.url == current }) quranStations else moroccoStations
+    }
+
+    private fun changeStation(direction: Int) {
+        val station = RadioQueue.neighbor(stationQueue(), engine.currentMediaItem?.mediaId, direction) ?: return
+        if (station.countryCode != null) {
+            val prefs = getSharedPreferences("radio_maroc", MODE_PRIVATE)
+            val favorites = prefs.getStringSet("favorites", emptySet()).orEmpty()
+            val bookmarks = StationDirectory.decode(prefs.getString("directory_bookmarks", null).orEmpty())
+            val retained = bookmarks.filter { it.url != station.url && it.url in favorites }
+            prefs.edit().putString("last_station", station.url)
+                .putString("directory_bookmarks", StationDirectory.encode(listOf(station) + retained)).apply()
+        }
+        engine.setMediaItem(Stations.item(station))
+        engine.prepare()
+    }
 
     private fun watchStation(item: MediaItem?) {
         logoWork?.cancel()
