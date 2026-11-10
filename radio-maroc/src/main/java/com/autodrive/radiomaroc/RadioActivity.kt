@@ -106,6 +106,8 @@ class RadioActivity : ComponentActivity() {
     private var playerFavorite: ImageButton? = null
     private val television: Boolean
         get() = resources.configuration.uiMode and Configuration.UI_MODE_TYPE_MASK == Configuration.UI_MODE_TYPE_TELEVISION
+    private val compactTv: Boolean
+        get() = television && (resources.configuration.screenHeightDp < 430 || resources.configuration.screenWidthDp < 760)
 
     private val playerListener = object : Player.Listener {
         override fun onEvents(player: Player, events: Player.Events) {
@@ -199,8 +201,8 @@ class RadioActivity : ComponentActivity() {
         isFocusableInTouchMode = !television
         setOnApplyWindowInsetsListener { view, insets ->
             val edges = insets.getInsets(WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout() or WindowInsets.Type.ime())
-            val horizontal = dp(if (television) 40 else 10)
-            val vertical = dp(if (television) 24 else 6)
+            val horizontal = dp(if (compactTv) 22 else if (television) 40 else 10)
+            val vertical = dp(if (compactTv) 12 else if (television) 24 else 6)
             view.setPadding(edges.left + horizontal, edges.top + vertical, edges.right + horizontal, edges.bottom + vertical)
             insets
         }
@@ -210,15 +212,16 @@ class RadioActivity : ComponentActivity() {
         val masthead = row().apply {
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(6), 0, dp(8), 0)
-            val iconSize = dp(if (television) 46 else 36)
+            val iconSize = dp(if (television && !compactTv) 46 else 36)
             addView(ImageView(context).apply { setImageResource(R.drawable.ic_radio) }, LinearLayout.LayoutParams(iconSize, iconSize))
             addView(column().apply {
                 setPadding(dp(9), 0, dp(4), 0)
-                addView(label(getString(R.string.app_name), if (television) 25 else 16, textColor, bold = true).apply {
+                val titleSize = if (compactTv) 20 else if (television) 25 else 16
+                addView(label(getString(R.string.app_name), titleSize, textColor, bold = true).apply {
                     maxLines = if (compactMasthead) 2 else 1
                     ellipsize = TextUtils.TruncateAt.END
                 })
-                if (!compactMasthead) addView(label("RADIOS & RÉCITATIONS", if (television) 12 else 9, muted, bold = true).apply {
+                if (!compactMasthead) addView(label("RADIOS & RÉCITATIONS", if (television && !compactTv) 12 else 9, muted, bold = true).apply {
                     letterSpacing = .10f
                     maxLines = 1
                     ellipsize = TextUtils.TruncateAt.END
@@ -235,18 +238,18 @@ class RadioActivity : ComponentActivity() {
             }, LinearLayout.LayoutParams(dp(48), dp(48)))
         }
         val categories = categoryBar()
-        val headerHeight = dp(if (television) 62 else if (wide) 52 else 54)
+        val headerHeight = dp(if (television && !compactTv) 62 else if (wide) 52 else 54)
         if (wide && !television) {
             addView(wideColumns(masthead, categories).apply {
                 background = getDrawable(R.drawable.radio_header)
             }, LinearLayout.LayoutParams(-1, headerHeight).apply { bottomMargin = dp(8) })
         } else {
-            addView(masthead, LinearLayout.LayoutParams(-1, dp(if (television) 60 else 52)))
+            addView(masthead, LinearLayout.LayoutParams(-1, dp(if (television && !compactTv) 60 else 48)))
             addView(categories, LinearLayout.LayoutParams(-1, headerHeight).apply { bottomMargin = dp(8) })
         }
         val content = when {
             television -> row().apply {
-                addView(stationList(), LinearLayout.LayoutParams(0, -1, .58f).apply { marginEnd = dp(18) })
+                addView(stationList(), LinearLayout.LayoutParams(0, -1, .58f).apply { marginEnd = dp(if (compactTv) 10 else 18) })
                 addView(stationPanel(true), LinearLayout.LayoutParams(0, -1, .42f))
                 list.nextFocusRightId = playButton.id
                 previous.nextFocusLeftId = list.id
@@ -271,7 +274,7 @@ class RadioActivity : ComponentActivity() {
         background = getDrawable(R.drawable.radio_category_line)
         val configuration = resources.configuration
         val inlineIcons = television || (configuration.screenWidthDp >= 460 && configuration.fontScale <= 1.3f)
-        val maxTextSize = if (television) 18 else if (configuration.screenWidthDp >= 650) 14 else 13
+        val maxTextSize = if (compactTv) 15 else if (television) 18 else if (configuration.screenWidthDp >= 650) 14 else 13
         val tabFont = Typeface.create(Typeface.DEFAULT, 600, false)
         tabs = StationTab.entries.associateWith { choice ->
             if (choice != StationTab.entries.first()) addView(View(context).apply {
@@ -297,7 +300,8 @@ class RadioActivity : ComponentActivity() {
                     StationTab.FAVORITES -> R.drawable.ic_tab_favorites
                 }
                 if (television) {
-                    val symbol = getDrawable(icon)?.apply { setBounds(0, 0, dp(24), dp(24)) }
+                    val iconSize = dp(if (compactTv) 19 else 24)
+                    val symbol = getDrawable(icon)?.apply { setBounds(0, 0, iconSize, iconSize) }
                     view.setCompoundDrawablesRelative(null, symbol, null, null)
                     view.compoundDrawablePadding = dp(3)
                     view.setPadding(0, dp(4), 0, dp(4))
@@ -317,7 +321,7 @@ class RadioActivity : ComponentActivity() {
     }
 
     private fun stationList(): View = column().apply {
-        listContext = label("", if (television) 13 else 11, accent, bold = true).apply {
+        listContext = label("", if (television && !compactTv) 13 else 11, accent, bold = true).apply {
             gravity = Gravity.START or Gravity.CENTER_VERTICAL
             letterSpacing = .08f
             setPadding(dp(4), 0, 0, 0)
@@ -327,7 +331,7 @@ class RadioActivity : ComponentActivity() {
             hint = "Rechercher…"
             contentDescription = "Rechercher une station ou un récitateur"
             setSingleLine(true)
-            textSize = if (television) 17f else 14f
+            textSize = if (television && !compactTv) 17f else 14f
             setTextColor(textColor)
             setHintTextColor(muted)
             setText(query)
@@ -369,7 +373,7 @@ class RadioActivity : ComponentActivity() {
             addView(stationSearch, LinearLayout.LayoutParams(0, -1, 1f))
             addView(countryButton, LinearLayout.LayoutParams(dp(128), -1).apply { marginStart = dp(6) })
             addView(radioFilter, LinearLayout.LayoutParams(dp(94), -1).apply { marginStart = dp(6) })
-        }, LinearLayout.LayoutParams(-1, dp(if (television) 52 else 48)).apply { bottomMargin = dp(6) })
+        }, LinearLayout.LayoutParams(-1, dp(if (compactTv) 42 else if (television) 52 else 48)).apply { bottomMargin = dp(6) })
         addView(FrameLayout(context).apply {
             empty = label("", 15, muted).apply { gravity = Gravity.CENTER; setPadding(dp(10), 0, dp(10), 0) }
             list = ListView(context).apply {
@@ -478,26 +482,30 @@ class RadioActivity : ComponentActivity() {
 
     private fun stationPanel(wide: Boolean): View = column().apply {
         background = getDrawable(R.drawable.radio_player)
-        val padding = dp(if (television) 16 else 12)
-        setPadding(padding, dp(if (television) 12 else 8), padding, dp(if (television) 14 else 8))
-        val compactLandscape = wide && resources.configuration.screenHeightDp < 420
+        val padding = dp(if (compactTv) 10 else if (television) 16 else 12)
+        setPadding(padding, dp(if (television && !compactTv) 12 else 8), padding, dp(if (television && !compactTv) 14 else 8))
+        val compactLandscape = compactTv || (wide && resources.configuration.screenHeightDp < 420)
         val presentation = (if (wide) column() else row()).apply {
             playerPanel = this
             gravity = if (wide) Gravity.CENTER else Gravity.START or Gravity.CENTER_VERTICAL
-            if (wide) addView(label("", if (television) 13 else 11, accent, bold = true).apply {
+            if (wide) addView(label("", if (television && !compactTv) 13 else 11, accent, bold = true).apply {
                 gravity = Gravity.CENTER
                 letterSpacing = .08f
+                maxLines = 1
+                ellipsize = TextUtils.TruncateAt.END
                 playerCategory = this
             }, LinearLayout.LayoutParams(-1, -2))
             playerArtwork = StationArtwork(if (wide) 26 else 16, showCredits = true)
             val artworkSize = dp(when {
                 !wide -> 48
+                compactTv -> 46
                 compactLandscape -> 54
                 television -> 92
                 else -> 76
             })
             val motifHeight = dp(when {
                 !wide -> 56
+                compactTv -> 54
                 compactLandscape -> 72
                 television -> 130
                 else -> 122
@@ -521,11 +529,11 @@ class RadioActivity : ComponentActivity() {
                 }
                 playerTitle = label("", titleSize, textColor, bold = true).apply {
                     textAlignment = alignment
-                    maxLines = 2
+                    maxLines = if (compactTv) 1 else 2
                     ellipsize = TextUtils.TruncateAt.END
                 }
                 addView(playerTitle, LinearLayout.LayoutParams(-1, -2))
-                playerSubtitle = label("", if (television) 16 else 12, muted).apply {
+                playerSubtitle = label("", if (television && !compactTv) 16 else 12, muted).apply {
                     textAlignment = alignment
                     maxLines = if (compactLandscape) 1 else 2
                     ellipsize = TextUtils.TruncateAt.END
@@ -576,29 +584,32 @@ class RadioActivity : ComponentActivity() {
             addView(liveIndicator, LinearLayout.LayoutParams(-2, -2))
             addView(playerStatus, LinearLayout.LayoutParams(-2, -2))
         }
-        addView(statusBadge, if (wide) LinearLayout.LayoutParams(-1, dp(33)).apply { bottomMargin = dp(4) }
+        addView(statusBadge, if (wide) LinearLayout.LayoutParams(-1, dp(if (compactTv) 28 else 33)).apply { bottomMargin = dp(4) }
             else LinearLayout.LayoutParams(0, -2, 1f).apply { marginEnd = dp(6) })
+        val controlHeight = dp(if (compactTv) 44 else if (television) 54 else 48)
         addView(row().apply {
             gravity = Gravity.CENTER
-            val controlHeight = dp(if (television) 54 else 48)
             previous = transportButton(R.drawable.ic_radio_previous, "Station précédente") { skip(-1) }
             playButton = transportButton(R.drawable.ic_radio_play, "Écouter", primary = true) { toggle() }
             next = transportButton(R.drawable.ic_radio_next, "Station suivante") { skip(1) }
-            addView(previous, LinearLayout.LayoutParams(controlHeight, controlHeight))
-            addView(playButton, LinearLayout.LayoutParams(dp(if (television) 66 else 56), controlHeight).apply {
+            fun controlParams(width: Int, weight: Float = 1f) = if (compactTv) {
+                LinearLayout.LayoutParams(0, controlHeight, weight)
+            } else LinearLayout.LayoutParams(width, controlHeight)
+            addView(previous, controlParams(controlHeight))
+            addView(playButton, controlParams(dp(if (television) 66 else 56), 1.18f).apply {
                 marginStart = dp(6)
                 marginEnd = dp(6)
             })
-            addView(next, LinearLayout.LayoutParams(controlHeight, controlHeight))
+            addView(next, controlParams(controlHeight))
             if (television) {
                 val favoriteButton = transportButton(R.drawable.ic_tab_favorites, "Favori") {
                     val current = findStation(controller?.currentMediaItem?.mediaId) ?: savedStation
                     current?.let(::toggleFavorite)
                 }
                 playerFavorite = favoriteButton
-                addView(favoriteButton, LinearLayout.LayoutParams(controlHeight, controlHeight).apply { marginStart = dp(6) })
+                addView(favoriteButton, controlParams(controlHeight).apply { marginStart = dp(6) })
             }
-        }, LinearLayout.LayoutParams(if (wide) -1 else -2, dp(if (television) 54 else 48)))
+        }, LinearLayout.LayoutParams(if (wide) -1 else -2, controlHeight))
     }
 
     private fun transportButton(icon: Int, description: String, primary: Boolean = false, action: () -> Unit) =
@@ -658,13 +669,13 @@ class RadioActivity : ComponentActivity() {
                 setColor(accent)
             }
         }
-        private val badge = StationArtwork(if (television) 17 else 12)
-        private val name = label("", if (television) 21 else 17, textColor, bold = true).apply {
+        private val badge = StationArtwork(if (television && !compactTv) 17 else 12)
+        private val name = label("", if (television && !compactTv) 21 else 17, textColor, bold = true).apply {
             textAlignment = View.TEXT_ALIGNMENT_VIEW_START
             maxLines = 2
             ellipsize = TextUtils.TruncateAt.END
         }
-        private val subtitle = label("", if (television) 15 else 12, muted).apply {
+        private val subtitle = label("", if (television && !compactTv) 15 else 12, muted).apply {
             textAlignment = View.TEXT_ALIGNMENT_VIEW_START
             maxLines = 1
             ellipsize = TextUtils.TruncateAt.END
@@ -677,7 +688,7 @@ class RadioActivity : ComponentActivity() {
 
         init {
             layoutParams = AbsListView.LayoutParams(-1, -2)
-            minimumHeight = dp(if (television) 66 else 54)
+            minimumHeight = dp(if (television && !compactTv) 66 else 54)
             gravity = Gravity.CENTER_VERTICAL
             background = RippleDrawable(ColorStateList.valueOf(0x2EFFFFFF), null, ColorDrawable(Color.WHITE))
             addView(FrameLayout(context).apply {
@@ -686,8 +697,9 @@ class RadioActivity : ComponentActivity() {
                 addView(number, FrameLayout.LayoutParams(-1, -1))
                 addView(playingIcon, FrameLayout.LayoutParams(dp(18), dp(18), Gravity.CENTER))
             }, LinearLayout.LayoutParams(dp(38), dp(44)))
-            addView(badge, LinearLayout.LayoutParams(dp(if (television) 54 else 44), dp(if (television) 50 else 40)).apply {
-                marginEnd = dp(if (television) 12 else 9)
+            val largeArt = television && !compactTv
+            addView(badge, LinearLayout.LayoutParams(dp(if (largeArt) 54 else 44), dp(if (largeArt) 50 else 40)).apply {
+                marginEnd = dp(if (largeArt) 12 else 9)
             })
             addView(column().apply { addView(name); addView(subtitle) }, LinearLayout.LayoutParams(0, -2, 1f))
             if (television) {
