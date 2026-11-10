@@ -286,6 +286,7 @@ internal class PlaybackService : MediaLibraryService() {
         }
         engine.setMediaItem(Stations.item(station))
         engine.prepare()
+        engine.play()
     }
 
     private fun watchStation(item: MediaItem?) {

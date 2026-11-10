@@ -10,7 +10,7 @@ Le lecteur système Android reçoit le nom de la station, son logo et le titre d
 
 La 2.4.0 déclare une source audio Android Auto avec le catalogue embarqué **Radio Maroc** et **القرآن**. Le lecteur de la voiture choisit la source et les champs qu’il affiche. Le lancement AppBoot, l’affichage sur l’Incarlink et la projection dans un véhicule restent à vérifier sur le matériel. [Découverte des sources audio Android Auto](https://developer.android.com/training/cars/media/auto).
 
-Depuis la 2.4.1, les commandes média Android **précédente** et **suivante** changent la station dans la liste filtrée de la radio, même en arrière-plan. La lecture reste en pause si elle l’était déjà. Les boutons **TRACK / SEEK** de la Toyota dépendent de la transmission de ces commandes par l’Incarlink. Luxe Radio utilise la session média de son application officielle. [Commandes média Android](https://developer.android.com/media/media3/session/control-playback).
+Les commandes média Android **précédente** et **suivante** changent la station dans la liste filtrée de la radio, même en arrière-plan. Depuis la 2.4.2, elles lancent la station choisie même si la précédente était en pause. Les boutons **TRACK / SEEK** de la Toyota dépendent de la transmission de ces commandes par l’Incarlink. Luxe Radio utilise la session média de son application officielle. [Commandes média Android](https://developer.android.com/media/media3/session/control-playback).
 
 ## Mises à jour en ligne
 
