@@ -10,6 +10,20 @@ L’image Google Play Android 13 testée expose uniquement l’ABI x86-64. Andro
 
 Le paquet signé a été installé dans un deuxième émulateur, sous Android 11. Son image Google Play x86 prend en charge la traduction des binaires ARMv7. L’installation depuis le Play Store reste à vérifier avec une session Google.
 
+### Installer Luxe Radio sans compte Google
+
+Google Play demande une session Google. En revanche, l’installation Android du paquet Luxe Radio via ADB et son mode invité ont fonctionné dans l’émulateur sans compte Google. Une fois l’application ouverte, **Get started** donne accès au direct gratuit sans identifiant Luxe Radio. [Comptes Google Play](https://support.google.com/googleplay/answer/2521798?hl=fr) · [Installation de paquets fractionnés avec ADB](https://developer.android.com/tools/adb#move).
+
+L’archive XAPK d’APKPure retéléchargée pendant la vérification contient exactement les mêmes octets que l’archive testée. Son SHA-256 est `0754587dfc43010c75684f77d99816fdce8b8009da8146d41f574f8ccb828909`. Les trois APK portent le certificat publié par le diffuseur. Le lien du miroir peut servir une version différente à l’avenir. Vérifier le contenu et le certificat avec `apksigner verify --print-certs` avant usage. [Archive sur le miroir tiers](https://d.apkpure.net/b/XAPK/app.luxeradio.ma?version=latest) · [Certificats publiés par Luxe Radio](https://open.luxeradio.ma/.well-known/assetlinks.json).
+
+Le paquet testé contient un composant ARMv7. Sur un appareil autorisé pour ce test, `adb -s NUMERO_DE_SERIE shell getprop ro.product.cpu.abilist` doit inclure `armeabi-v7a` pour ce jeu d’APK. Extraire les trois APK du XAPK et les installer ensemble depuis le dossier extrait.
+
+```sh
+adb -s NUMERO_DE_SERIE install-multiple app.luxeradio.ma.apk config.armeabi_v7a.apk config.tvdpi.apk
+```
+
+La compatibilité de cette procédure avec l’Incarlink reste à vérifier. Le blocage de la mise à jour Radio Maroc & Coran 2.3.0 relève de Play Protect. En FM, Luxe Radio est disponible sans compte à 99,2 MHz à Casablanca et 105,4 MHz à Rabat. [Fréquences publiées par la HACA](https://www.haca.ma/sites/default/files/upload/Fr%C3%A9quences%20des%20Services%20Radiophoniques%20%C3%A9dit%C3%A9s%20par%20les%20op%C3%A9rateurs%20Priv%C3%A9s_1.pdf).
+
 ## Direct et service média
 
 Le contrôle du flux gratuit avec une session invitée du lecteur officiel a renvoyé HTTP 200 et plusieurs trames AAC consécutives. Une requête sans jeton a renvoyé HTTP 401. Le lien public du diffuseur ouvre son application. [Direct officiel](https://open.luxeradio.ma/radio/live).
