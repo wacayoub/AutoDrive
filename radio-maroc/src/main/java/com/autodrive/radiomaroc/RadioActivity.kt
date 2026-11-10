@@ -60,7 +60,14 @@ import com.google.common.util.concurrent.ListenableFuture
 import kotlinx.coroutines.Job
 
 class RadioActivity : ComponentActivity() {
+    private enum class CarResume(val label: String) {
+        OFF("Désactivée"),
+        AFTER_BOOT("Après redémarrage Android"),
+        ON_OPEN("À chaque ouverture"),
+    }
+
     private var startupDeadline = 0L
+    private var restoringActivity = false
     private var playbackQuery: String? = null
     private val accent = 0xFF75EED8.toInt()
     private val textColor = 0xFFF1F7F6.toInt()
@@ -135,13 +142,8 @@ class RadioActivity : ComponentActivity() {
         directoryBookmarks = StationDirectory.decode(prefs.getString("directory_bookmarks", null).orEmpty())
         savedStation = findStation(prefs.getString("last_station", null))
         playbackQuery = voiceQuery(intent)
-        if (savedStation != null && prefs.getBoolean("car_autoplay", false)) {
-            val boot = carBootCount()
-            if (boot >= 0 && boot != prefs.getInt("car_played_boot", -1) &&
-                prefs.edit().putInt("car_played_boot", boot).commit()) {
-                startupDeadline = SystemClock.elapsedRealtime() + 30_000
-            }
-        }
+        restoringActivity = savedInstanceState != null
+        startupDeadline = savedInstanceState?.getLong("startup_deadline") ?: 0L
         query = savedInstanceState?.getString("query").orEmpty()
         radioFavoritesOnly = savedInstanceState?.getBoolean("radio_favorites_only") == true
         volumeControlStream = android.media.AudioManager.STREAM_MUSIC
@@ -155,12 +157,15 @@ class RadioActivity : ComponentActivity() {
     override fun onSaveInstanceState(outState: Bundle) {
         outState.putString("query", query)
         outState.putBoolean("radio_favorites_only", radioFavoritesOnly)
+        outState.putLong("startup_deadline", startupDeadline)
         radioUpdates.save(outState)
         super.onSaveInstanceState(outState)
     }
 
     override fun onStart() {
         super.onStart()
+        if (!restoringActivity || carResume() == CarResume.AFTER_BOOT) armCarStartup()
+        restoringActivity = false
         connectPlayer()
     }
 
@@ -168,6 +173,10 @@ class RadioActivity : ComponentActivity() {
         super.onNewIntent(intent)
         playbackQuery = voiceQuery(intent)
         playFromSearch()
+        if ((intent.action == Intent.ACTION_MAIN || intent.action == null) && carResume() == CarResume.ON_OPEN) {
+            armCarStartup()
+            controller?.let { onNetworkStatus(it.sessionExtras) }
+        }
     }
 
     private fun voiceQuery(intent: Intent): String? =
@@ -254,7 +263,13 @@ class RadioActivity : ComponentActivity() {
         val player = controller
         if (!offline && startupDeadline > SystemClock.elapsedRealtime() && player != null) {
             startupDeadline = 0L
-            if (player.currentMediaItem == null) savedStation?.let(::select)
+            val requesting = if (savedStation == Stations.luxe && player.currentMediaItem == null) {
+                luxeState() in listOf(LuxeRadio.State.CONNECTING, LuxeRadio.State.PLAYING)
+            } else {
+                player.currentMediaItem != null && player.playWhenReady &&
+                    player.playerError == null && player.playbackState != Player.STATE_ENDED
+            }
+            if (!requesting) savedStation?.let(::select)
         }
         renderPlayer()
     }
@@ -1092,20 +1107,40 @@ class RadioActivity : ComponentActivity() {
     }
 
     private fun showCarStartup() {
-        val resume = prefs.getBoolean("car_autoplay", false)
+        val modes = CarResume.entries
         AlertDialog.Builder(this)
             .setTitle("Démarrage voiture")
-            .setMessage("Dans AppBoot ou le menu de démarrage du boîtier, choisis Radio Maroc & Coran. " +
-                "Avec la reprise activée, la dernière station se lance quand le boîtier ouvre la radio après un démarrage Android.")
-            .setNegativeButton("Fermer", null)
-            .setPositiveButton(if (resume) "Désactiver la reprise" else "Activer la reprise") { _, _ ->
-                val boot = carBootCount()
-                prefs.edit().putBoolean("car_autoplay", !resume).apply {
-                    if (boot >= 0) putInt("car_played_boot", boot)
+            .setSingleChoiceItems(modes.map { it.label }.toTypedArray(), carResume().ordinal) { dialog, index ->
+                prefs.edit().putString("car_resume_mode", modes[index].name).apply {
+                    if (modes[index] == CarResume.AFTER_BOOT) {
+                        val boot = carBootCount()
+                        if (boot >= 0) putInt("car_played_boot", boot)
+                    }
                 }.apply()
                 startupDeadline = 0L
+                dialog.dismiss()
             }
+            .setNegativeButton("Fermer", null)
             .show()
+    }
+
+    private fun carResume(): CarResume {
+        val storedMode = prefs.getString("car_resume_mode", null)
+        return CarResume.entries.firstOrNull { it.name == storedMode }
+            ?: if (prefs.getBoolean("car_autoplay", false)) CarResume.AFTER_BOOT else CarResume.OFF
+    }
+
+    private fun armCarStartup() {
+        val mode = carResume()
+        if (mode == CarResume.OFF || playbackQuery != null) return
+        directoryBookmarks = StationDirectory.decode(prefs.getString("directory_bookmarks", null).orEmpty())
+        savedStation = findStation(prefs.getString("last_station", null)) ?: return
+        if (mode == CarResume.AFTER_BOOT) {
+            val boot = carBootCount()
+            if (boot < 0 || boot == prefs.getInt("car_played_boot", -1) ||
+                !prefs.edit().putInt("car_played_boot", boot).commit()) return
+        }
+        startupDeadline = SystemClock.elapsedRealtime() + 30_000
     }
 
     private fun carBootCount() = runCatching { Settings.Global.getInt(contentResolver, Settings.Global.BOOT_COUNT, -1) }
