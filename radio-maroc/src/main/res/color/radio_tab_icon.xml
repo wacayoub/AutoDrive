@@ -1,4 +1,4 @@
 <selector xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:state_selected="true" android:color="#75EED8" />
-    <item android:color="#A7BABF" />
+    <item android:state_selected="true" android:color="@color/radio_accent" />
+    <item android:color="@color/radio_muted" />
 </selector>

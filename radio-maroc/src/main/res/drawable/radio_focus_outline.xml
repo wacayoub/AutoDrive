@@ -1,5 +1,5 @@
 <shape xmlns:android="http://schemas.android.com/apk/res/android">
     <corners android:radius="10dp" />
-    <solid android:color="#2275EED8" />
-    <stroke android:width="2dp" android:color="#C9FFF3" />
+    <solid android:color="@color/radio_focus_fill" />
+    <stroke android:width="2dp" android:color="@color/radio_focus_border" />
 </shape>

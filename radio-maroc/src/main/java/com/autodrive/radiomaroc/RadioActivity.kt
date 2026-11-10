@@ -60,6 +60,11 @@ import com.google.common.util.concurrent.ListenableFuture
 import kotlinx.coroutines.Job
 
 class RadioActivity : ComponentActivity() {
+    private companion object {
+        const val PREFERENCES = "radio_maroc"
+        const val DAY_APPEARANCE = "day_appearance"
+    }
+
     private enum class CarResume(val label: String) {
         OFF("Désactivée"),
         AFTER_BOOT("Après redémarrage Android"),
@@ -69,10 +74,11 @@ class RadioActivity : ComponentActivity() {
     private var startupDeadline = 0L
     private var restoringActivity = false
     private var playbackQuery: String? = null
-    private val accent = 0xFF75EED8.toInt()
-    private val textColor = 0xFFF1F7F6.toInt()
-    private val muted = 0xFFA7BABF.toInt()
-    private val amber = 0xFFFFCF73.toInt()
+    private val accent by lazy { getColor(R.color.radio_accent) }
+    private val textColor by lazy { getColor(R.color.radio_text) }
+    private val muted by lazy { getColor(R.color.radio_muted) }
+    private val amber by lazy { getColor(R.color.radio_favorite) }
+    private val ripple by lazy { ColorStateList.valueOf(getColor(R.color.radio_ripple)) }
     private lateinit var prefs: SharedPreferences
     private lateinit var artwork: RadioArtwork
     private lateinit var directory: DirectoryBrowser
@@ -130,9 +136,17 @@ class RadioActivity : ComponentActivity() {
         }
     }
 
+    override fun attachBaseContext(newBase: Context) {
+        val day = newBase.getSharedPreferences(PREFERENCES, MODE_PRIVATE).getBoolean(DAY_APPEARANCE, false)
+        val configuration = Configuration().apply {
+            uiMode = if (day) Configuration.UI_MODE_NIGHT_NO else Configuration.UI_MODE_NIGHT_YES
+        }
+        super.attachBaseContext(newBase.createConfigurationContext(configuration))
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        prefs = getSharedPreferences("radio_maroc", MODE_PRIVATE)
+        prefs = getSharedPreferences(PREFERENCES, MODE_PRIVATE)
         artwork = RadioArtwork(this, maxImageBytes = 1024 * 1024)
         directory = DirectoryBrowser(StationDirectory(this)) { renderRows() }
         radioUpdates = RadioUpdates(this, savedInstanceState)
@@ -676,7 +690,7 @@ class RadioActivity : ComponentActivity() {
             liveIndicator = row().apply {
                 gravity = Gravity.CENTER_VERTICAL
                 visibility = View.GONE
-                val lineColor = 0xFF658F8C.toInt()
+                val lineColor = getColor(R.color.radio_live_rule)
                 fun line() = View(context).apply {
                     setBackgroundColor(lineColor)
                     importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
@@ -742,7 +756,7 @@ class RadioActivity : ComponentActivity() {
         ImageButton(this).apply {
             id = View.generateViewId()
             setImageResource(icon)
-            if (primary) imageTintList = ColorStateList.valueOf(0xFF132A2A.toInt())
+            imageTintList = ColorStateList.valueOf(if (primary) 0xFF132A2A.toInt() else textColor)
             scaleType = ImageView.ScaleType.CENTER
             background = pressable(if (primary) R.drawable.radio_primary else R.drawable.radio_control)
             contentDescription = description
@@ -818,7 +832,7 @@ class RadioActivity : ComponentActivity() {
             layoutParams = AbsListView.LayoutParams(-1, -2)
             minimumHeight = dp(if (television && !compactTv) 66 else 54)
             gravity = Gravity.CENTER_VERTICAL
-            background = RippleDrawable(ColorStateList.valueOf(0x2EFFFFFF), null, ColorDrawable(Color.WHITE))
+            background = RippleDrawable(ripple, null, ColorDrawable(Color.WHITE))
             addView(FrameLayout(context).apply {
                 addView(selectionMark, FrameLayout.LayoutParams(dp(2), dp(20), Gravity.START or Gravity.CENTER_VERTICAL)
                     .apply { marginStart = dp(2) })
@@ -1082,10 +1096,10 @@ class RadioActivity : ComponentActivity() {
             else -> muted
         })
         statusBadge.backgroundTintList = ColorStateList.valueOf(when {
-            waitingForNetwork && !playing -> 0xFF3A2B1C.toInt()
+            waitingForNetwork && !playing -> getColor(R.color.radio_status_waiting)
             live -> Color.TRANSPARENT
-            playing -> 0xFF1C3637.toInt()
-            else -> 0xFF203034.toInt()
+            playing -> getColor(R.color.radio_status_playing)
+            else -> getColor(R.color.radio_status_idle)
         })
         updateLiveDot(live)
         playButton.setImageResource(if (requesting) R.drawable.ic_radio_pause else R.drawable.ic_radio_play)
@@ -1119,6 +1133,23 @@ class RadioActivity : ComponentActivity() {
                 }.apply()
                 startupDeadline = 0L
                 dialog.dismiss()
+            }
+            .setNeutralButton("Jour / Nuit") { _, _ -> showAppearance() }
+            .setNegativeButton("Fermer", null)
+            .show()
+    }
+
+    private fun showAppearance() {
+        val day = prefs.getBoolean(DAY_APPEARANCE, false)
+        AlertDialog.Builder(this)
+            .setTitle("Apparence")
+            .setSingleChoiceItems(arrayOf("Jour", "Nuit"), if (day) 0 else 1) { dialog, index ->
+                dialog.dismiss()
+                val selectedDay = index == 0
+                if (selectedDay != day) {
+                    prefs.edit().putBoolean(DAY_APPEARANCE, selectedDay).apply()
+                    recreate()
+                }
             }
             .setNegativeButton("Fermer", null)
             .show()
@@ -1296,7 +1327,7 @@ class RadioActivity : ComponentActivity() {
 
     private fun row() = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
     private fun column() = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-    private fun pressable(drawable: Int) = RippleDrawable(ColorStateList.valueOf(0x2EFFFFFF), getDrawable(drawable),
+    private fun pressable(drawable: Int) = RippleDrawable(ripple, getDrawable(drawable),
         GradientDrawable().apply { setColor(Color.WHITE); cornerRadius = dp(12).toFloat() })
     private fun dp(value: Int) = (value * resources.displayMetrics.density + .5f).toInt()
 }

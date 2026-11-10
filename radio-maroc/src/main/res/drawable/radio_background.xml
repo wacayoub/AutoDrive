@@ -1,3 +1,3 @@
 <shape xmlns:android="http://schemas.android.com/apk/res/android">
-    <gradient android:angle="270" android:startColor="#132023" android:endColor="#0A1013" />
+    <gradient android:angle="270" android:startColor="@color/radio_background_top" android:endColor="@color/radio_background_bottom" />
 </shape>

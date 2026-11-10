@@ -1,5 +1,6 @@
 <shape xmlns:android="http://schemas.android.com/apk/res/android">
     <corners android:radius="20dp" />
-    <gradient android:angle="270" android:startColor="#1A3539" android:centerColor="#17272B" android:endColor="#10191D" />
-    <stroke android:width="1dp" android:color="#315155" />
+    <gradient android:angle="270" android:startColor="@color/radio_player_top"
+        android:centerColor="@color/radio_player_center" android:endColor="@color/radio_player_bottom" />
+    <stroke android:width="1dp" android:color="@color/radio_player_border" />
 </shape>

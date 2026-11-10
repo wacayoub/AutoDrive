@@ -4,16 +4,18 @@ import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.view.View
+import androidx.core.graphics.ColorUtils
 import kotlin.math.min
 
 internal class PremiumRadioMotif(context: Context) : View(context) {
     private val density = resources.displayMetrics.density
+    private val motifColor = context.getColor(R.color.radio_motif)
     private val wavePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
         strokeWidth = density
     }
     private val levelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = 0x496FD7C6
+        color = ColorUtils.setAlphaComponent(motifColor, 73)
         strokeCap = Paint.Cap.ROUND
         strokeWidth = 2 * density
     }
@@ -28,7 +30,7 @@ internal class PremiumRadioMotif(context: Context) : View(context) {
         val centerY = height / 2f
         val radius = min(width, height) * .47f
         for (ring in 0..2) {
-            wavePaint.color = 0x006FD7C6 or ((27 + ring * 15) shl 24)
+            wavePaint.color = ColorUtils.setAlphaComponent(motifColor, 27 + ring * 15)
             canvas.drawCircle(centerX, centerY, radius * (1f - ring * .12f), wavePaint)
         }
         val spacing = 4 * density

@@ -1,0 +1,33 @@
+<resources>
+    <color name="radio_accent">#75EED8</color>
+    <color name="radio_text">#F1F7F6</color>
+    <color name="radio_muted">#A7BABF</color>
+    <color name="radio_favorite">#FFCF73</color>
+    <color name="radio_background_top">#132023</color>
+    <color name="radio_background_bottom">#0A1013</color>
+    <color name="radio_window">#0B1215</color>
+    <color name="radio_control">#18282C</color>
+    <color name="radio_control_border">#304448</color>
+    <color name="radio_dialog">#151C25</color>
+    <color name="radio_dialog_border">#344153</color>
+    <color name="radio_focus_fill">#2275EED8</color>
+    <color name="radio_focus_border">#C9FFF3</color>
+    <color name="radio_header">#142225</color>
+    <color name="radio_player_top">#1A3539</color>
+    <color name="radio_player_center">#17272B</color>
+    <color name="radio_player_bottom">#10191D</color>
+    <color name="radio_player_border">#315155</color>
+    <color name="radio_primary">#72E1CB</color>
+    <color name="radio_primary_border">#B4F8EA</color>
+    <color name="radio_selected">#214340</color>
+    <color name="radio_selected_border">#65C7B8</color>
+    <color name="radio_list_rule">#26393D</color>
+    <color name="radio_tab_selected">#F4FAFF</color>
+    <color name="radio_tab_text_color">#D7E1EB</color>
+    <color name="radio_live_rule">#658F8C</color>
+    <color name="radio_status_waiting">#3A2B1C</color>
+    <color name="radio_status_playing">#1C3637</color>
+    <color name="radio_status_idle">#203034</color>
+    <color name="radio_ripple">#2EFFFFFF</color>
+    <color name="radio_motif">#6FD7C6</color>
+</resources>
