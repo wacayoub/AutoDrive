@@ -637,6 +637,7 @@ class RadioActivity : ComponentActivity() {
         }.apply {
             setPadding(dp(8), 0, dp(6), 0)
             setCompoundDrawablesRelativeWithIntrinsicBounds(R.drawable.ic_tab_favorites, 0, 0, 0)
+            compoundDrawableTintList = ColorStateList.valueOf(accent)
             if (landscape && !television) text = ""
         }
         countryButton = button("") { chooseContinent() }.apply {
@@ -644,6 +645,7 @@ class RadioActivity : ComponentActivity() {
             ellipsize = TextUtils.TruncateAt.END
             setPadding(dp(8), 0, dp(6), 0)
             setCompoundDrawablesRelativeWithIntrinsicBounds(R.drawable.ic_tab_world, 0, 0, 0)
+            compoundDrawableTintList = ColorStateList.valueOf(accent)
         }
         val inlineSearch = television || landscape
         listToolbar = row().apply {
