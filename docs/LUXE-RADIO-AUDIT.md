@@ -19,6 +19,23 @@ APKPure propose Luxe Radio **3.9.42** (`3090042`) en ARM64 et en ARMv7. Les troi
 - **ARM64**, archive dont l’intégrité, la version et la signature ont été vérifiées. SHA-256 `1f3e47f638c4a0dca0a102ee35d981c68b3c3ccf21b6e54727bd3f001c554ab4`. [Archive ARM64](https://d.apkpure.net/b/XAPK/app.luxeradio.ma?versionCode=3090042&nc=arm64-v8a&sv=24).
 - **ARMv7**, archive installée et testée dans l’émulateur. SHA-256 `0754587dfc43010c75684f77d99816fdce8b8009da8146d41f574f8ccb828909`.
 
+### Première installation depuis un PC Windows
+
+Le script Windows choisit l’archive ARM64 ou ARMv7 et vérifie son empreinte avant d’installer les trois APK. Connecter l’Incarlink à ADB en USB ou via le débogage sans fil, puis relever le numéro affiché par `adb devices`. Depuis la racine du dépôt, lancer ces commandes sur l’appareil choisi. La première vérifie la connexion et l’architecture. La deuxième lance l’installation. [Script Windows](../tools/install-luxe-radio.ps1) · [Connexion ADB](https://developer.android.com/tools/adb#connect-to-a-device-over-wi-fi).
+
+```powershell
+.\tools\install-luxe-radio.ps1 -Serial NUMERO_DE_SERIE
+.\tools\install-luxe-radio.ps1 -Serial NUMERO_DE_SERIE -Install
+```
+
+Si ADB est installé hors du `PATH`, passer `-AdbPath` avec le chemin de `adb.exe`. Sur l’Incarlink, ouvrir **Luxe Radio** et choisir **Get started** pour écouter en invité.
+
+Le script a installé Luxe Radio sur l’émulateur Android 11 sans compte Google. Un deuxième passage a conservé l’installation existante. Le téléchargement, l’empreinte et la sélection des trois APK ARM64 ont été vérifiés avec un installateur ADB simulé. L’installation ARM64 sur l’Incarlink reste à tester.
+
+Les futures versions **publiées de Radio Maroc & Coran** sont détectées dans l’application. **OK** télécharge l’APK depuis GitHub et ouvre l’installateur Android pour confirmation. Luxe Radio est éditée séparément par RadioVeille. [Mises à jour de Radio Maroc & Coran](../radio-maroc/README.md#mises-à-jour-en-ligne).
+
+### Installation manuelle avec ADB
+
 Utiliser ADB depuis un ordinateur sur un appareil autorisé pour l’installation. `adb -s NUMERO_DE_SERIE shell getprop ro.product.cpu.abilist` indique les architectures acceptées. Si la liste contient `arm64-v8a`, extraire les trois fichiers de l’archive ARM64 et les installer ensemble depuis le dossier extrait.
 
 ```sh
