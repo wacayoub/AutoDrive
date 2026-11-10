@@ -12,11 +12,20 @@ Le paquet signé a été installé dans un deuxième émulateur, sous Android 11
 
 ### Installer Luxe Radio sans compte Google
 
-Google Play demande une session Google. En revanche, l’installation Android du paquet Luxe Radio via ADB et son mode invité ont fonctionné dans l’émulateur sans compte Google. Une fois l’application ouverte, **Get started** donne accès au direct gratuit sans identifiant Luxe Radio. [Comptes Google Play](https://support.google.com/googleplay/answer/2521798?hl=fr) · [Installation de paquets fractionnés avec ADB](https://developer.android.com/tools/adb#move).
+Google Play demande une session Google. L’installation Android du paquet Luxe Radio via ADB et son mode invité ont fonctionné dans l’émulateur sans compte Google. Une fois l’application ouverte, **Get started** donne accès au direct gratuit sans identifiant Luxe Radio. [Comptes Google Play](https://support.google.com/googleplay/answer/2521798?hl=fr) · [Installation de paquets fractionnés avec ADB](https://developer.android.com/tools/adb#move).
 
-L’archive XAPK d’APKPure retéléchargée pendant la vérification contient exactement les mêmes octets que l’archive testée. Son SHA-256 est `0754587dfc43010c75684f77d99816fdce8b8009da8146d41f574f8ccb828909`. Les trois APK portent le certificat publié par le diffuseur. Le lien du miroir peut servir une version différente à l’avenir. Vérifier le contenu et le certificat avec `apksigner verify --print-certs` avant usage. [Archive sur le miroir tiers](https://d.apkpure.net/b/XAPK/app.luxeradio.ma?version=latest) · [Certificats publiés par Luxe Radio](https://open.luxeradio.ma/.well-known/assetlinks.json).
+APKPure propose Luxe Radio **3.9.42** (`3090042`) en ARM64 et en ARMv7. Les trois APK de chaque archive téléchargée portent le certificat SHA-256 `270e78e9fc529de6ee0c1946b84887278d6e7dad8d35571d42c709bb9bd85b10`, publié par Luxe Radio. Vérifier le certificat avec `apksigner verify --print-certs` avant usage. [Page de téléchargement du miroir tiers](https://apkpure.net/fr/luxe-radio/app.luxeradio.ma/download) · [Certificats publiés par Luxe Radio](https://open.luxeradio.ma/.well-known/assetlinks.json).
 
-Le paquet testé contient un composant ARMv7. Sur un appareil autorisé pour ce test, `adb -s NUMERO_DE_SERIE shell getprop ro.product.cpu.abilist` doit inclure `armeabi-v7a` pour ce jeu d’APK. Extraire les trois APK du XAPK et les installer ensemble depuis le dossier extrait.
+- **ARM64**, archive dont l’intégrité, la version et la signature ont été vérifiées. SHA-256 `1f3e47f638c4a0dca0a102ee35d981c68b3c3ccf21b6e54727bd3f001c554ab4`. [Archive ARM64](https://d.apkpure.net/b/XAPK/app.luxeradio.ma?versionCode=3090042&nc=arm64-v8a&sv=24).
+- **ARMv7**, archive installée et testée dans l’émulateur. SHA-256 `0754587dfc43010c75684f77d99816fdce8b8009da8146d41f574f8ccb828909`.
+
+Utiliser ADB depuis un ordinateur sur un appareil autorisé pour l’installation. `adb -s NUMERO_DE_SERIE shell getprop ro.product.cpu.abilist` indique les architectures acceptées. Si la liste contient `arm64-v8a`, extraire les trois fichiers de l’archive ARM64 et les installer ensemble depuis le dossier extrait.
+
+```sh
+adb -s NUMERO_DE_SERIE install-multiple app.luxeradio.ma.apk config.arm64_v8a.apk config.xxhdpi.apk
+```
+
+Pour l’archive ARMv7, la liste doit inclure `armeabi-v7a`.
 
 ```sh
 adb -s NUMERO_DE_SERIE install-multiple app.luxeradio.ma.apk config.armeabi_v7a.apk config.tvdpi.apk
