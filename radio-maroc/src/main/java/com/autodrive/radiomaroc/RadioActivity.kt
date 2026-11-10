@@ -570,7 +570,9 @@ class RadioActivity : ComponentActivity() {
                     view.setCompoundDrawablesRelativeWithIntrinsicBounds(icon, 0, 0, 0)
                     view.compoundDrawablePadding = dp(5)
                 } else {
-                    view.setCompoundDrawablesRelativeWithIntrinsicBounds(0, icon, 0, 0)
+                    val symbol = getDrawable(icon)?.apply { setBounds(0, 0, dp(16), dp(16)) }
+                    view.setCompoundDrawablesRelative(null, symbol, null, null)
+                    view.includeFontPadding = false
                 }
                 view.compoundDrawableTintList = getColorStateList(R.color.radio_tab_icon)
                 addView(view, LinearLayout.LayoutParams(0, -1, weight))
@@ -597,7 +599,8 @@ class RadioActivity : ComponentActivity() {
         }
         sortButton = button("Trier", ::chooseSort).apply {
             textSize = 12f
-            setPadding(dp(10), 0, dp(10), 0)
+            maxLines = 1
+            setPadding(dp(if (shortLandscape) 6 else 10), 0, dp(if (shortLandscape) 6 else 10), 0)
             setCompoundDrawablesRelativeWithIntrinsicBounds(R.drawable.ic_radio_sort, 0, 0, 0)
             compoundDrawablePadding = dp(6)
         }
@@ -810,6 +813,7 @@ class RadioActivity : ComponentActivity() {
     private fun stationPanel(wide: Boolean, mini: Boolean = false, full: Boolean = false): View {
         val horizontalMini = mini && (television || landscape)
         val splitListening = full && shortLandscape
+        val compactSidePlayer = wide && shortLandscape && !full
         return (if (horizontalMini || splitListening) row() else column()).apply {
             playerCategory = null
             if (!full) background = getDrawable(R.drawable.radio_player)
@@ -832,7 +836,7 @@ class RadioActivity : ComponentActivity() {
             val presentation = (if (wide) column() else row()).apply {
                 playerPanel = this
                 gravity = if (wide) Gravity.CENTER else Gravity.START or Gravity.CENTER_VERTICAL
-                if (wide) addView(label("", if (television && !compactTv) 13 else 11, accent, bold = true).apply {
+                if (wide && !compactSidePlayer) addView(label("", if (television && !compactTv) 13 else 11, accent, bold = true).apply {
                     gravity = Gravity.CENTER
                     letterSpacing = .08f
                     maxLines = 1
@@ -844,7 +848,7 @@ class RadioActivity : ComponentActivity() {
                     full -> listeningArtwork
                     !wide -> 48
                     compactTv -> 46
-                    shortLandscape -> 38
+                    compactSidePlayer -> 26
                     compactLandscape -> 54
                     television -> 92
                     else -> 76
@@ -853,7 +857,7 @@ class RadioActivity : ComponentActivity() {
                     full -> listeningArtwork + 8
                     !wide -> 56
                     compactTv -> 54
-                    shortLandscape -> 42
+                    compactSidePlayer -> 29
                     compactLandscape -> 72
                     television -> 130
                     else -> 122
@@ -863,8 +867,8 @@ class RadioActivity : ComponentActivity() {
                     addView(playerArtwork, FrameLayout.LayoutParams(artworkSize, artworkSize, Gravity.CENTER))
                 }, LinearLayout.LayoutParams(if (wide) -1 else dp(76), motifHeight).apply {
                     if (wide) {
-                        topMargin = dp(if (compactLandscape) 4 else 5)
-                        bottomMargin = dp(if (compactLandscape) 4 else 6)
+                        topMargin = dp(if (compactSidePlayer) 2 else if (compactLandscape) 4 else 5)
+                        bottomMargin = dp(if (compactSidePlayer) 2 else if (compactLandscape) 4 else 6)
                     } else marginEnd = dp(10)
                 })
                 val alignment = if (wide) View.TEXT_ALIGNMENT_CENTER else View.TEXT_ALIGNMENT_VIEW_START
@@ -872,18 +876,21 @@ class RadioActivity : ComponentActivity() {
                     val titleSize = when {
                         full -> if (shortLandscape) 23 else if (compactTv || !television) 26 else 36
                         !wide -> 17
+                        compactSidePlayer -> 16
                         compactLandscape -> 19
                         television -> 25
                         else -> 21
                     }
                     playerTitle = label("", titleSize, textColor, bold = true).apply {
                         textAlignment = alignment
+                        if (compactSidePlayer) includeFontPadding = false
                         maxLines = if (compactTv || shortLandscape || mini || full && television) 1 else 2
                         ellipsize = TextUtils.TruncateAt.END
                     }
                     addView(playerTitle, LinearLayout.LayoutParams(-1, -2))
-                    playerSubtitle = label("", if (television && !compactTv) 16 else 12, muted).apply {
+                    playerSubtitle = label("", if (compactSidePlayer) 11 else if (television && !compactTv) 16 else 12, muted).apply {
                         textAlignment = alignment
+                        if (compactSidePlayer) includeFontPadding = false
                         maxLines = if (compactLandscape || mini || full && television) 1 else 2
                         ellipsize = TextUtils.TruncateAt.END
                     }
