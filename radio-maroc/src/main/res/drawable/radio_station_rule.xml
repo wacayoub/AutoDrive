@@ -1,0 +1,7 @@
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:left="7dp" android:right="7dp" android:height="1dp" android:gravity="bottom">
+        <shape>
+            <solid android:color="@color/radio_list_rule" />
+        </shape>
+    </item>
+</layer-list>

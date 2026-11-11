@@ -54,7 +54,7 @@ internal class HeadlineTicker(context: Context, size: Int, textColor: Int) : Tex
     }
 
     private fun prepareDrawing() {
-        drawing = if (viewport > 0 && measuredWidth(text) > viewport) {
+        drawing = if (displayMillis > 0 && viewport > 0 && measuredWidth(text) > viewport) {
             val scrollBudget = (displayMillis - START_PAUSE - END_PAUSE).coerceAtLeast(0L)
             val maxWidth = viewport + (scrollBudget / 1_000f) * SCROLL_DP_PER_SECOND * density
             val headline = TextUtils.ellipsize(text, paint, maxWidth - 2, TextUtils.TruncateAt.END)

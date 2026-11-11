@@ -362,6 +362,14 @@ internal object Stations {
         else -> station.tags.firstOrNull() ?: "القرآن الكريم · MP3Quran"
     }
 
+    fun listDescription(station: RadioStation): String? = when {
+        station.name == "HIT RADIO" && group(station) == StationGroup.HIT -> "Variétés · Hits"
+        station.countryCode != null -> listOfNotNull(station.tags.firstOrNull(), StationDirectory.countryName(station.countryCode))
+            .distinct().joinToString(" · ")
+        station.tags.isNotEmpty() || region(station) != null || isReciter(station) -> subtitle(station)
+        else -> null
+    }
+
     private const val DEFAULT_ARTWORK = "android.resource://com.autodrive.radiomaroc/drawable/ic_radio"
     fun defaultArtwork(): Uri = Uri.parse(DEFAULT_ARTWORK)
 

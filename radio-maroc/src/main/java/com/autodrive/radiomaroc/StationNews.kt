@@ -23,7 +23,7 @@ internal enum class NewsPublisher(val label: String, val badge: String, val url:
 
 private fun wordpress(host: String) = "https://$host/wp-json/wp/v2/posts?_embed=wp%3Afeaturedmedia&per_page=8"
 
-internal data class NewsBulletin(val source: String, val text: String, val url: String)
+internal data class NewsBulletin(val source: String, val text: String, val url: String? = null)
 
 internal object StationNews {
     private val dateMedi1 = DateTimeFormatter.ofPattern("dd/MM/uuuu HH:mm")

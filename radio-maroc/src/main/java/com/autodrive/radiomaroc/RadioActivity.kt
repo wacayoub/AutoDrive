@@ -64,6 +64,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import androidx.media3.common.MediaItem
@@ -181,7 +182,10 @@ class RadioActivity : ComponentActivity() {
     private var tickerStartedAt = 0L
     private var tickerDuration = 0L
     private data class NewsEdition(val expiresAt: Long, val headlines: List<NewsHeadline>)
-    private val stationPublisher = MutableStateFlow<NewsPublisher?>(null)
+    private data class TvStationInfo(
+        val id: String, val publisher: NewsPublisher?, val streamTitle: String?, val fallback: NewsBulletin,
+    )
+    private val tvStationInfo = MutableStateFlow<TvStationInfo?>(null)
     private val stationHeadlines = MutableStateFlow<List<NewsHeadline>>(emptyList())
     private val stationNews = mutableMapOf<NewsPublisher, NewsEdition>()
     private val radioCity = MutableStateFlow(RadioCity.CASABLANCA)
@@ -277,7 +281,11 @@ class RadioActivity : ComponentActivity() {
             radioCity.value = RadioCity.restore(prefs.getString("tv_info_city", null))
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 launch { rollNewsHeadlines() }
-                launch { stationPublisher.collectLatest { publisher -> publisher?.let { refreshStationNews(it) } } }
+                launch {
+                    tvStationInfo.map { it?.publisher }.distinctUntilChanged().collectLatest { publisher ->
+                        publisher?.let { refreshStationNews(it) }
+                    }
+                }
                 launch { radioCity.collectLatest { refreshWeather(it) } }
                 launch { refreshPrayerCalendars() }
                 launch { refreshLocalTiles() }
@@ -998,7 +1006,9 @@ class RadioActivity : ComponentActivity() {
     }
 
     private suspend fun rollNewsHeadlines() {
-        combine(stationPublisher, stationHeadlines, StationNews::bulletins)
+        combine(tvStationInfo, stationHeadlines) { info, headlines ->
+            StationNews.bulletins(info?.publisher, headlines).ifEmpty { listOfNotNull(info?.fallback) }
+        }
             .distinctUntilChanged().collectLatest { edition ->
                 if (edition.isEmpty()) {
                     tickerBulletin = null
@@ -1007,7 +1017,11 @@ class RadioActivity : ComponentActivity() {
                     return@collectLatest
                 }
                 newsFooter?.visibility = View.VISIBLE
-                var index = (edition.indexOfFirst { it.url == tickerBulletin?.url } + 1) % edition.size
+                if (edition.size == 1) {
+                    setTickerBulletin(edition.single())
+                    return@collectLatest
+                }
+                var index = edition.indexOfFirst { it == tickerBulletin }.coerceAtLeast(0)
                 while (true) {
                     delay(setTickerBulletin(edition[index]))
                     index = (index + 1) % edition.size
@@ -1016,9 +1030,10 @@ class RadioActivity : ComponentActivity() {
     }
 
     private fun setTickerBulletin(bulletin: NewsBulletin): Long {
+        if (tickerBulletin == bulletin) return tickerDuration
         tickerBulletin = bulletin
         tickerStartedAt = SystemClock.uptimeMillis()
-        tickerDuration = newsTicker?.durationFor(bulletin.text) ?: 8_000L
+        tickerDuration = if (bulletin.url == null) 0L else newsTicker?.durationFor(bulletin.text) ?: 8_000L
         tickerSource?.text = bulletin.source
         newsTicker?.showHeadline(bulletin.text, tickerStartedAt, tickerDuration)
         return tickerDuration
@@ -1026,13 +1041,13 @@ class RadioActivity : ComponentActivity() {
 
     private suspend fun refreshStationNews(publisher: NewsPublisher) {
         while (true) {
-            val cached = stationNews[publisher]?.takeIf { it.expiresAt > SystemClock.elapsedRealtime() }
-            val edition = cached ?: run {
+            val cached = stationNews[publisher]
+            val edition = cached?.takeIf { it.expiresAt > SystemClock.elapsedRealtime() } ?: run {
                 val headlines = withContext(Dispatchers.IO) {
                     runCatching { StationNews.fetch(publisher) }.getOrDefault(emptyList())
                 }
-                NewsEdition(SystemClock.elapsedRealtime() + if (headlines.isEmpty()) 180_000L else 900_000L, headlines)
-                    .also { stationNews[publisher] = it }
+                val retryAt = SystemClock.elapsedRealtime() + if (headlines.isEmpty()) 180_000L else 900_000L
+                NewsEdition(retryAt, headlines.ifEmpty { cached?.headlines.orEmpty() }).also { stationNews[publisher] = it }
             }
             stationHeadlines.value = edition.headlines
             delay((edition.expiresAt - SystemClock.elapsedRealtime()).coerceAtLeast(1L))
@@ -1229,7 +1244,7 @@ class RadioActivity : ComponentActivity() {
     }
 
     private fun showTvInfo() {
-        val publisher = stationPublisher.value?.label ?: "RFI"
+        val publisher = tvStationInfo.value?.publisher?.label ?: "RFI"
         val options = arrayOf("Actualités · $publisher", "Météo", "Salat · مواقيت الصلاة", "Ville · ${radioCity.value.label}")
         val actions = listOf(::showNews, ::showWeather, ::showPrayerTimes, ::chooseInfoCity)
         val dialog = AlertDialog.Builder(this).setTitle("Infos TV")
@@ -1310,7 +1325,7 @@ class RadioActivity : ComponentActivity() {
     private fun showNews() {
         val dateFormat = DateTimeFormatter.ofLocalizedDateTime(FormatStyle.SHORT)
             .withLocale(Locale.FRENCH).withZone(RadioLocalInfo.moroccoTime)
-        val publisher = stationPublisher.value
+        val publisher = tvStationInfo.value?.publisher
         val cache = mutableMapOf<NewsTopic, List<NewsHeadline>>()
         var request: Job? = null
         val status = label("", 14, muted).apply { gravity = Gravity.CENTER }
@@ -1888,20 +1903,35 @@ class RadioActivity : ComponentActivity() {
             else -> 96
         }
         private val logo = StationArtwork(18)
-        private val idleBackground = if (tvGuide) pressable() else pressable(R.drawable.radio_control)
+        private val idleBackground = pressable(if (tvGuide) R.drawable.radio_station_rule else R.drawable.radio_control)
         private val selectedBackground = pressable(R.drawable.radio_selected)
-        private val name = label("", if (tvGuide || compactTv || shortLandscape) 13 else if (television) 17 else 15, textColor, bold = true).apply {
+        private val name = label("", when {
+            tvGuide && !compactTv -> 14
+            tvGuide || compactTv || shortLandscape -> 13
+            television -> 17
+            else -> 15
+        }, textColor, bold = true).apply {
             gravity = if (tvGuide) Gravity.START or Gravity.CENTER_VERTICAL else Gravity.CENTER
             includeFontPadding = false
             maxLines = 1
             ellipsize = TextUtils.TruncateAt.END
         }
-        private val subtitle = if (tvGuide) null else label("", if (compactTv || shortLandscape) 10 else 12, muted).apply {
-            gravity = Gravity.CENTER
+        private val subtitle = label("", when {
+            tvGuide && compactTv -> 9
+            tvGuide || compactTv || shortLandscape -> 10
+            else -> 12
+        }, muted).apply {
+            gravity = if (tvGuide) Gravity.START else Gravity.CENTER
             includeFontPadding = false
             maxLines = 1
             ellipsize = TextUtils.TruncateAt.END
         }
+        private val playingMark = if (tvGuide) ImageView(context).apply {
+            setImageResource(R.drawable.ic_radio_play)
+            imageTintList = ColorStateList.valueOf(accent)
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+            visibility = View.INVISIBLE
+        } else null
 
         init {
             layoutParams = AbsListView.LayoutParams(-1, dp(heightDp))
@@ -1909,10 +1939,14 @@ class RadioActivity : ComponentActivity() {
             if (tvGuide) {
                 orientation = HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
-                setPadding(dp(6), 0, dp(6), 0)
+                setPadding(dp(7), 0, dp(7), 0)
                 val artSize = dp(heightDp - 6)
-                addView(logo, LinearLayout.LayoutParams(artSize, artSize).apply { marginEnd = dp(6) })
-                addView(name, LinearLayout.LayoutParams(0, -1, 1f))
+                addView(logo, LinearLayout.LayoutParams(artSize, artSize).apply { marginEnd = dp(8) })
+                addView(column().apply {
+                    addView(name, LinearLayout.LayoutParams(-1, -2))
+                    addView(subtitle, LinearLayout.LayoutParams(-1, -2))
+                }, LinearLayout.LayoutParams(0, -2, 1f))
+                playingMark?.let { addView(it, LinearLayout.LayoutParams(dp(14), dp(14)).apply { marginStart = dp(4) }) }
             } else {
                 orientation = VERTICAL
                 gravity = Gravity.CENTER
@@ -1920,7 +1954,7 @@ class RadioActivity : ComponentActivity() {
                 val artSize = dp((heightDp - if (compactTv || shortLandscape) 37 else 47).coerceIn(20, 68))
                 addView(logo, LinearLayout.LayoutParams(artSize, artSize).apply { bottomMargin = dp(2) })
                 addView(name, LinearLayout.LayoutParams(-1, -2))
-                subtitle?.let { addView(it, LinearLayout.LayoutParams(-1, -2)) }
+                addView(subtitle, LinearLayout.LayoutParams(-1, -2))
             }
         }
 
@@ -1935,7 +1969,13 @@ class RadioActivity : ComponentActivity() {
             logo.bind(station)
             name.text = station.name
             name.setTextColor(if (selected) accent else textColor)
-            subtitle?.text = if (playing) "En écoute" else Stations.subtitle(station)
+            subtitle.text = when {
+                tvGuide -> Stations.listDescription(station).orEmpty()
+                playing -> "En écoute"
+                else -> Stations.subtitle(station)
+            }
+            subtitle.visibility = if (subtitle.text.isEmpty()) View.GONE else View.VISIBLE
+            playingMark?.visibility = if (playing) View.VISIBLE else View.INVISIBLE
         }
     }
 
@@ -2217,14 +2257,6 @@ class RadioActivity : ComponentActivity() {
         val player = controller
         val active = player?.currentMediaItem?.mediaId ?: savedStation?.takeIf { it == Stations.luxe }?.url
         val station = findStation(active) ?: savedStation
-        if (television) {
-            val publisher = StationNews.forStation(station)
-            if (stationPublisher.value != publisher) {
-                stationPublisher.value = publisher
-                stationHeadlines.value = publisher?.let(stationNews::get)?.takeIf { it.expiresAt > SystemClock.elapsedRealtime() }
-                    ?.headlines.orEmpty()
-            }
-        }
         val luxe = if (station == Stations.luxe) luxeState() else null
         val recording = station?.let(Stations::isRecording) == true
         val ended = player?.playbackState == Player.STATE_ENDED
@@ -2241,6 +2273,7 @@ class RadioActivity : ComponentActivity() {
             }
         } ?: station?.takeIf { live && it.url == active }
             ?.let { BroadcastProgrammes.fromStream(it, streamInfo?.getString(PlaybackService.STREAM_TITLE)) }
+        if (television) updateTvStationInfo(station, programme?.title ?: streamInfo?.getString(PlaybackService.STREAM_TITLE))
         playerCategory?.apply {
             text = if (recording) "تلاوات الحرم" else programme?.source.orEmpty()
             visibility = if (text.isEmpty()) View.GONE else View.VISIBLE
@@ -2309,6 +2342,22 @@ class RadioActivity : ComponentActivity() {
         }
         if (!television && showingCatalogue && (stationChanged || revealCatalogueSelection)) {
             revealCatalogueSelection = selectedStationId != null && !revealCatalogueStation(selectedStationId)
+        }
+    }
+
+    private fun updateTvStationInfo(station: RadioStation?, streamTitle: String?) {
+        val previous = tvStationInfo.value
+        val publisher = StationNews.forStation(station)
+        if (previous?.publisher != publisher) {
+            stationHeadlines.value = publisher?.let(stationNews::get)?.headlines.orEmpty()
+        }
+        tvStationInfo.value = station?.let {
+            val title = BroadcastProgrammes.fromStream(it, streamTitle)?.title
+                ?: previous?.takeIf { info -> info.id == it.url }?.streamTitle
+            val detail = title ?: Stations.listDescription(it)
+            val text = listOfNotNull(it.name, detail?.takeUnless { value -> value.equals(it.name, ignoreCase = true) })
+                .joinToString(" · ")
+            TvStationInfo(it.url, publisher, title, NewsBulletin(if (title == null) "RADIO" else "FLUX", text))
         }
     }
 
