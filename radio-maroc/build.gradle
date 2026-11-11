@@ -13,8 +13,8 @@ android {
         applicationId 'com.autodrive.radiomaroc'
         minSdk 30
         targetSdk 35
-        versionCode providers.gradleProperty('radioMarocVersionCode').getOrElse('40').toInteger()
-        versionName providers.gradleProperty('radioMarocVersionName').getOrElse('2.5.6')
+        versionCode providers.gradleProperty('radioMarocVersionCode').getOrElse('41').toInteger()
+        versionName providers.gradleProperty('radioMarocVersionName').getOrElse('2.5.7')
     }
 
     signingConfigs {
