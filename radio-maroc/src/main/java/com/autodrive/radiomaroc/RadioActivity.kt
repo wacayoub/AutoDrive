@@ -49,8 +49,10 @@ import android.widget.ListView
 import android.widget.RadioButton
 import android.widget.RadioGroup
 import android.widget.TextView
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.net.toUri
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
@@ -65,6 +67,9 @@ import com.google.common.util.concurrent.ListenableFuture
 import kotlinx.coroutines.Job
 
 class RadioActivity : ComponentActivity() {
+    private val dolbyPanel by lazy { DolbyPanel.find(this) }
+    private val openDolbyPanel = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { }
+
     private companion object {
         const val PREFERENCES = "radio_maroc"
         const val APPEARANCE = "appearance"
@@ -553,11 +558,32 @@ class RadioActivity : ComponentActivity() {
         }
         soundStatusLabel = status
         renderSoundStatus(controller?.sessionExtras ?: Bundle.EMPTY)
-        choiceDialog("Effets sonores")
+        val dialog = choiceDialog("Effets sonores")
             .setView(content)
             .setNegativeButton("Fermer", null)
             .setOnDismissListener { soundStatusLabel = null }
-            .show()
+        dolbyPanel?.let { panel ->
+            dialog.setNeutralButton("Dolby") { _, _ -> showDolbySettings(panel) }
+        }
+        dialog.show()
+    }
+
+    private fun showDolbySettings(panel: DolbyPanel) {
+        val enabled = prefs.getBoolean(RadioSound.DOLBY, false)
+        val dialog = choiceDialog("Dolby")
+            .setSingleChoiceItems(arrayOf("Désactivé dans la radio", "Autoriser Dolby sur la radio"), if (enabled) 1 else 0) { prompt, which ->
+                val allow = which == 1
+                prefs.edit().putBoolean(RadioSound.DOLBY, allow).apply()
+                (prompt as AlertDialog).getButton(AlertDialog.BUTTON_POSITIVE).isEnabled = allow
+            }
+            .setNegativeButton("Fermer", null)
+            .setPositiveButton("Réglages Dolby") { _, _ ->
+                val sessionId = controller?.sessionExtras?.getInt(RadioSound.DOLBY_SESSION_ID) ?: 0
+                runCatching { openDolbyPanel.launch(panel.settingsIntent(this, sessionId)) }.onFailure {
+                    Toast.makeText(this, "Réglages Dolby indisponibles", Toast.LENGTH_SHORT).show()
+                }
+            }.show()
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE).isEnabled = enabled
     }
 
     private fun renderSoundStatus(extras: Bundle) {
@@ -644,8 +670,9 @@ class RadioActivity : ComponentActivity() {
     }
 
     private fun wideColumns(left: View, right: View): LinearLayout = row().apply {
-        addView(left, LinearLayout.LayoutParams(0, -1, .36f).apply { marginEnd = dp(8) })
-        addView(right, LinearLayout.LayoutParams(0, -1, .64f))
+        val playerWeight = if (tightLandscape) .36f else .39f
+        addView(left, LinearLayout.LayoutParams(0, -1, playerWeight).apply { marginEnd = dp(8) })
+        addView(right, LinearLayout.LayoutParams(0, -1, 1f - playerWeight))
     }
 
     private fun categoryBar(): LinearLayout = row().apply {
@@ -921,6 +948,7 @@ class RadioActivity : ComponentActivity() {
     }
 
     private fun stationPanel(wide: Boolean, mini: Boolean = false, full: Boolean = false): View {
+        val dashboardPlayer = wide && !television && !mini && !full
         val horizontalMini = mini && (television || landscape)
         val splitListening = full && landscape && !television
         val compactSidePlayer = wide && shortLandscape && !full
@@ -950,20 +978,22 @@ class RadioActivity : ComponentActivity() {
             playerArtwork = artwork
             val artworkSize = dp(when {
                 full -> listeningArtwork
-                tightSidePlayer -> 22
+                tightSidePlayer -> 26
                 !wide -> 48
                 compactTv -> 46
-                compactSidePlayer -> 26
+                compactSidePlayer -> 46
+                dashboardPlayer && compactLandscape -> 66
                 compactLandscape -> 54
                 television -> 92
-                else -> 76
+                else -> 96
             })
             val motifHeight = dp(when {
                 full -> listeningArtwork + 8
-                tightSidePlayer -> 27
+                tightSidePlayer -> 33
                 !wide -> 56
                 compactTv -> 54
-                compactSidePlayer -> 29
+                compactSidePlayer -> 55
+                dashboardPlayer && compactLandscape -> 78
                 compactLandscape -> 72
                 television -> 130
                 else -> 122
@@ -986,7 +1016,7 @@ class RadioActivity : ComponentActivity() {
                 }, LinearLayout.LayoutParams(-1, -2))
                 addView(artworkFrame, LinearLayout.LayoutParams(when {
                     stackedPresentation -> -1
-                    tightSidePlayer -> dp(31)
+                    tightSidePlayer -> dp(35)
                     tightListening -> dp(52)
                     else -> dp(76)
                 }, motifHeight).apply {
@@ -1010,7 +1040,7 @@ class RadioActivity : ComponentActivity() {
                     playerTitle = label("", titleSize, textColor, bold = true).apply {
                         textAlignment = alignment
                         if (compactSidePlayer) includeFontPadding = false
-                        maxLines = if (compactTv || shortLandscape || mini || full && television) 1 else 2
+                        maxLines = if (compactTv || mini || full && (television || shortLandscape)) 1 else 2
                         ellipsize = TextUtils.TruncateAt.END
                     }
                     addView(playerTitle, LinearLayout.LayoutParams(-1, -2))
@@ -1125,6 +1155,12 @@ class RadioActivity : ComponentActivity() {
         }
         addView(statusBadge, if (wide) LinearLayout.LayoutParams(-1, dp(if (compactTv) 28 else 33)).apply { bottomMargin = dp(4) }
             else LinearLayout.LayoutParams(0, -2, 1f).apply { marginEnd = dp(6) })
+        if (wide && !television && !mini && !full) {
+            addView(View(context).apply {
+                setBackgroundColor(getColor(R.color.radio_list_rule))
+                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+            }, LinearLayout.LayoutParams(-1, dp(1)).apply { marginStart = dp(8); marginEnd = dp(8) })
+        }
         val controlHeight = dp(if (shortLandscape) 42 else if (compactTv || !wide) 44 else if (television) 54 else 48)
         addView(row().apply {
             gravity = Gravity.CENTER

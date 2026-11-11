@@ -15,6 +15,8 @@ internal object RadioSound {
     const val CLICKS = "radio_sound_clicks"
     const val PROFILE = "radio_sound_profile"
     const val STATUS = "com.autodrive.radiomaroc.SOUND_STATUS"
+    const val DOLBY = "radio_dolby_session"
+    const val DOLBY_SESSION_ID = "com.autodrive.radiomaroc.DOLBY_SESSION_ID"
 
     enum class Status { NORMAL, WAITING, ACTIVE, UNAVAILABLE }
 

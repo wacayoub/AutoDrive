@@ -79,9 +79,13 @@ internal class PlaybackService : MediaLibraryService() {
     private lateinit var engine: ExoPlayer
     private val radioPreferences by lazy { getSharedPreferences("radio_maroc", MODE_PRIVATE) }
     private val audioProcessor = RadioAudioProcessor()
+    private val dolbySession = DolbySession(this)
     private var soundStatus = RadioSound.Status.NORMAL
     private val soundPreferenceListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-        if (key == RadioSound.PROFILE) applySoundProfile()
+        when (key) {
+            RadioSound.PROFILE -> applySoundProfile()
+            RadioSound.DOLBY -> updateDolbySession()
+        }
     }
     private lateinit var sessionPlayer: RadioSessionPlayer
     private lateinit var artwork: RadioArtwork
@@ -120,11 +124,15 @@ internal class PlaybackService : MediaLibraryService() {
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
             watchStation(mediaItem)
             applySoundProfile()
+            updateDolbySession()
         }
 
         override fun onPlaybackStateChanged(playbackState: Int) {
             applySoundProfile()
+            updateDolbySession()
         }
+
+        override fun onAudioSessionIdChanged(audioSessionId: Int) = updateDolbySession()
 
         override fun onMetadata(metadata: Metadata) {
             val icy = (0 until metadata.length()).firstNotNullOfOrNull { metadata[it] as? IcyInfo } ?: return
@@ -282,6 +290,7 @@ internal class PlaybackService : MediaLibraryService() {
         putBoolean(NETWORK_UNAVAILABLE, networkUnavailable)
         putString(LUXE_STATE, luxeState.name)
         putString(RadioSound.STATUS, soundStatus.name)
+        if (dolbySession.activeId > 0) putInt(RadioSound.DOLBY_SESSION_ID, dolbySession.activeId)
         val currentInfo = luxeProgramme?.let { Stations.luxe.url to it }
             ?: activeItem?.let { item -> (programme?.title ?: icyTitle)?.let { item.mediaId to it } }
         currentInfo?.let { (station, title) ->
@@ -298,6 +307,13 @@ internal class PlaybackService : MediaLibraryService() {
         controller.uid == applicationInfo.uid && controller.packageName == packageName
 
     private fun lastStationId(): String? = radioPreferences.getString("last_station", null)
+
+    private fun updateDolbySession() {
+        val useDolby = radioPreferences.getBoolean(RadioSound.DOLBY, false) && engine.currentMediaItem != null &&
+            (engine.playbackState == Player.STATE_BUFFERING || engine.playbackState == Player.STATE_READY)
+        val sessionId = if (useDolby) engine.audioSessionId.coerceAtLeast(0) else 0
+        if (dolbySession.update(sessionId)) session?.setSessionExtras(sessionExtras())
+    }
 
     private fun applySoundProfile() {
         val profile = RadioSound.profile(radioPreferences)
@@ -428,6 +444,7 @@ internal class PlaybackService : MediaLibraryService() {
     override fun onDestroy() {
         connectivity.unregisterNetworkCallback(networkCallback)
         radioPreferences.unregisterOnSharedPreferenceChangeListener(soundPreferenceListener)
+        dolbySession.update(0)
         scope.cancel()
         artwork.close()
         CarArtworkProvider.publish(null)
