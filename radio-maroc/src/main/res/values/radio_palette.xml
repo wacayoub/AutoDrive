@@ -8,6 +8,10 @@
     <color name="radio_window">#0B1215</color>
     <color name="radio_control">#18282C</color>
     <color name="radio_control_border">#304448</color>
+    <color name="radio_weather_label">#FFD083</color>
+    <color name="radio_prayer_label">#8BE0AD</color>
+    <color name="radio_news_badge">#BCD6FF</color>
+    <color name="radio_news_badge_background">#223D58</color>
     <color name="radio_dialog">#151C25</color>
     <color name="radio_dialog_border">#344153</color>
     <color name="radio_focus_fill">#2275EED8</color>

@@ -65,6 +65,8 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import androidx.media3.common.MediaItem
@@ -173,9 +175,9 @@ class RadioActivity : ComponentActivity() {
     private data class Bulletin(val source: String, val text: String)
     private var newsTicker: TextView? = null
     private var tickerSource: TextView? = null
-    private var tickerBulletin = Bulletin("INFOS", "Chargement…")
+    private var tickerBulletin = Bulletin("ACTUS", "Chargement…")
     private var nextNewsFetchAt = 0L
-    private val newsHeadlines = mutableMapOf<NewsTopic, List<NewsHeadline>>()
+    private val newsHeadlines = MutableStateFlow<Map<NewsTopic, List<NewsHeadline>>?>(null)
     private data class NewsEdition(val expiresAt: Long, val headlines: List<NewsHeadline>)
     private val stationPublisher = MutableStateFlow<NewsPublisher?>(null)
     private val stationHeadlines = MutableStateFlow<List<NewsHeadline>>(emptyList())
@@ -184,6 +186,8 @@ class RadioActivity : ComponentActivity() {
     private val weather = MutableStateFlow<RadioWeather?>(null)
     private val prayerCalendars = MutableStateFlow<Map<YearMonth, HabousCalendar>>(emptyMap())
     private var nextWeatherFetchAt = 0L
+    private var weatherTile: LocalInfoTile? = null
+    private var prayerTile: LocalInfoTile? = null
     private var playerCategory: TextView? = null
     private lateinit var playerArtwork: StationArtwork
     private lateinit var playerStatus: TextView
@@ -271,9 +275,11 @@ class RadioActivity : ComponentActivity() {
             radioCity.value = RadioCity.restore(prefs.getString("tv_info_city", null))
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 launch { rollNewsHeadlines() }
+                launch { refreshRfiHeadlines() }
                 launch { stationPublisher.collectLatest { publisher -> publisher?.let { refreshStationNews(it) } } }
                 launch { radioCity.collectLatest { refreshWeather(it) } }
                 launch { refreshPrayerCalendars() }
+                launch { refreshLocalTiles() }
             }
         }
     }
@@ -948,8 +954,7 @@ class RadioActivity : ComponentActivity() {
         dialog.listView.setSelection(0)
     }
 
-    private suspend fun rollNewsHeadlines() {
-        var index = 0
+    private suspend fun refreshRfiHeadlines() {
         while (true) {
             if (SystemClock.elapsedRealtime() >= nextNewsFetchAt) {
                 val feeds = coroutineScope {
@@ -957,39 +962,40 @@ class RadioActivity : ComponentActivity() {
                         async(Dispatchers.IO) { topic to runCatching { RadioNews.fetch(topic) }.getOrDefault(emptyList()) }
                     }.awaitAll()
                 }
-                newsHeadlines.clear()
-                feeds.filter { (_, headlines) -> headlines.isNotEmpty() }.forEach { (topic, headlines) ->
-                    newsHeadlines[topic] = headlines
-                }
-                val refreshDelay = if (newsHeadlines.isEmpty()) 180_000L else 900_000L
+                val available = feeds.filter { (_, headlines) -> headlines.isNotEmpty() }.toMap()
+                newsHeadlines.value = available
+                val refreshDelay = if (available.isEmpty()) 180_000L else 900_000L
                 nextNewsFetchAt = SystemClock.elapsedRealtime() + refreshDelay
-                index = 0
             }
-            val headlines = stationHeadlines.value.take(6).map { Bulletin(it.publisher.badge, it.title) }.ifEmpty {
+            delay((nextNewsFetchAt - SystemClock.elapsedRealtime()).coerceAtLeast(1L))
+        }
+    }
+
+    private suspend fun rollNewsHeadlines() {
+        combine(stationPublisher, stationHeadlines, newsHeadlines) { publisher, station, fallback ->
+            val own = station.filter { it.publisher == publisher }.take(6)
+                .map { Bulletin(it.publisher.badge, it.title) }
+            if (own.isNotEmpty()) own else fallback?.let { feeds ->
                 (0 until 3).flatMap { slot ->
                     NewsTopic.entries.mapNotNull { topic ->
-                        newsHeadlines[topic]?.getOrNull(slot)?.let { Bulletin("RFI", "${topic.label} · ${it.title}") }
+                        feeds[topic]?.getOrNull(slot)?.let { Bulletin("RFI", "${topic.label} · ${it.title}") }
                     }
                 }
             }
-            val city = radioCity.value
-            val local = listOfNotNull(
-                weather.value?.let { Bulletin("MÉTÉO", "${city.label} · ${it.degrees} °C · ${it.condition}") },
-                nextLocalPrayer(city)?.let { Bulletin("SALAT", "${city.label} · ${it.prayer.label} ${it.dateTime.toLocalTime()}") },
-            )
-            val rotation = headlines.chunked(3).flatMap { it.take(1) + local + it.drop(1) }.ifEmpty { local }
-            if (rotation.isEmpty()) {
-                setTickerBulletin(Bulletin("INFOS", "Données indisponibles"))
-                delay(5_000L)
-            } else {
-                index %= rotation.size
-                val headline = rotation[index++]
+        }.distinctUntilChanged().collectLatest { rotation ->
+            if (rotation.isNullOrEmpty()) {
+                setTickerBulletin(Bulletin("ACTUS", if (rotation == null) "Chargement…" else "Titres indisponibles"))
+                return@collectLatest
+            }
+            var index = 0
+            while (true) {
+                val headline = rotation[index]
+                index = (index + 1) % rotation.size
                 setTickerBulletin(headline)
                 val ticker = newsTicker
                 val textWidthDp = (ticker?.paint?.measureText(headline.text) ?: 0f) / resources.displayMetrics.density
                 val seconds = if (ticker?.isSelected == true) textWidthDp / 30f + 3f else 10f
-                val displayTime = (seconds * 1_000).toLong().coerceIn(8_000L, 60_000L)
-                delay(minOf(displayTime, (nextNewsFetchAt - SystemClock.elapsedRealtime()).coerceAtLeast(1L)))
+                delay((seconds * 1_000).toLong().coerceIn(8_000L, 60_000L))
             }
         }
     }
@@ -1014,9 +1020,6 @@ class RadioActivity : ComponentActivity() {
                     .also { stationNews[publisher] = it }
             }
             stationHeadlines.value = edition.headlines
-            if (tickerBulletin.source == "RFI" || tickerBulletin.source == "INFOS") {
-                edition.headlines.firstOrNull()?.let { setTickerBulletin(Bulletin(publisher.badge, it.title)) }
-            }
             delay((edition.expiresAt - SystemClock.elapsedRealtime()).coerceAtLeast(1L))
         }
     }
@@ -1064,6 +1067,74 @@ class RadioActivity : ComponentActivity() {
         return RadioLocalInfo.nextPrayer(now, hours, localPrayerTimes(city, now.toLocalDate().plusDays(1)))
     }
 
+    private suspend fun refreshLocalTiles() {
+        combine(radioCity, weather, prayerCalendars) { _, _, _ -> Unit }.collectLatest {
+            while (true) {
+                renderLocalTiles()
+                delay(60_000L - System.currentTimeMillis() % 60_000L)
+            }
+        }
+    }
+
+    private fun renderLocalTiles() {
+        val city = radioCity.value
+        val report = weather.value
+        weatherTile?.bind(report?.let { "${it.degrees} °C" }, report?.condition, city)
+        val prayer = nextLocalPrayer(city)
+        val day = if (prayer != null && prayer.dateTime.toLocalDate() != LocalDate.now(RadioLocalInfo.moroccoTime)) {
+            " demain"
+        } else ""
+        prayerTile?.bind(prayer?.dateTime?.toLocalTime()?.toString(), prayer?.let { "${it.prayer.label}$day" }, city)
+    }
+
+    private fun localInfoBar(): View = row().apply {
+        layoutDirection = View.LAYOUT_DIRECTION_LTR
+        weatherTile = LocalInfoTile("Météo", R.color.radio_weather_label, ::showWeather).also {
+            addView(it, LinearLayout.LayoutParams(0, -1, 1f).apply { marginEnd = dp(5) })
+        }
+        prayerTile = LocalInfoTile("Salat", R.color.radio_prayer_label, ::showPrayerTimes).also {
+            addView(it, LinearLayout.LayoutParams(0, -1, 1f))
+        }
+        renderLocalTiles()
+    }
+
+    private inner class LocalInfoTile(
+        private val heading: String,
+        headingColor: Int,
+        action: () -> Unit,
+    ) : LinearLayout(this@RadioActivity) {
+        private val value = line(if (compactTv) 14 else 17, textColor, bold = true)
+        private val detail = line(if (compactTv) 10 else 11, muted)
+
+        init {
+            orientation = VERTICAL
+            gravity = Gravity.CENTER
+            setPadding(dp(4), 0, dp(4), 0)
+            background = pressable(R.drawable.radio_control)
+            isFocusable = true
+            remoteFocus()
+            setRadioClick(action)
+            addView(line(if (compactTv) 10 else 11, getColor(headingColor), bold = true).apply {
+                text = heading
+            }, LayoutParams(-1, -2))
+            addView(value, LayoutParams(-1, -2))
+            addView(detail, LayoutParams(-1, -2))
+        }
+
+        private fun line(size: Int, color: Int, bold: Boolean = false) = label("", size, color, bold).apply {
+            gravity = Gravity.CENTER
+            includeFontPadding = false
+            maxLines = 1
+            ellipsize = TextUtils.TruncateAt.END
+        }
+
+        fun bind(amount: String?, description: String?, city: RadioCity) {
+            value.text = amount ?: "—"
+            detail.text = description ?: "Indisponible"
+            contentDescription = listOfNotNull(heading, city.label, amount, detail.text).joinToString(" · ")
+        }
+    }
+
     private fun newsBar(): View = row().apply {
         layoutDirection = View.LAYOUT_DIRECTION_LTR
         gravity = Gravity.CENTER_VERTICAL
@@ -1072,12 +1143,13 @@ class RadioActivity : ComponentActivity() {
         contentDescription = "Infos TV · Actualités, météo et salat"
         remoteFocus()
         setRadioClick(::showTvInfo)
-        val source = label(tickerBulletin.source, if (compactTv) 10 else 11, accent, bold = true).apply {
+        val source = label(tickerBulletin.source, if (compactTv) 10 else 11, getColor(R.color.radio_news_badge), bold = true).apply {
             gravity = Gravity.CENTER
+            background = getDrawable(R.drawable.radio_news_badge)
         }
         tickerSource = source
-        addView(source, LinearLayout.LayoutParams(dp(if (compactTv) 49 else 54), -1))
-        addView(View(context).apply { setBackgroundColor(ripple.defaultColor) }, LinearLayout.LayoutParams(dp(1), dp(15)))
+        addView(source, LinearLayout.LayoutParams(dp(if (compactTv) 45 else 51), dp(if (compactTv) 21 else 24))
+            .apply { marginStart = dp(4) })
         val ticker = label(tickerBulletin.text, if (compactTv) 11 else 13, textColor).apply {
             setSingleLine(true)
             ellipsize = TextUtils.TruncateAt.MARQUEE
@@ -1111,7 +1183,7 @@ class RadioActivity : ComponentActivity() {
                     nextWeatherFetchAt = 0L
                     radioCity.value = city
                     prefs.edit().putString("tv_info_city", city.name).apply()
-                    if (tickerBulletin.source in setOf("MÉTÉO", "SALAT")) setTickerBulletin(Bulletin("INFOS", city.label))
+                    renderLocalTiles()
                 }
                 picker.dismiss()
             }.setNegativeButton("Fermer", null).show()
@@ -1172,7 +1244,7 @@ class RadioActivity : ComponentActivity() {
         val dateFormat = DateTimeFormatter.ofLocalizedDateTime(FormatStyle.SHORT)
             .withLocale(Locale.FRENCH).withZone(RadioLocalInfo.moroccoTime)
         val publisher = stationPublisher.value
-        val cache = newsHeadlines.toMutableMap()
+        val cache = newsHeadlines.value.orEmpty().toMutableMap()
         var request: Job? = null
         val status = label("", 14, muted).apply { gravity = Gravity.CENTER }
         val headlines = object : ArrayAdapter<NewsHeadline>(this, android.R.layout.simple_list_item_1) {
@@ -1414,6 +1486,8 @@ class RadioActivity : ComponentActivity() {
             playerCategory = null
             newsTicker = null
             tickerSource = null
+            weatherTile = null
+            prayerTile = null
             background = getDrawable(R.drawable.radio_player)
             if (mini) gravity = Gravity.CENTER_VERTICAL
             if (full) gravity = Gravity.CENTER
@@ -1473,6 +1547,11 @@ class RadioActivity : ComponentActivity() {
                     ellipsize = TextUtils.TruncateAt.END
                     playerCategory = this
                 }, LinearLayout.LayoutParams(-1, -2))
+                if (television && !mini) {
+                    addView(localInfoBar(), LinearLayout.LayoutParams(-1, dp(if (compactTv) 44 else 52)).apply {
+                        topMargin = dp(4)
+                    })
+                }
                 addView(artworkFrame, LinearLayout.LayoutParams(when {
                     stackedPresentation -> -1
                     tightSidePlayer -> dp(35)
@@ -2069,12 +2148,9 @@ class RadioActivity : ComponentActivity() {
         if (television) {
             val publisher = StationNews.forStation(station)
             if (stationPublisher.value != publisher) {
+                stationPublisher.value = publisher
                 stationHeadlines.value = publisher?.let(stationNews::get)?.takeIf { it.expiresAt > SystemClock.elapsedRealtime() }
                     ?.headlines.orEmpty()
-                stationPublisher.value = publisher
-                if (NewsPublisher.entries.any { it.badge == tickerBulletin.source }) {
-                    setTickerBulletin(Bulletin("INFOS", "Chargement…"))
-                }
             }
         }
         val luxe = if (station == Stations.luxe) luxeState() else null
