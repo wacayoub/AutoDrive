@@ -503,10 +503,14 @@ class RadioActivity : ComponentActivity() {
     private fun layoutLabel(layout: DisplayLayout): String =
         if (!television && layout == DisplayLayout.GUIDE) "Guide" else layout.label
 
+    private fun choiceDialog(title: String): AlertDialog.Builder =
+        if (tightLandscape) AlertDialog.Builder(this, R.style.RadioCompactAlert)
+        else AlertDialog.Builder(this).setTitle(title)
+
     private fun showDisplayMenu() {
         val layouts = DisplayLayout.entries
-        AlertDialog.Builder(this)
-            .setTitle(if (television) "Affichage TV" else "Affichage")
+        val title = if (television) "Affichage TV" else "Affichage"
+        choiceDialog(title)
             .setSingleChoiceItems(layouts.map(::layoutLabel).toTypedArray(), displayLayout.ordinal) { dialog, index ->
                 dialog.dismiss()
                 val layout = layouts[index]
@@ -834,7 +838,8 @@ class RadioActivity : ComponentActivity() {
         val splitListening = full && landscape && !television
         val compactSidePlayer = wide && shortLandscape && !full
         val tightSidePlayer = compactSidePlayer && tightLandscape
-        val stackedPresentation = wide && !tightSidePlayer
+        val tightListening = splitListening && tightLandscape
+        val stackedPresentation = wide && !tightSidePlayer && !tightListening
         return (if (horizontalMini || splitListening) row() else column()).apply {
             playerCategory = null
             background = getDrawable(R.drawable.radio_player)
@@ -849,6 +854,7 @@ class RadioActivity : ComponentActivity() {
                 val height = resources.configuration.screenHeightDp
                 when {
                     television -> (height - if (compactTv) 298 else 365).coerceIn(48, 140)
+                    tightListening -> 42
                     splitListening -> (height / 3).coerceIn(48, 144)
                     else -> (height / 4).coerceIn(75, 176)
                 }
@@ -856,7 +862,7 @@ class RadioActivity : ComponentActivity() {
             val presentation = (if (stackedPresentation) column() else row()).apply {
                 playerPanel = this
                 gravity = if (stackedPresentation) Gravity.CENTER else Gravity.START or Gravity.CENTER_VERTICAL
-                if (wide && !compactSidePlayer) addView(label("", if (television && !compactTv) 13 else 11, accent, bold = true).apply {
+                if (stackedPresentation && !compactSidePlayer) addView(label("", if (television && !compactTv) 13 else 11, accent, bold = true).apply {
                     gravity = Gravity.CENTER
                     letterSpacing = .08f
                     maxLines = 1
@@ -887,7 +893,12 @@ class RadioActivity : ComponentActivity() {
                 addView(FrameLayout(context).apply {
                     addView(PremiumRadioMotif(context), FrameLayout.LayoutParams(-1, -1))
                     addView(playerArtwork, FrameLayout.LayoutParams(artworkSize, artworkSize, Gravity.CENTER))
-                }, LinearLayout.LayoutParams(if (stackedPresentation) -1 else dp(if (tightSidePlayer) 31 else 76), motifHeight).apply {
+                }, LinearLayout.LayoutParams(when {
+                    stackedPresentation -> -1
+                    tightSidePlayer -> dp(31)
+                    tightListening -> dp(52)
+                    else -> dp(76)
+                }, motifHeight).apply {
                     if (stackedPresentation) {
                         topMargin = dp(if (compactSidePlayer) 2 else if (compactLandscape) 4 else 5)
                         bottomMargin = dp(if (compactSidePlayer) 2 else if (compactLandscape) 4 else 6)
@@ -896,6 +907,7 @@ class RadioActivity : ComponentActivity() {
                 val alignment = if (stackedPresentation) View.TEXT_ALIGNMENT_CENTER else View.TEXT_ALIGNMENT_VIEW_START
                 addView(column().apply {
                     val titleSize = when {
+                        tightListening -> 18
                         full -> if (shortLandscape) 23 else if (compactTv || !television) 26 else 36
                         !wide -> 17
                         tightSidePlayer -> 13
@@ -1497,8 +1509,7 @@ class RadioActivity : ComponentActivity() {
 
     private fun showCarStartup() {
         val modes = CarResume.entries
-        AlertDialog.Builder(this)
-            .setTitle("Démarrage voiture")
+        choiceDialog("Démarrage voiture")
             .setSingleChoiceItems(modes.map { it.label }.toTypedArray(), carResume().ordinal) { dialog, index ->
                 prefs.edit().putString("car_resume_mode", modes[index].name).apply {
                     if (modes[index] == CarResume.AFTER_BOOT) {
@@ -1517,8 +1528,7 @@ class RadioActivity : ComponentActivity() {
     private fun showAppearance() {
         val appearance = Appearance.restore(prefs)
         val options = Appearance.entries
-        AlertDialog.Builder(this)
-            .setTitle("Apparence")
+        choiceDialog("Apparence")
             .setSingleChoiceItems(options.map { it.label }.toTypedArray(), appearance.ordinal) { dialog, index ->
                 dialog.dismiss()
                 val selected = options[index]
