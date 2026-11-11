@@ -26,7 +26,7 @@ python tools/github_release.py --radio-maroc --apk radio-maroc/build/outputs/apk
 
 ## Écoute
 
-Dans **Affichage → Jour / Nuit** (**Affichage TV** sur Android TV), choisis **Jour** pour le thème ivoire et vert, **Nuit** pour le thème sombre ou **Système** pour suivre le réglage d’Android. La radio mémorise ce choix pour les trois vues.
+Dans **Affichage → Jour / Nuit** (**Affichage TV** sur Android TV), choisis **Jour** pour le thème blanc et bleu cobalt, **Nuit** pour le thème sombre ou **Système** pour suivre le réglage d’Android. La radio mémorise ce choix pour les trois vues.
 
 Le thème graphite et turquoise regroupe les radios, le Coran et les favoris dans une barre de catégories avec icônes. Sur l’Incarlink, le lecteur occupe la colonne de gauche et les catégories commencent au bord de la liste. En portrait, les commandes restent en bas de l’écran.
 
