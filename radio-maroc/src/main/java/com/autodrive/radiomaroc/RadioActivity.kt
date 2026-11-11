@@ -449,8 +449,9 @@ class RadioActivity : ComponentActivity() {
             maxLines = 1
             ellipsize = TextUtils.TruncateAt.END
             setAutoSizeTextTypeUniformWithConfiguration(11, if (compactTv) 15 else 18, 1, TypedValue.COMPLEX_UNIT_SP)
-            gravity = if (sidebar) Gravity.START or Gravity.CENTER_VERTICAL else Gravity.CENTER
-            setPadding(dp(9), 0, dp(5), 0)
+            gravity = Gravity.START or Gravity.CENTER_VERTICAL
+            textAlignment = View.TEXT_ALIGNMENT_VIEW_START
+            setPadding(dp(12), 0, dp(5), 0)
             setCompoundDrawablesRelativeWithIntrinsicBounds(icon, 0, 0, 0)
             compoundDrawableTintList = getColorStateList(R.color.radio_tab_icon)
             compoundDrawablePadding = dp(6)
@@ -812,8 +813,8 @@ class RadioActivity : ComponentActivity() {
             if (mini) gravity = Gravity.CENTER_VERTICAL
             if (full) gravity = Gravity.CENTER
             val padding = dp(if (shortLandscape) 7 else if (compactTv) 10 else if (television) 16 else 12)
-            val topPadding = if (mini) 3 else if (television && !compactTv) 12 else 8
-            val bottomPadding = if (mini) 3 else if (television && !compactTv) 14 else 8
+            val topPadding = if (mini || compactSidePlayer) 3 else if (television && !compactTv) 12 else 8
+            val bottomPadding = if (mini || compactSidePlayer) 3 else if (television && !compactTv) 14 else 8
             setPadding(padding, dp(topPadding), padding, dp(bottomPadding))
             val compactLandscape = compactTv || (wide && resources.configuration.screenHeightDp < 420)
             val listeningArtwork = if (full) {
