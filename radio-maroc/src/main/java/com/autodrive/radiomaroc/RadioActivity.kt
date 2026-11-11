@@ -4,6 +4,7 @@ import android.animation.ObjectAnimator
 import android.animation.ValueAnimator
 import android.app.AlertDialog
 import android.app.SearchManager
+import android.content.ActivityNotFoundException
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -612,6 +613,7 @@ class RadioActivity : ComponentActivity() {
             "Jour / Nuit" to ::showAppearance,
             "Effets sonores" to ::showSoundEffects,
             "Démarrage voiture" to ::showCarStartup,
+            "Scores en direct" to ::showLiveScores,
             "Mises à jour" to radioUpdates::show,
         )
         if (television) actions.add(1, "Infos TV" to ::showTvInfo)
@@ -619,6 +621,24 @@ class RadioActivity : ComponentActivity() {
         menu
             .setItems(actions.map { it.first }.toTypedArray()) { _, index -> actions[index].second() }
             .show()
+    }
+
+    private fun showLiveScores() {
+        val pages = listOf(
+            "Matchs en direct" to "https://www.fotmob.com/?show=ongoing",
+            "Botola Pro" to "https://www.fotmob.com/fr/leagues/530/fixtures/botola-pro",
+        )
+        val dialog = choiceDialog("Scores en direct · FotMob")
+            .setItems(pages.map { it.first }.toTypedArray()) { _, index ->
+                val link = Intent(Intent.ACTION_VIEW, pages[index].second.toUri()).addCategory(Intent.CATEGORY_BROWSABLE)
+                try {
+                    startActivity(link)
+                } catch (_: ActivityNotFoundException) {
+                    Toast.makeText(this, "FotMob ou un navigateur est nécessaire pour ouvrir les scores.",
+                        Toast.LENGTH_LONG).show()
+                }
+            }.setNegativeButton("Fermer", null).show()
+        if (television) dialog.listView.requestFocus()
     }
 
     private fun showSoundEffects() {
