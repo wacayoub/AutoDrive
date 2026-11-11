@@ -471,6 +471,16 @@ class RadioActivity : ComponentActivity() {
         addView(masthead, LinearLayout.LayoutParams(-1, mastheadHeight).apply { bottomMargin = dp(4) })
         val hideWhileTyping = mutableListOf<View>(masthead)
         addView(layoutContent(hideWhileTyping), LinearLayout.LayoutParams(-1, 0, 1f))
+        if (television) {
+            val footer = newsBar()
+            addView(footer, LinearLayout.LayoutParams(-1, dp(if (compactTv) 42 else 48)).apply {
+                topMargin = dp(6)
+            })
+            for (control in listOfNotNull(previous, playButton, next, playerFavorite)) {
+                control.nextFocusDownId = footer.id
+            }
+            footer.nextFocusUpId = playButton.id
+        }
         setOnApplyWindowInsetsListener { view, insets ->
             val keyboard = WindowInsets.Type.ime()
             val edges = insets.getInsets(WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout() or keyboard)
@@ -1220,6 +1230,7 @@ class RadioActivity : ComponentActivity() {
     }
 
     private fun newsBar(): View = row().apply {
+        id = View.generateViewId()
         layoutDirection = View.LAYOUT_DIRECTION_LTR
         gravity = Gravity.CENTER_VERTICAL
         background = pressable(R.drawable.radio_control)
@@ -1227,14 +1238,14 @@ class RadioActivity : ComponentActivity() {
         contentDescription = "Infos TV · Actualités, météo et salat"
         remoteFocus()
         setRadioClick(::showTvInfo)
-        val source = label(tickerBulletin.source, if (compactTv) 11 else 12, getColor(R.color.radio_news_badge), bold = true).apply {
+        val source = label(tickerBulletin.source, if (compactTv) 12 else 14, getColor(R.color.radio_news_badge), bold = true).apply {
             gravity = Gravity.CENTER
             background = getDrawable(R.drawable.radio_news_badge)
         }
         tickerSource = source
-        addView(source, LinearLayout.LayoutParams(dp(if (compactTv) 46 else 52), dp(if (compactTv) 23 else 26))
-            .apply { marginStart = dp(4) })
-        val ticker = HeadlineTicker(context, if (compactTv) 13 else 15, textColor).apply {
+        addView(source, LinearLayout.LayoutParams(dp(if (compactTv) 52 else 62), dp(if (compactTv) 26 else 30))
+            .apply { marginStart = dp(6) })
+        val ticker = HeadlineTicker(context, if (compactTv) 16 else 19, textColor).apply {
             showHeadline(tickerBulletin, tickerStartedAt, tickerDuration)
         }
         newsTicker = ticker
@@ -1564,8 +1575,6 @@ class RadioActivity : ComponentActivity() {
         val stackedPresentation = wide && !tightSidePlayer && !tightListening
         return (if (horizontalMini || splitListening) row() else column()).apply {
             playerCategory = null
-            newsTicker = null
-            tickerSource = null
             weatherTile = null
             prayerTile = null
             background = getDrawable(R.drawable.radio_player)
@@ -1680,10 +1689,6 @@ class RadioActivity : ComponentActivity() {
                         ellipsize = TextUtils.TruncateAt.END
                     }
                     addView(playerSubtitle, LinearLayout.LayoutParams(-1, -2))
-                    if (television && !mini) {
-                        addView(newsBar(), LinearLayout.LayoutParams(-1, dp(if (compactTv) 34 else 40))
-                            .apply { topMargin = dp(4) })
-                    }
                 }, if (stackedPresentation) LinearLayout.LayoutParams(-1, -2) else LinearLayout.LayoutParams(0, -2, 1f))
             }
             val presentationSize = when {

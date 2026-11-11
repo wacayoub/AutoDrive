@@ -15,10 +15,10 @@ import kotlin.math.ceil
 
 internal class HeadlineTicker(context: Context, size: Int, textColor: Int) : TextView(context) {
     private val density = resources.displayMetrics.density
-    private val entrance = 16f * density
+    private val viewport get() = width - paddingLeft - paddingRight
     private var drawing: StaticLayout? = null
     private var startedAt = 0L
-    private var scrollMillis = 1L
+    private var displayMillis = 0L
     private var isArticle = false
 
     init {
@@ -30,20 +30,21 @@ internal class HeadlineTicker(context: Context, size: Int, textColor: Int) : Tex
         includeFontPadding = false
         maxLines = 2
         ellipsize = TextUtils.TruncateAt.END
-        val padding = (7 * density).toInt()
+        val padding = (10 * density).toInt()
         setPadding(padding, 0, padding, 0)
     }
 
     fun durationFor(bulletin: NewsBulletin): Long {
         if (!ValueAnimator.areAnimatorsEnabled()) return 10_000L
-        val travelDp = (measuredWidth(scrollingText(bulletin.text)) + entrance) / density
-        return (travelDp / SCROLL_DP_PER_SECOND * 1_000).toLong().coerceIn(5_500L, MAX_SCROLL_MILLIS)
+        val overflow = measuredWidth(bulletin.text) - viewport
+        if (bulletin.url == null || viewport <= 0 || overflow <= 0) return STATIC_MILLIS
+        return (START_PAUSE + travelTime(overflow) + END_PAUSE).coerceIn(STATIC_MILLIS, MAX_DISPLAY_MILLIS)
     }
 
     fun showHeadline(bulletin: NewsBulletin, start: Long, duration: Long) {
         isArticle = bulletin.url != null
         startedAt = start
-        scrollMillis = duration.coerceAtLeast(1L)
+        displayMillis = duration
         text = bulletin.text
         prepareDrawing()
         invalidate()
@@ -55,9 +56,10 @@ internal class HeadlineTicker(context: Context, size: Int, textColor: Int) : Tex
     }
 
     private fun prepareDrawing() {
-        val viewport = width - paddingLeft - paddingRight
-        drawing = if (isArticle && viewport > 0) {
-            val headline = scrollingText(text)
+        drawing = if (isArticle && viewport > 0 && measuredWidth(text) > viewport) {
+            val scrollBudget = (displayMillis - START_PAUSE - END_PAUSE).coerceAtLeast(0L)
+            val maxWidth = viewport + (scrollBudget / 1_000f) * SCROLL_DP_PER_SECOND * density
+            val headline = TextUtils.ellipsize(text, paint, maxWidth - 2, TextUtils.TruncateAt.END)
             StaticLayout.Builder.obtain(headline, 0, headline.length, paint, measuredWidth(headline))
                 .setIncludePad(false)
                 .setMaxLines(1)
@@ -66,13 +68,11 @@ internal class HeadlineTicker(context: Context, size: Int, textColor: Int) : Tex
         } else null
     }
 
-    private fun scrollingText(headline: CharSequence): CharSequence {
-        val maxWidth = SCROLL_DP_PER_SECOND * (MAX_SCROLL_MILLIS / 1_000f) * density - entrance
-        return TextUtils.ellipsize(headline, paint, maxWidth, TextUtils.TruncateAt.END)
-    }
-
     private fun measuredWidth(headline: CharSequence): Int =
         ceil(Layout.getDesiredWidth(headline, paint)).toInt() + 2
+
+    private fun travelTime(overflow: Int): Long =
+        (overflow / density / SCROLL_DP_PER_SECOND * 1_000f).toLong()
 
     override fun onDraw(canvas: Canvas) {
         val headline = drawing
@@ -81,24 +81,26 @@ internal class HeadlineTicker(context: Context, size: Int, textColor: Int) : Tex
             return
         }
         val elapsed = SystemClock.uptimeMillis() - startedAt
-        val fraction = (elapsed.toFloat() / scrollMillis).coerceIn(0f, 1f)
-        val viewport = width - paddingLeft - paddingRight
-        val travel = headline.width + entrance
-        val left = entrance - fraction * travel
-        val offset = if (headline.getParagraphDirection(0) < 0) viewport - headline.width - left else left
+        val travel = (headline.width - viewport).coerceAtLeast(0)
+        val duration = travelTime(travel).coerceAtLeast(1L)
+        val fraction = ((elapsed - START_PAUSE).toFloat() / duration).coerceIn(0f, 1f)
+        val offset = -travel * if (headline.getParagraphDirection(0) < 0) 1f - fraction else fraction
         canvas.save()
         canvas.clipRect(paddingLeft, 0, width - paddingRight, height)
         canvas.translate(paddingLeft + offset, (height - headline.height) / 2f)
         paint.color = currentTextColor
         headline.draw(canvas)
         canvas.restore()
-        if (elapsed < scrollMillis && isShown && windowVisibility == VISIBLE) {
-            postInvalidateDelayed(32L)
+        if (elapsed < START_PAUSE + duration && isShown && windowVisibility == VISIBLE) {
+            postInvalidateDelayed(if (elapsed < START_PAUSE) START_PAUSE - elapsed else 32L)
         }
     }
 
     private companion object {
         const val SCROLL_DP_PER_SECOND = 32f
-        const val MAX_SCROLL_MILLIS = 25_000L
+        const val STATIC_MILLIS = 8_000L
+        const val MAX_DISPLAY_MILLIS = 25_000L
+        const val START_PAUSE = 1_600L
+        const val END_PAUSE = 1_200L
     }
 }
