@@ -69,6 +69,10 @@ import com.autodrive.launcher.RadioQueue
 import com.autodrive.launcher.RadioStation
 import com.google.common.util.concurrent.ListenableFuture
 import kotlinx.coroutines.Job
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
+import java.util.Locale
 
 class RadioActivity : ComponentActivity() {
     private val dolbyPanel by lazy { DolbyPanel.find(this) }
@@ -155,7 +159,6 @@ class RadioActivity : ComponentActivity() {
     private lateinit var playerTitle: TextView
     private lateinit var playerPanel: LinearLayout
     private lateinit var playerSubtitle: TextView
-    private var playerWebsite: TextView? = null
     private var playerCategory: TextView? = null
     private lateinit var playerArtwork: StationArtwork
     private lateinit var playerStatus: TextView
@@ -911,28 +914,91 @@ class RadioActivity : ComponentActivity() {
         dialog.listView.setSelection(0)
     }
 
-    private fun showStationWebsite() {
-        val station = findStation(controller?.currentMediaItem?.mediaId) ?: savedStation ?: return
-        val website = StationWebsites.forStation(station) ?: return
-        val dialog = AlertDialog.Builder(this)
-            .setTitle(station.name)
-            .setMessage("Chargement des informations du site…")
-            .setPositiveButton("Fermer", null)
-            .setNeutralButton("Ouvrir le site") { _, _ ->
-                runCatching { startActivity(Intent(Intent.ACTION_VIEW, website.toUri())) }
-                    .onFailure { Toast.makeText(this, "Navigateur indisponible", Toast.LENGTH_SHORT).show() }
-            }.show()
-        dialog.window?.setBackgroundDrawableResource(R.drawable.radio_dialog)
-        val request = lifecycleScope.launch {
-            val information = withContext(Dispatchers.IO) {
-                runCatching { StationWebsites.information(station) }.getOrNull()
-            }
-            if (dialog.isShowing) {
-                dialog.setMessage(listOf(website.toUri().host, information ?: "Informations du site indisponibles.")
-                    .joinToString("\n\n"))
+    private fun showNews() {
+        val dateFormat = DateTimeFormatter.ofLocalizedDateTime(FormatStyle.SHORT)
+            .withLocale(Locale.FRENCH).withZone(ZoneId.systemDefault())
+        val cache = mutableMapOf<NewsTopic, List<NewsHeadline>>()
+        var request: Job? = null
+        val status = label("", 14, muted).apply { gravity = Gravity.CENTER }
+        val headlines = object : ArrayAdapter<NewsHeadline>(this, android.R.layout.simple_list_item_1) {
+            override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
+                val article = requireNotNull(getItem(position))
+                return ((convertView as? TextView) ?: label("", 15, textColor).apply {
+                    gravity = Gravity.CENTER_VERTICAL
+                    setPadding(dp(10), dp(8), dp(10), dp(8))
+                    minHeight = dp(48)
+                    maxLines = 3
+                    ellipsize = TextUtils.TruncateAt.END
+                }).apply { text = article.title }
             }
         }
-        dialog.setOnDismissListener { request.cancel() }
+        val list = ListView(this).apply {
+            id = View.generateViewId()
+            adapter = headlines
+            setSelector(R.drawable.radio_focus)
+            setOnItemClickListener { _, _, position, _ ->
+                val article = requireNotNull(headlines.getItem(position))
+                val source = listOfNotNull("RFI", article.publishedAt?.let(dateFormat::format)).joinToString(" · ")
+                AlertDialog.Builder(this@RadioActivity).setTitle(article.title)
+                    .setMessage(listOfNotNull(source, article.summary).joinToString("\n\n"))
+                    .setPositiveButton("Retour", null)
+                    .setNeutralButton("Lire sur RFI") { _, _ ->
+                        runCatching { startActivity(Intent(Intent.ACTION_VIEW, article.url.toUri())) }
+                            .onFailure { Toast.makeText(this@RadioActivity, "Navigateur indisponible", Toast.LENGTH_SHORT).show() }
+                    }.show().window?.setBackgroundDrawableResource(R.drawable.radio_dialog)
+            }
+        }
+        val buttons = mutableMapOf<NewsTopic, TextView>()
+        fun load(topic: NewsTopic) {
+            request?.cancel()
+            buttons.forEach { (choice, control) ->
+                control.isSelected = choice == topic
+                control.setTextColor(if (choice == topic) accent else textColor)
+            }
+            list.nextFocusUpId = buttons.getValue(topic).id
+            headlines.clear()
+            list.setSelection(0)
+            cache[topic]?.let {
+                headlines.addAll(it)
+                return
+            }
+            status.text = "Chargement des titres…"
+            request = lifecycleScope.launch {
+                val articles = withContext(Dispatchers.IO) { runCatching { RadioNews.fetch(topic) }.getOrDefault(emptyList()) }
+                if (articles.isEmpty()) {
+                    status.text = "Titres indisponibles. Sélectionne la rubrique pour réessayer."
+                } else {
+                    cache[topic] = articles
+                    headlines.addAll(articles)
+                }
+            }
+        }
+        val content = column().apply {
+            setPadding(dp(16), dp(4), dp(16), 0)
+            addView(row().apply {
+                NewsTopic.entries.forEach { topic ->
+                    val control = button(topic.label) { load(topic) }.apply {
+                        id = View.generateViewId()
+                        textSize = 12f
+                        maxLines = 1
+                        nextFocusDownId = list.id
+                    }
+                    buttons[topic] = control
+                    addView(control, LinearLayout.LayoutParams(0, -1, 1f).apply { marginEnd = dp(4) })
+                }
+            }, LinearLayout.LayoutParams(-1, dp(40)))
+            addView(FrameLayout(context).apply {
+                addView(list, FrameLayout.LayoutParams(-1, -1))
+                addView(status, FrameLayout.LayoutParams(-1, -1))
+                list.emptyView = status
+            }, LinearLayout.LayoutParams(-1, dp(if (compactTv) 150 else 240)).apply { topMargin = dp(6) })
+        }
+        val dialog = AlertDialog.Builder(this).setTitle("Actualités · RFI").setView(content)
+            .setPositiveButton("Fermer", null).show()
+        dialog.window?.setBackgroundDrawableResource(R.drawable.radio_dialog)
+        dialog.setOnDismissListener { request?.cancel() }
+        load(NewsTopic.WORLD)
+        buttons.getValue(NewsTopic.WORLD).requestFocus()
     }
 
     private fun chooseSort() {
@@ -1039,7 +1105,6 @@ class RadioActivity : ComponentActivity() {
         val stackedPresentation = wide && !tightSidePlayer && !tightListening
         return (if (horizontalMini || splitListening) row() else column()).apply {
             playerCategory = null
-            playerWebsite = null
             background = getDrawable(R.drawable.radio_player)
             if (mini) gravity = Gravity.CENTER_VERTICAL
             if (full) gravity = Gravity.CENTER
@@ -1139,13 +1204,12 @@ class RadioActivity : ComponentActivity() {
                     }
                     addView(playerSubtitle, LinearLayout.LayoutParams(-1, -2))
                     if (television && !mini) {
-                        playerWebsite = button("", ::showStationWebsite).apply {
+                        val news = button("Actualités · RFI", ::showNews).apply {
                             textSize = if (compactTv) 11f else 13f
                             maxLines = 1
                             ellipsize = TextUtils.TruncateAt.END
-                            visibility = View.GONE
                         }
-                        addView(playerWebsite, LinearLayout.LayoutParams(-1, dp(if (compactTv) 28 else 32))
+                        addView(news, LinearLayout.LayoutParams(-1, dp(if (compactTv) 28 else 32))
                             .apply { topMargin = dp(4) })
                     }
                 }, if (stackedPresentation) LinearLayout.LayoutParams(-1, -2) else LinearLayout.LayoutParams(0, -2, 1f))
@@ -1724,12 +1788,6 @@ class RadioActivity : ComponentActivity() {
             listOfNotNull(it.title, it.hours, it.source.takeIf { playerCategory == null }).joinToString(" · ")
         } ?: station?.let(Stations::subtitle).orEmpty()
         playerSubtitle.visibility = if (playerSubtitle.text.isEmpty()) View.GONE else View.VISIBLE
-        playerWebsite?.apply {
-            val website = station?.let(StationWebsites::forStation)
-            visibility = if (website == null) View.GONE else View.VISIBLE
-            text = website?.let { "Site · ${it.toUri().host?.removePrefix("www.")}" }.orEmpty()
-            contentDescription = station?.let { "Informations du site officiel · ${it.name}" }
-        }
         playerArtwork.bind(station)
         playerStatus.visibility = if (live) View.GONE else View.VISIBLE
         playerStatus.text = when {

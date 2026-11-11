@@ -21,4 +21,4 @@ Vérification pour Radio Maroc & Coran 2.5.16, le 11 novembre 2026. Les sondes o
 
 Le catalogue local comprend 59 entrées dans Radio Maroc, avec les résultats supplémentaires de l’annuaire selon le réseau. Le menu Genres propose les radios régionales, les entrées communautaires et la musique arabe, avec des filtres Fayrouz, Tarab, Chaâbi, Andalou et Scène marocaine. Amazigh a son propre filtre.
 
-Le bouton Site du lecteur TV affiche les informations d’un site officiel identifié. Aswat fournit la grille du jour selon l’heure du Maroc. SNRT et 2M fournissent l’émission publiée quand elle est disponible. Pour les autres sites référencés, la fiche affiche la description officielle lorsque le site en publie une. [Grille Aswat](https://radioaswat.ma/), [SNRT Live](https://snrtlive.ma/), [Radio 2M](https://radio2m.ma/le-direct/)
+À partir de 2.5.17, le bouton Actualités du lecteur TV affiche les titres et résumés publiés par RFI dans cinq rubriques. La lecture de la radio continue pendant la consultation. [Mode d’emploi des fils RSS de RFI](https://www1.rfi.fr/actufr/articles/072/article_40497.asp)
