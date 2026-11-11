@@ -116,7 +116,8 @@ class RadioActivity : ComponentActivity() {
     private var tab = StationTab.MOROCCO
     private var displayLayout = DisplayLayout.GUIDE
     private var catalogueLayout = DisplayLayout.GUIDE
-    private var catalogueStation: String? = null
+    private var catalogueFocusStation: String? = null
+    private var revealCatalogueSelection = true
     private lateinit var menuButton: TextView
     private lateinit var catalogueButton: TextView
     private var radioFavoritesOnly = false
@@ -212,7 +213,7 @@ class RadioActivity : ComponentActivity() {
         displayLayout = DisplayLayout.restore(savedInstanceState?.getString("display_screen") ?: prefs.getString(DISPLAY_LAYOUT, null))
         catalogueLayout = DisplayLayout.restore(prefs.getString(CATALOGUE_LAYOUT, null))
             .takeUnless { it == DisplayLayout.LISTENING } ?: DisplayLayout.GUIDE
-        catalogueStation = savedInstanceState?.getString("catalogue_station")
+        catalogueFocusStation = savedInstanceState?.getString("catalogue_station")
         onBackPressedDispatcher.addCallback(this, returnFromListening)
         returnFromListening.isEnabled = !showingCatalogue
         volumeControlStream = android.media.AudioManager.STREAM_MUSIC
@@ -220,7 +221,7 @@ class RadioActivity : ComponentActivity() {
         setContentView(screen())
         window.decorView.addOnUnhandledKeyEventListener { _, event -> handleStationKey(event) }
         updateDirectory()
-        restoreCataloguePosition()
+        restoreTvCatalogueFocus()
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -229,7 +230,7 @@ class RadioActivity : ComponentActivity() {
         outState.putLong("startup_deadline", startupDeadline)
         if (television) rememberTvFocus()
         outState.putString("display_screen", displayLayout.name)
-        outState.putString("catalogue_station", catalogueStation)
+        outState.putString("catalogue_station", catalogueFocusStation)
         radioUpdates.save(outState)
         super.onSaveInstanceState(outState)
     }
@@ -474,7 +475,7 @@ class RadioActivity : ComponentActivity() {
     }
 
     private fun selectTab(choice: StationTab) {
-        if (tab != choice) catalogueStation = null
+        if (tab != choice) catalogueFocusStation = null
         tab = choice
         prefs.edit().putString("tab", choice.name).apply()
         updateDirectory(resetScroll = true)
@@ -598,9 +599,10 @@ class RadioActivity : ComponentActivity() {
         returnFromListening.isEnabled = !showingCatalogue
         livePulse?.cancel()
         livePulse = null
+        revealCatalogueSelection = true
         setContentView(screen())
         renderRows()
-        restoreCataloguePosition()
+        restoreTvCatalogueFocus()
     }
 
     private fun stationAt(position: Int): RadioStation? = if (displayLayout == DisplayLayout.MOSAIC) {
@@ -610,23 +612,35 @@ class RadioActivity : ComponentActivity() {
     }
 
     private fun rememberTvFocus() {
-        if (showingCatalogue) stationAt(list.selectedItemPosition)?.let { catalogueStation = it.url }
+        if (showingCatalogue) stationAt(list.selectedItemPosition)?.let { catalogueFocusStation = it.url }
     }
 
-    private fun restoreCataloguePosition() {
+    private fun cataloguePosition(stationId: String?): Int = if (stationId == null) -1 else
+        (0 until catalogueAdapter.count).firstOrNull { stationAt(it)?.url == stationId } ?: -1
+
+    private fun restoreTvCatalogueFocus() {
+        if (!television) return
         if (!showingCatalogue) {
-            if (television && !playButton.requestFocus()) catalogueButton.requestFocus()
+            if (!playButton.requestFocus()) catalogueButton.requestFocus()
             return
         }
-        val station = catalogueStation
-        val position = if (station == null) -1 else (0 until catalogueAdapter.count)
-            .firstOrNull { stationAt(it)?.url == station } ?: -1
+        val position = cataloguePosition(catalogueFocusStation)
         if (position >= 0) {
-            if (television) list.requestFocus()
+            list.requestFocus()
             list.setSelection(position)
-        } else if (television) {
+        } else {
             tabs[tab]?.requestFocus()
         }
+    }
+
+    private fun revealCatalogueStation(stationId: String): Boolean {
+        val position = cataloguePosition(stationId)
+        if (position < 0) return false
+        val child = list.getChildAt(position - list.firstVisiblePosition)
+        if (child == null || child.top < list.paddingTop || child.bottom > list.height - list.paddingBottom) {
+            list.setSelectionFromTop(position, 0)
+        }
+        return true
     }
 
     private fun wideColumns(left: View, right: View): LinearLayout = row().apply {
@@ -791,7 +805,7 @@ class RadioActivity : ComponentActivity() {
                         val station = stationAt(position)
                         if (station != null) {
                             RadioSound.playClick(this@RadioActivity, prefs)
-                            catalogueStation = station.url
+                            if (television) catalogueFocusStation = station.url
                             select(station)
                         } else if (inlineDirectoryPage && position == catalogueAdapter.count - 1) {
                             RadioSound.playClick(this@RadioActivity, prefs)
@@ -1332,10 +1346,7 @@ class RadioActivity : ComponentActivity() {
             selectionMark.visibility = if (selected) View.VISIBLE else View.GONE
             contentDescription = "Écouter ${station.name}"
             stateDescription = if (playing) "En écoute" else if (selected) "Sélectionnée" else null
-            if (!television) setRadioClick {
-                catalogueStation = station.url
-                select(station)
-            }
+            if (!television) setRadioClick { select(station) }
             number.text = position.toString().padStart(2, '0')
             number.visibility = if (playing) View.INVISIBLE else View.VISIBLE
             number.setTextColor(if (selected) accent else muted)
@@ -1515,9 +1526,8 @@ class RadioActivity : ComponentActivity() {
         }
         catalogueAdapter.notifyDataSetChanged()
         if (resetScroll) {
-            val catalogue = list
-            if (catalogue is ListView && catalogue.isInTouchMode) catalogue.setSelectionFromTop(0, 0)
-            else catalogue.setSelection(0)
+            revealCatalogueSelection = false
+            if (television) list.setSelection(0) else list.setSelectionFromTop(0, 0)
         }
         renderPlayer()
     }
@@ -1606,10 +1616,15 @@ class RadioActivity : ComponentActivity() {
         enable(previous, player != null && rows.size > 1)
         enable(next, player != null && rows.size > 1)
         playerFavorite?.let { bindFavorite(it, station) }
-        val highlight = (active ?: savedStation?.url) to playing
+        val selectedStationId = active ?: savedStation?.url
+        val stationChanged = highlighted?.first != selectedStationId
+        val highlight = selectedStationId to playing
         if (highlighted != highlight) {
             highlighted = highlight
             if (showingCatalogue) catalogueAdapter.notifyDataSetChanged()
+        }
+        if (!television && showingCatalogue && (stationChanged || revealCatalogueSelection)) {
+            revealCatalogueSelection = selectedStationId != null && !revealCatalogueStation(selectedStationId)
         }
     }
 
