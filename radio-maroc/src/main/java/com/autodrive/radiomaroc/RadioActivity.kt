@@ -59,16 +59,11 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import androidx.media3.common.MediaItem
@@ -174,6 +169,7 @@ class RadioActivity : ComponentActivity() {
     private lateinit var playerTitle: TextView
     private lateinit var playerPanel: LinearLayout
     private lateinit var playerSubtitle: TextView
+    private var newsFooter: View? = null
     private var newsTicker: HeadlineTicker? = null
     private var tickerSource: TextView? = null
     private var clockTime: TextView? = null
@@ -181,11 +177,9 @@ class RadioActivity : ComponentActivity() {
     private val clockTimeFormat = DateTimeFormatter.ofPattern("HH:mm", Locale.ROOT)
     private val clockDateFormat = DateTimeFormatter.ofPattern("EEE d MMM", Locale.FRENCH)
     private val shortClockDateFormat = DateTimeFormatter.ofPattern("dd/MM", Locale.ROOT)
-    private var tickerBulletin = NewsBulletin("ACTUS", "Chargement…")
+    private var tickerBulletin: NewsBulletin? = null
     private var tickerStartedAt = 0L
     private var tickerDuration = 0L
-    private var nextNewsFetchAt = 0L
-    private val newsHeadlines = MutableStateFlow<Map<NewsTopic, List<NewsHeadline>>?>(null)
     private data class NewsEdition(val expiresAt: Long, val headlines: List<NewsHeadline>)
     private val stationPublisher = MutableStateFlow<NewsPublisher?>(null)
     private val stationHeadlines = MutableStateFlow<List<NewsHeadline>>(emptyList())
@@ -283,7 +277,6 @@ class RadioActivity : ComponentActivity() {
             radioCity.value = RadioCity.restore(prefs.getString("tv_info_city", null))
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 launch { rollNewsHeadlines() }
-                launch { refreshRfiHeadlines() }
                 launch { stationPublisher.collectLatest { publisher -> publisher?.let { refreshStationNews(it) } } }
                 launch { radioCity.collectLatest { refreshWeather(it) } }
                 launch { refreshPrayerCalendars() }
@@ -606,13 +599,14 @@ class RadioActivity : ComponentActivity() {
         else AlertDialog.Builder(this).setTitle(title)
 
     private fun showMainMenu() {
-        val actions = listOf(
+        val actions = mutableListOf(
             "Affichage" to ::showDisplayMenu,
             "Jour / Nuit" to ::showAppearance,
             "Effets sonores" to ::showSoundEffects,
             "Démarrage voiture" to ::showCarStartup,
             "Mises à jour" to radioUpdates::show,
         )
+        if (television) actions.add(1, "Infos TV" to ::showTvInfo)
         val menu = if (tightLandscape) AlertDialog.Builder(this, R.style.RadioCompactMenu) else choiceDialog("Menu")
         menu
             .setItems(actions.map { it.first }.toTypedArray()) { _, index -> actions[index].second() }
@@ -1003,51 +997,30 @@ class RadioActivity : ComponentActivity() {
         dialog.listView.setSelection(0)
     }
 
-    private suspend fun refreshRfiHeadlines() {
-        while (true) {
-            if (SystemClock.elapsedRealtime() >= nextNewsFetchAt) {
-                val feeds = coroutineScope {
-                    NewsTopic.entries.map { topic ->
-                        async(Dispatchers.IO) { topic to runCatching { RadioNews.fetch(topic) }.getOrDefault(emptyList()) }
-                    }.awaitAll()
+    private suspend fun rollNewsHeadlines() {
+        combine(stationPublisher, stationHeadlines, StationNews::bulletins)
+            .distinctUntilChanged().collectLatest { edition ->
+                if (edition.isEmpty()) {
+                    tickerBulletin = null
+                    if (newsFooter?.hasFocus() == true) playButton.requestFocus()
+                    newsFooter?.visibility = View.GONE
+                    return@collectLatest
                 }
-                val available = feeds.filter { (_, headlines) -> headlines.isNotEmpty() }.toMap()
-                newsHeadlines.value = newsHeadlines.value.orEmpty() + available
-                val refreshDelay = if (available.size < NewsTopic.entries.size) 180_000L else 900_000L
-                nextNewsFetchAt = SystemClock.elapsedRealtime() + refreshDelay
-            }
-            delay((nextNewsFetchAt - SystemClock.elapsedRealtime()).coerceAtLeast(1L))
-        }
-    }
-
-    private suspend fun rollNewsHeadlines(): Unit = coroutineScope {
-        val rotation = combine(stationPublisher, stationHeadlines, newsHeadlines) { publisher, station, feeds ->
-            val stationItems = station.filter { it.publisher == publisher }
-            if (stationItems.isEmpty() && feeds == null) null else RadioNews.rotation(stationItems, feeds.orEmpty())
-        }.stateIn(this, SharingStarted.Eagerly, null)
-        while (true) {
-            var headlines = rotation.value
-            if (headlines.isNullOrEmpty()) {
-                setTickerBulletin(NewsBulletin("ACTUS", if (headlines == null) "Chargement…" else "Titres indisponibles"))
-                headlines = rotation.first { it != null }
-                if (headlines.isNullOrEmpty()) {
-                    setTickerBulletin(NewsBulletin("ACTUS", "Titres indisponibles"))
-                    headlines = rotation.first { !it.isNullOrEmpty() }
+                newsFooter?.visibility = View.VISIBLE
+                var index = (edition.indexOfFirst { it.url == tickerBulletin?.url } + 1) % edition.size
+                while (true) {
+                    delay(setTickerBulletin(edition[index]))
+                    index = (index + 1) % edition.size
                 }
             }
-            val edition = requireNotNull(headlines)
-            val previous = edition.indexOfFirst { it.url == tickerBulletin.url }
-            val next = edition[(previous + 1) % edition.size]
-            delay(setTickerBulletin(next))
-        }
     }
 
     private fun setTickerBulletin(bulletin: NewsBulletin): Long {
         tickerBulletin = bulletin
         tickerStartedAt = SystemClock.uptimeMillis()
-        tickerDuration = newsTicker?.durationFor(bulletin) ?: 8_000L
+        tickerDuration = newsTicker?.durationFor(bulletin.text) ?: 8_000L
         tickerSource?.text = bulletin.source
-        newsTicker?.showHeadline(bulletin, tickerStartedAt, tickerDuration)
+        newsTicker?.showHeadline(bulletin.text, tickerStartedAt, tickerDuration)
         return tickerDuration
     }
 
@@ -1230,7 +1203,9 @@ class RadioActivity : ComponentActivity() {
     }
 
     private fun newsBar(): View = row().apply {
+        newsFooter = this
         id = View.generateViewId()
+        visibility = if (tickerBulletin == null) View.GONE else View.VISIBLE
         layoutDirection = View.LAYOUT_DIRECTION_LTR
         gravity = Gravity.CENTER_VERTICAL
         background = pressable(R.drawable.radio_control)
@@ -1238,7 +1213,8 @@ class RadioActivity : ComponentActivity() {
         contentDescription = "Infos TV · Actualités, météo et salat"
         remoteFocus()
         setRadioClick(::showTvInfo)
-        val source = label(tickerBulletin.source, if (compactTv) 12 else 14, getColor(R.color.radio_news_badge), bold = true).apply {
+        val source = label(tickerBulletin?.source.orEmpty(), if (compactTv) 12 else 14,
+            getColor(R.color.radio_news_badge), bold = true).apply {
             gravity = Gravity.CENTER
             background = getDrawable(R.drawable.radio_news_badge)
         }
@@ -1246,7 +1222,7 @@ class RadioActivity : ComponentActivity() {
         addView(source, LinearLayout.LayoutParams(dp(if (compactTv) 52 else 62), dp(if (compactTv) 26 else 30))
             .apply { marginStart = dp(6) })
         val ticker = HeadlineTicker(context, if (compactTv) 16 else 19, textColor).apply {
-            showHeadline(tickerBulletin, tickerStartedAt, tickerDuration)
+            tickerBulletin?.let { showHeadline(it.text, tickerStartedAt, tickerDuration) }
         }
         newsTicker = ticker
         addView(ticker, LinearLayout.LayoutParams(0, -1, 1f))
@@ -1335,7 +1311,7 @@ class RadioActivity : ComponentActivity() {
         val dateFormat = DateTimeFormatter.ofLocalizedDateTime(FormatStyle.SHORT)
             .withLocale(Locale.FRENCH).withZone(RadioLocalInfo.moroccoTime)
         val publisher = stationPublisher.value
-        val cache = newsHeadlines.value.orEmpty().toMutableMap()
+        val cache = mutableMapOf<NewsTopic, List<NewsHeadline>>()
         var request: Job? = null
         val status = label("", 14, muted).apply { gravity = Gravity.CENTER }
         val headlines = object : ArrayAdapter<NewsHeadline>(this, android.R.layout.simple_list_item_1) {

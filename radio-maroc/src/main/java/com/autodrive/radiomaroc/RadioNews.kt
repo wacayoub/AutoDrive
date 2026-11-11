@@ -28,32 +28,9 @@ internal data class NewsHeadline(
     val imageUrl: String? = null,
 )
 
-internal data class NewsBulletin(val source: String, val text: String, val url: String? = null)
-
 internal object RadioNews {
     private const val MAX_BYTES = 128 * 1024
     private const val MAX_HEADLINES = 8
-
-    fun rotation(
-        station: List<NewsHeadline>,
-        rfiFeeds: Map<NewsTopic, List<NewsHeadline>>,
-    ): List<NewsBulletin> {
-        val stationBulletins = station.distinctBy { it.url }.take(6)
-            .map { NewsBulletin(it.publisher.badge, it.title, it.url) }
-        val displayedUrls = stationBulletins.mapTo(mutableSetOf()) { it.url }
-        val rfiBulletins = (0 until 3).flatMap { slot ->
-            NewsTopic.entries.mapNotNull { topic ->
-                rfiFeeds[topic]?.getOrNull(slot)?.takeIf { displayedUrls.add(it.url) }
-                    ?.let { NewsBulletin("RFI", "${topic.label} · ${it.title}", it.url) }
-            }
-        }
-        return buildList {
-            for (index in 0 until maxOf(stationBulletins.size, rfiBulletins.size)) {
-                stationBulletins.getOrNull(index)?.let(::add)
-                rfiBulletins.getOrNull(index)?.let(::add)
-            }
-        }
-    }
 
     fun fetch(topic: NewsTopic): List<NewsHeadline> {
         val connection = URI(topic.feedUrl).toURL().openConnection() as HttpURLConnection

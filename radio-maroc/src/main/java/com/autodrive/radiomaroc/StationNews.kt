@@ -23,6 +23,8 @@ internal enum class NewsPublisher(val label: String, val badge: String, val url:
 
 private fun wordpress(host: String) = "https://$host/wp-json/wp/v2/posts?_embed=wp%3Afeaturedmedia&per_page=8"
 
+internal data class NewsBulletin(val source: String, val text: String, val url: String)
+
 internal object StationNews {
     private val dateMedi1 = DateTimeFormatter.ofPattern("dd/MM/uuuu HH:mm")
 
@@ -33,6 +35,16 @@ internal object StationNews {
         station?.name == "Med Radio" -> NewsPublisher.MED_RADIO
         station?.name == "Radio Mars" -> NewsPublisher.RADIO_MARS
         else -> null
+    }
+
+    fun bulletins(publisher: NewsPublisher?, headlines: List<NewsHeadline>): List<NewsBulletin> {
+        if (publisher == null || publisher == NewsPublisher.RFI) return emptyList()
+        return headlines.asSequence()
+            .filter { it.publisher == publisher }
+            .distinctBy { it.url }
+            .take(6)
+            .map { NewsBulletin(publisher.badge, it.title, it.url) }
+            .toList()
     }
 
     fun fetch(publisher: NewsPublisher): List<NewsHeadline> {

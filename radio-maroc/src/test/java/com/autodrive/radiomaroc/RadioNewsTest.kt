@@ -6,25 +6,6 @@ import org.junit.Test
 import java.time.Instant
 
 class RadioNewsTest {
-    @Test fun rotationKeepsRfiAlongsideStationNewsAndSkipsCrossSectionDuplicates() {
-        val world = NewsHeadline("Monde", "https://www.rfi.fr/fr/monde/a", null, null)
-        val sport = NewsHeadline("Sport", "https://www.rfi.fr/fr/sports/b", null, null)
-        val africa = NewsHeadline("Afrique", "https://www.rfi.fr/fr/afrique/c", null, null)
-        val station = listOf(
-            NewsHeadline("Premier titre", "https://radiomars.ma/a", null, null, NewsPublisher.RADIO_MARS),
-            NewsHeadline("Deuxième titre", "https://radiomars.ma/b", null, null, NewsPublisher.RADIO_MARS),
-        )
-        val feeds = mapOf(
-            NewsTopic.WORLD to listOf(world),
-            NewsTopic.SPORT to listOf(sport),
-            NewsTopic.AFRICA to listOf(world, africa),
-        )
-
-        assertEquals(listOf(station[0].url, world.url, station[1].url, sport.url, africa.url),
-            RadioNews.rotation(station, feeds).map { it.url })
-        assertEquals(listOf("RFI", "RFI", "RFI"), RadioNews.rotation(emptyList(), feeds).map { it.source })
-    }
-
     @Test fun parsesOnlyPublishedHeadlinesAndKeepsPlainTextSummaries() {
         val xml = """
             <rss version="2.0" xmlns:media="http://search.yahoo.com/mrss/"><channel><title>RFI</title>

@@ -19,7 +19,6 @@ internal class HeadlineTicker(context: Context, size: Int, textColor: Int) : Tex
     private var drawing: StaticLayout? = null
     private var startedAt = 0L
     private var displayMillis = 0L
-    private var isArticle = false
 
     init {
         textSize = size.toFloat()
@@ -34,18 +33,17 @@ internal class HeadlineTicker(context: Context, size: Int, textColor: Int) : Tex
         setPadding(padding, 0, padding, 0)
     }
 
-    fun durationFor(bulletin: NewsBulletin): Long {
+    fun durationFor(headline: String): Long {
         if (!ValueAnimator.areAnimatorsEnabled()) return 10_000L
-        val overflow = measuredWidth(bulletin.text) - viewport
-        if (bulletin.url == null || viewport <= 0 || overflow <= 0) return STATIC_MILLIS
+        val overflow = measuredWidth(headline) - viewport
+        if (viewport <= 0 || overflow <= 0) return STATIC_MILLIS
         return (START_PAUSE + travelTime(overflow) + END_PAUSE).coerceIn(STATIC_MILLIS, MAX_DISPLAY_MILLIS)
     }
 
-    fun showHeadline(bulletin: NewsBulletin, start: Long, duration: Long) {
-        isArticle = bulletin.url != null
+    fun showHeadline(headline: String, start: Long, duration: Long) {
         startedAt = start
         displayMillis = duration
-        text = bulletin.text
+        text = headline
         prepareDrawing()
         invalidate()
     }
@@ -56,7 +54,7 @@ internal class HeadlineTicker(context: Context, size: Int, textColor: Int) : Tex
     }
 
     private fun prepareDrawing() {
-        drawing = if (isArticle && viewport > 0 && measuredWidth(text) > viewport) {
+        drawing = if (viewport > 0 && measuredWidth(text) > viewport) {
             val scrollBudget = (displayMillis - START_PAUSE - END_PAUSE).coerceAtLeast(0L)
             val maxWidth = viewport + (scrollBudget / 1_000f) * SCROLL_DP_PER_SECOND * density
             val headline = TextUtils.ellipsize(text, paint, maxWidth - 2, TextUtils.TruncateAt.END)

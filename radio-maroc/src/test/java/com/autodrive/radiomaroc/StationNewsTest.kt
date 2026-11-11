@@ -6,6 +6,18 @@ import org.junit.Test
 import java.time.Instant
 
 class StationNewsTest {
+    @Test fun bannerShowsOnlyUniqueHeadlinesFromTheSelectedStation() {
+        val station = NewsHeadline("Titre de la station", "https://radiomars.ma/a", null, null, NewsPublisher.RADIO_MARS)
+        val other = NewsHeadline("Autre station", "https://snrtnews.com/article/b", null, null, NewsPublisher.SNRT)
+        val rfi = NewsHeadline("Titre RFI", "https://www.rfi.fr/fr/monde/a", null, null)
+        val headlines = listOf(station, rfi, other, station)
+
+        assertEquals(listOf(NewsBulletin("MARS", station.title, station.url)),
+            StationNews.bulletins(NewsPublisher.RADIO_MARS, headlines))
+        assertEquals(emptyList<NewsBulletin>(), StationNews.bulletins(null, headlines))
+        assertEquals(emptyList<NewsBulletin>(), StationNews.bulletins(NewsPublisher.RFI, headlines))
+    }
+
     @Test fun readsMedi1TitlesAndAuthorisedPhotos() {
         val headlines = StationNews.parse(NewsPublisher.MEDI1, """[
           {"id":"415345","titre":"Nouvelles du monde","langue":"fr","image":"https://img.medi1tv.com/photo.webp",
