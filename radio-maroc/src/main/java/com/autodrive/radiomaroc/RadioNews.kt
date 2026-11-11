@@ -19,7 +19,14 @@ internal enum class NewsTopic(val label: String, private val section: String) {
     val feedUrl: String get() = "https://www.rfi.fr/fr/$section/rss"
 }
 
-internal data class NewsHeadline(val title: String, val url: String, val publishedAt: Instant?, val summary: String?)
+internal data class NewsHeadline(
+    val title: String,
+    val url: String,
+    val publishedAt: Instant?,
+    val summary: String?,
+    val publisher: NewsPublisher = NewsPublisher.RFI,
+    val imageUrl: String? = null,
+)
 
 internal object RadioNews {
     private const val MAX_BYTES = 128 * 1024
@@ -55,7 +62,9 @@ internal object RadioNews {
                 val summary = item.selectFirst("> description")?.text()?.let {
                     Jsoup.parseBodyFragment(it).text().takeIf(String::isNotBlank)
                 }?.let { if (it.length <= 420) it else it.take(420).substringBeforeLast(' ') + "…" }
-                NewsHeadline(title, url, date, summary)
+                val photo = item.selectFirst("media|thumbnail")?.attr("url")
+                    ?.let { StationNews.publisherUrl(it, setOf("s.rfi.fr")) }
+                NewsHeadline(title, url, date, summary, imageUrl = photo)
             }
             .distinctBy { it.url }
             .take(MAX_HEADLINES)

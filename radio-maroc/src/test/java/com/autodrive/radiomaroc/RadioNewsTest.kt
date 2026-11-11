@@ -8,12 +8,13 @@ import java.time.Instant
 class RadioNewsTest {
     @Test fun parsesOnlyPublishedHeadlinesAndKeepsPlainTextSummaries() {
         val xml = """
-            <rss version="2.0"><channel><title>RFI</title>
+            <rss version="2.0" xmlns:media="http://search.yahoo.com/mrss/"><channel><title>RFI</title>
               <item>
                 <title><![CDATA[Maroc & Europe]]></title>
                 <link>https://www.rfi.fr/fr/afrique/actualite</link>
                 <pubDate>Wed, 11 Nov 2026 15:20:50 GMT</pubDate>
                 <description><![CDATA[<p>Le point sur <strong>l’actualité</strong>.</p>]]></description>
+                <media:thumbnail url="https://s.rfi.fr/media/article.jpg"/>
               </item>
               <item><title>Doublon</title><link>https://www.rfi.fr/fr/afrique/actualite</link></item>
               <item><title>Lien étranger</title><link>https://www.rfi.fr.example/fr/sport</link></item>
@@ -22,7 +23,8 @@ class RadioNewsTest {
             </channel></rss>
         """.trimIndent()
         assertEquals(listOf(NewsHeadline("Maroc & Europe", "https://www.rfi.fr/fr/afrique/actualite",
-            Instant.parse("2026-11-11T15:20:50Z"), "Le point sur l’actualité.")), RadioNews.parse(xml))
+            Instant.parse("2026-11-11T15:20:50Z"), "Le point sur l’actualité.",
+            imageUrl = "https://s.rfi.fr/media/article.jpg")), RadioNews.parse(xml))
     }
 
     @Test fun capsTheHeadlinesAndHandlesMissingDates() {
