@@ -21,9 +21,18 @@ class RadioLocalInfoTest {
         val today = calendar.prayers(RadioCity.CASABLANCA, date)
         assertEquals(Prayer.entries, today.map { it.prayer })
         assertEquals("12:19", today[1].dateTime.toLocalTime().toString())
-        val next = RadioLocalInfo.nextPrayer(date.atTime(22, 0), today,
-            calendar.prayers(RadioCity.CASABLANCA, date.plusDays(1)))
-        assertEquals(PrayerMoment(Prayer.FAJR, LocalDateTime.of(2026, 11, 2, 5, 19)), next)
+        val tomorrow = calendar.prayers(RadioCity.CASABLANCA, date.plusDays(1))
+        val evening = RadioLocalInfo.prayerStatus(date.atTime(22, 0), emptyList(), today, tomorrow)
+        assertEquals(today.last(), evening.current)
+        assertEquals(PrayerMoment(Prayer.FAJR, LocalDateTime.of(2026, 11, 2, 5, 19)), evening.next)
+        val beforeFajr = RadioLocalInfo.prayerStatus(date.plusDays(1).atTime(3, 0), today, tomorrow, emptyList())
+        assertEquals(today.last(), beforeFajr.current)
+        assertEquals(tomorrow.first(), beforeFajr.next)
+        val atMaghrib = RadioLocalInfo.prayerStatus(date.atTime(17, 40), emptyList(), today, tomorrow)
+        assertEquals(Prayer.MAGHRIB, atMaghrib.current?.prayer)
+        assertEquals(Prayer.ISHA, atMaghrib.next?.prayer)
+        assertEquals(PrayerStatus(date, null, null), RadioLocalInfo.prayerStatus(date.atStartOfDay(),
+            emptyList(), emptyList(), tomorrow))
         assertEquals(emptyList<PrayerMoment>(), calendar.prayers(RadioCity.RABAT, date))
         assertNull(RadioLocalInfo.parseCalendar(script, month.plusMonths(1)))
         assertNull(RadioLocalInfo.parseCalendar("<html></html>", month))
@@ -31,12 +40,14 @@ class RadioLocalInfoTest {
 
     @Test fun readsWeatherAndIgnoresAnUnrelatedDailyRange() {
         val data = """{
-          "current":{"time":"2026-11-11T17:45","temperature_2m":22.5,"weather_code":61},
+          "current":{"time":"2026-11-11T17:45","temperature_2m":22.5,"weather_code":61,"is_day":0},
           "daily":{"time":["2026-11-11"],"temperature_2m_min":[20.6],"temperature_2m_max":[25.1]}
         }"""
         val weather = requireNotNull(RadioLocalInfo.parseWeather(data))
-        assertEquals(RadioWeather(LocalDateTime.of(2026, 11, 11, 17, 45), 23, "Pluie", 21, 25), weather)
+        assertEquals(RadioWeather(LocalDateTime.of(2026, 11, 11, 17, 45), 23, WeatherCondition.RAIN, 21, 25, false), weather)
         assertNull(RadioLocalInfo.parseWeather(data.replace("2026-11-11\"]", "2026-11-10\"]"))?.low)
+        assertEquals(WeatherCondition.STORM, WeatherCondition.fromCode(97))
+        assertEquals(WeatherCondition.UNKNOWN, WeatherCondition.fromCode(-1))
         assertNull(RadioLocalInfo.parseWeather("{}"))
     }
 }

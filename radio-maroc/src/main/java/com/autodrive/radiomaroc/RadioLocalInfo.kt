@@ -36,10 +36,32 @@ internal enum class RadioCity(val label: String, val habousCode: Int, val latitu
 internal data class RadioWeather(
     val at: LocalDateTime,
     val degrees: Int,
-    val condition: String,
+    val condition: WeatherCondition,
     val low: Int?,
     val high: Int?,
+    val isDay: Boolean?,
 )
+
+internal enum class WeatherCondition(val label: String) {
+    CLEAR("Ciel dégagé"), PARTLY_CLOUDY("Éclaircies"), CLOUDY("Couvert"), FOG("Brouillard"),
+    DRIZZLE("Bruine"), RAIN("Pluie"), SNOW("Neige"), SHOWERS("Averses"), STORM("Orages"),
+    UNKNOWN("Conditions non précisées");
+
+    companion object {
+        fun fromCode(code: Int): WeatherCondition = when (code) {
+            0 -> CLEAR
+            1, 2 -> PARTLY_CLOUDY
+            3 -> CLOUDY
+            45, 48 -> FOG
+            51, 53, 55, 56, 57 -> DRIZZLE
+            61, 63, 65, 66, 67 -> RAIN
+            71, 73, 75, 77, 85, 86 -> SNOW
+            80, 81, 82 -> SHOWERS
+            95, 96, 97, 99 -> STORM
+            else -> UNKNOWN
+        }
+    }
+}
 
 internal enum class Prayer(val arabic: String, val column: String) {
     FAJR("الفجر", "Fajr"), DHUHR("الظهر", "Dhuhr"), ASR("العصر", "Asr"),
@@ -49,6 +71,7 @@ internal enum class Prayer(val arabic: String, val column: String) {
 }
 
 internal data class PrayerMoment(val prayer: Prayer, val dateTime: LocalDateTime)
+internal data class PrayerStatus(val date: LocalDate, val current: PrayerMoment?, val next: PrayerMoment?)
 
 internal class HabousCalendar(
     val month: YearMonth,
@@ -76,7 +99,7 @@ internal object RadioLocalInfo {
 
     fun weather(city: RadioCity): RadioWeather? {
         val url = "https://api.open-meteo.com/v1/forecast?latitude=${city.latitude}&longitude=${city.longitude}" +
-            "&current=temperature_2m,weather_code&daily=temperature_2m_min,temperature_2m_max&forecast_days=1&timezone=GMT"
+            "&current=temperature_2m,weather_code,is_day&daily=temperature_2m_min,temperature_2m_max&forecast_days=1&timezone=GMT"
         return parseWeather(download(url, 32 * 1024))
     }
 
@@ -88,23 +111,13 @@ internal object RadioLocalInfo {
         val current = data.optJSONObject("current") ?: return null
         val at = runCatching { LocalDateTime.parse(current.optString("time")) }.getOrNull() ?: return null
         val temperature = current.optDouble("temperature_2m").takeIf { it in -100.0..70.0 } ?: return null
-        val condition = when (current.optInt("weather_code", -1)) {
-            0 -> "Ciel dégagé"
-            1, 2 -> "Éclaircies"
-            3 -> "Couvert"
-            45, 48 -> "Brouillard"
-            51, 53, 55, 56, 57 -> "Bruine"
-            61, 63, 65, 66, 67 -> "Pluie"
-            71, 73, 75, 77, 85, 86 -> "Neige"
-            80, 81, 82 -> "Averses"
-            95, 96, 99 -> "Orages"
-            else -> "Conditions non précisées"
-        }
+        val condition = WeatherCondition.fromCode(current.optInt("weather_code", -1))
+        val isDay = current.optInt("is_day", -1).takeIf { it in 0..1 }?.let { it == 1 }
         val daily = data.optJSONObject("daily")
         val dailyMatches = daily?.optJSONArray("time")?.optString(0) == at.toLocalDate().toString()
         val low = daily?.optJSONArray("temperature_2m_min")?.optDouble(0)?.takeIf { dailyMatches && it in -100.0..70.0 }
         val high = daily?.optJSONArray("temperature_2m_max")?.optDouble(0)?.takeIf { dailyMatches && it in -100.0..70.0 }
-        return RadioWeather(at, temperature.roundToInt(), condition, low?.roundToInt(), high?.roundToInt())
+        return RadioWeather(at, temperature.roundToInt(), condition, low?.roundToInt(), high?.roundToInt(), isDay)
     }
 
     fun parseCalendar(script: String, requestedMonth: YearMonth): HabousCalendar? {
@@ -129,8 +142,18 @@ internal object RadioLocalInfo {
         return HabousCalendar(requestedMonth, offset, columns, rows)
     }
 
-    fun nextPrayer(now: LocalDateTime, today: List<PrayerMoment>, tomorrow: List<PrayerMoment>): PrayerMoment? =
-        today.firstOrNull { it.dateTime >= now } ?: tomorrow.firstOrNull()
+    fun prayerStatus(
+        now: LocalDateTime,
+        yesterday: List<PrayerMoment>,
+        today: List<PrayerMoment>,
+        tomorrow: List<PrayerMoment>,
+    ): PrayerStatus {
+        val date = now.toLocalDate()
+        if (today.isEmpty()) return PrayerStatus(date, null, null)
+        val current = today.lastOrNull { it.dateTime <= now } ?: yesterday.lastOrNull()
+        val next = today.firstOrNull { it.dateTime > now } ?: tomorrow.firstOrNull()
+        return PrayerStatus(date, current, next)
+    }
 
     private fun download(url: String, limit: Int): String {
         val connection = URI(url).toURL().openConnection() as HttpURLConnection

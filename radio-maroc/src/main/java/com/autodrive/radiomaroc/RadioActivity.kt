@@ -186,8 +186,8 @@ class RadioActivity : ComponentActivity() {
     private val weather = MutableStateFlow<RadioWeather?>(null)
     private val prayerCalendars = MutableStateFlow<Map<YearMonth, HabousCalendar>>(emptyMap())
     private var nextWeatherFetchAt = 0L
-    private var weatherTile: LocalInfoTile? = null
-    private var prayerTile: LocalInfoTile? = null
+    private var weatherTile: WeatherTile? = null
+    private var prayerTile: PrayerTile? = null
     private var playerCategory: TextView? = null
     private lateinit var playerArtwork: StationArtwork
     private lateinit var playerStatus: TextView
@@ -1038,7 +1038,7 @@ class RadioActivity : ComponentActivity() {
     private suspend fun refreshPrayerCalendars() {
         while (true) {
             val today = LocalDate.now(RadioLocalInfo.moroccoTime)
-            val months = setOf(YearMonth.from(today), YearMonth.from(today.plusDays(1)))
+            val months = listOf(today, today.minusDays(1), today.plusDays(1)).map(YearMonth::from).toSet()
             val calendars = prayerCalendars.value.filterKeys { it in months }.toMutableMap()
             val missing = months - calendars.keys
             if (missing.isNotEmpty()) {
@@ -1058,81 +1058,133 @@ class RadioActivity : ComponentActivity() {
     private fun localPrayerTimes(city: RadioCity, date: LocalDate): List<PrayerMoment> =
         prayerCalendars.value[YearMonth.from(date)]?.prayers(city, date).orEmpty()
 
-    private fun nextLocalPrayer(city: RadioCity): PrayerMoment? {
+    private fun localPrayerStatus(city: RadioCity): PrayerStatus {
         val today = LocalDate.now(RadioLocalInfo.moroccoTime)
-        val offset = prayerCalendars.value[YearMonth.from(today)]?.offset ?: return null
+        val offset = prayerCalendars.value[YearMonth.from(today)]?.offset ?: RadioLocalInfo.moroccoTime
         val now = LocalDateTime.now(offset)
-        val hours = localPrayerTimes(city, now.toLocalDate())
-        if (hours.isEmpty()) return null
-        return RadioLocalInfo.nextPrayer(now, hours, localPrayerTimes(city, now.toLocalDate().plusDays(1)))
+        val date = now.toLocalDate()
+        return RadioLocalInfo.prayerStatus(
+            now, localPrayerTimes(city, date.minusDays(1)), localPrayerTimes(city, date), localPrayerTimes(city, date.plusDays(1)),
+        )
     }
+
+    private fun untilNextMinute() = 60_000L - System.currentTimeMillis() % 60_000L
 
     private suspend fun refreshLocalTiles() {
         combine(radioCity, weather, prayerCalendars) { _, _, _ -> Unit }.collectLatest {
             while (true) {
                 renderLocalTiles()
-                delay(60_000L - System.currentTimeMillis() % 60_000L)
+                delay(untilNextMinute())
             }
         }
     }
 
     private fun renderLocalTiles() {
         val city = radioCity.value
-        val report = weather.value
-        weatherTile?.bind(report?.let { "${it.degrees} °C" }, report?.condition, city)
-        val prayer = nextLocalPrayer(city)
-        val day = if (prayer != null && prayer.dateTime.toLocalDate() != LocalDate.now(RadioLocalInfo.moroccoTime)) {
-            " demain"
-        } else ""
-        prayerTile?.bind(prayer?.dateTime?.toLocalTime()?.toString(), prayer?.let { "${it.prayer.label}$day" }, city)
+        weatherTile?.bind(weather.value, city)
+        prayerTile?.bind(localPrayerStatus(city), city)
     }
 
     private fun localInfoBar(): View = row().apply {
         layoutDirection = View.LAYOUT_DIRECTION_LTR
-        weatherTile = LocalInfoTile("Météo", R.color.radio_weather_label, ::showWeather).also {
+        weatherTile = WeatherTile().also {
             addView(it, LinearLayout.LayoutParams(0, -1, 1f).apply { marginEnd = dp(5) })
         }
-        prayerTile = LocalInfoTile("Salat", R.color.radio_prayer_label, ::showPrayerTimes).also {
-            addView(it, LinearLayout.LayoutParams(0, -1, 1f))
+        prayerTile = PrayerTile().also {
+            addView(it, LinearLayout.LayoutParams(0, -1, 1.55f))
         }
         renderLocalTiles()
     }
 
-    private inner class LocalInfoTile(
-        private val heading: String,
-        headingColor: Int,
-        action: () -> Unit,
-    ) : LinearLayout(this@RadioActivity) {
-        private val value = line(if (compactTv) 14 else 17, textColor, bold = true)
-        private val detail = line(if (compactTv) 10 else 11, muted)
+    private fun LinearLayout.prepareLocalTile(action: () -> Unit) {
+        orientation = LinearLayout.VERTICAL
+        gravity = Gravity.CENTER
+        setPadding(dp(4), 0, dp(4), 0)
+        background = pressable(R.drawable.radio_control)
+        isFocusable = true
+        remoteFocus()
+        setRadioClick(action)
+    }
 
-        init {
-            orientation = VERTICAL
-            gravity = Gravity.CENTER
-            setPadding(dp(4), 0, dp(4), 0)
-            background = pressable(R.drawable.radio_control)
-            isFocusable = true
-            remoteFocus()
-            setRadioClick(action)
-            addView(line(if (compactTv) 10 else 11, getColor(headingColor), bold = true).apply {
-                text = heading
-            }, LayoutParams(-1, -2))
-            addView(value, LayoutParams(-1, -2))
-            addView(detail, LayoutParams(-1, -2))
-        }
-
-        private fun line(size: Int, color: Int, bold: Boolean = false) = label("", size, color, bold).apply {
+    private fun tileLine(text: String, size: Int, color: Int, bold: Boolean = false) =
+        label(text, size, color, bold).apply {
             gravity = Gravity.CENTER
             includeFontPadding = false
             maxLines = 1
             ellipsize = TextUtils.TruncateAt.END
         }
 
-        fun bind(amount: String?, description: String?, city: RadioCity) {
-            value.text = amount ?: "—"
-            detail.text = description ?: "Indisponible"
-            contentDescription = listOfNotNull(heading, city.label, amount, detail.text).joinToString(" · ")
+    private inner class WeatherTile : LinearLayout(this@RadioActivity) {
+        private val headingColor = getColor(R.color.radio_weather_label)
+        private val icon = WeatherIcon(context, headingColor)
+        private val temperature = tileLine("", if (compactTv) 15 else 19, textColor, bold = true)
+        private val detail = tileLine("", if (compactTv) 10 else 11, muted)
+
+        init {
+            prepareLocalTile(::showWeather)
+            setPadding(dp(2), 0, dp(2), 0)
+            addView(tileLine("Météo", if (compactTv) 10 else 11, headingColor, bold = true), LayoutParams(-1, -2))
+            addView(row().apply {
+                gravity = Gravity.CENTER
+                val size = dp(if (compactTv) 17 else 23)
+                addView(icon, LayoutParams(size, size).apply { marginEnd = dp(3) })
+                addView(temperature, LayoutParams(-2, -2))
+            }, LayoutParams(-1, -2).apply { topMargin = dp(2) })
+            addView(detail, LayoutParams(-1, -2))
         }
+
+        fun bind(report: RadioWeather?, city: RadioCity) {
+            icon.bind(report)
+            temperature.text = report?.let { "${it.degrees}°" } ?: "—"
+            detail.text = report?.condition?.label ?: "Indisponible"
+            contentDescription = listOfNotNull("Météo", city.label, report?.let { "${it.degrees} °C" }, detail.text)
+                .joinToString(" · ")
+        }
+    }
+
+    private inner class PrayerTile : LinearLayout(this@RadioActivity) {
+        private val headingColor = getColor(R.color.radio_prayer_label)
+        private val currentName = tileLine("", if (compactTv) 10 else 12, textColor, bold = true)
+        private val nextName = tileLine("", if (compactTv) 10 else 12, textColor, bold = true)
+        private val currentTime = tileLine("", if (compactTv) 12 else 15, textColor, bold = true)
+        private val nextTime = tileLine("", if (compactTv) 12 else 15, headingColor, bold = true)
+
+        init {
+            prepareLocalTile(::showPrayerTimes)
+            addView(tileLine("Salat", if (compactTv) 10 else 11, headingColor, bold = true), LayoutParams(-1, -2))
+            addView(row().apply {
+                gravity = Gravity.CENTER_VERTICAL
+                addView(prayerColumn("Maint.", currentName, currentTime), LayoutParams(0, -2, 1f))
+                addView(View(context).apply { setBackgroundColor(getColor(R.color.radio_control_border)) },
+                    LayoutParams(dp(1), dp(if (compactTv) 28 else 34)))
+                addView(prayerColumn("Ensuite", nextName, nextTime), LayoutParams(0, -2, 1f))
+            }, LayoutParams(-1, -2).apply { topMargin = dp(2) })
+        }
+
+        private fun prayerColumn(label: String, name: TextView, time: TextView) = column().apply {
+            addView(tileLine(label, if (compactTv) 9 else 10, muted), LayoutParams(-1, -2))
+            addView(name, LayoutParams(-1, -2))
+            addView(time, LayoutParams(-1, -2))
+        }
+
+        fun bind(status: PrayerStatus, city: RadioCity) {
+            currentName.text = status.current?.prayer?.label ?: "—"
+            nextName.text = status.next?.prayer?.label ?: "—"
+            currentTime.text = status.current?.dateTime?.toLocalTime()?.toString().orEmpty()
+            nextTime.text = status.next?.dateTime?.toLocalTime()?.toString().orEmpty()
+            contentDescription = "Salat · ${city.label} · Maintenant ${prayerDescription(status.current, status.date)}" +
+                " · Ensuite ${prayerDescription(status.next, status.date)}"
+        }
+    }
+
+    private fun prayerDescription(moment: PrayerMoment?, date: LocalDate): String {
+        if (moment == null) return "—"
+        val day = when {
+            moment.dateTime.toLocalDate() < date -> " hier"
+            moment.dateTime.toLocalDate() > date -> " demain"
+            else -> ""
+        }
+        return "${moment.prayer.label} ${moment.dateTime.toLocalTime()}$day"
     }
 
     private fun newsBar(): View = row().apply {
@@ -1199,7 +1251,7 @@ class RadioActivity : ComponentActivity() {
                     val limits = if (report.low != null && report.high != null) {
                         "\nMin. ${report.low} °C · Max. ${report.high} °C"
                     } else ""
-                    "${report.degrees} °C · ${report.condition}$limits\nPrévision à ${report.at.toLocalTime()} (GMT)"
+                    "${report.degrees} °C · ${report.condition.label}$limits\nPrévision à ${report.at.toLocalTime()} (GMT)"
                 }
                 dialog.setMessage("$text\n\nDonnées Open-Meteo · CC BY 4.0")
             }
@@ -1212,20 +1264,21 @@ class RadioActivity : ComponentActivity() {
         val dialog = infoDialog("Salat · ${city.label}", RadioLocalInfo.HABOUS_SITE)
         val dateFormat = DateTimeFormatter.ofLocalizedDate(FormatStyle.FULL).withLocale(Locale.FRENCH)
         val request = lifecycleScope.launch {
-            prayerCalendars.collect {
-                val today = LocalDate.now(RadioLocalInfo.moroccoTime)
-                val prayers = localPrayerTimes(city, today)
-                val text = if (prayers.isEmpty()) "Horaires indisponibles pour cette date." else {
-                    val next = nextLocalPrayer(city)?.let {
-                        val day = if (it.dateTime.toLocalDate() == today) "" else " demain"
-                        "Prochaine prière · ${it.prayer.label} ${it.dateTime.toLocalTime()}$day\n\n"
-                    }.orEmpty()
-                    val hours = prayers.joinToString("\n") {
-                        "${it.prayer.label}  ·  ${it.dateTime.toLocalTime()}  ·  ${it.prayer.arabic}"
+            prayerCalendars.collectLatest {
+                while (true) {
+                    val status = localPrayerStatus(city)
+                    val prayers = localPrayerTimes(city, status.date)
+                    val text = if (prayers.isEmpty()) "Horaires indisponibles pour cette date." else {
+                        val hours = prayers.joinToString("\n") {
+                            "${it.prayer.label}  ·  ${it.dateTime.toLocalTime()}  ·  ${it.prayer.arabic}"
+                        }
+                        "${dateFormat.format(status.date)}\n" +
+                            "Maintenant · ${prayerDescription(status.current, status.date)}\n" +
+                            "Ensuite · ${prayerDescription(status.next, status.date)}\n\n$hours"
                     }
-                    "${dateFormat.format(today)}\n\n$next$hours"
+                    dialog.setMessage("$text\n\nMinistère des Habous et des Affaires islamiques")
+                    delay(untilNextMinute())
                 }
-                dialog.setMessage("$text\n\nMinistère des Habous et des Affaires islamiques")
             }
         }
         dialog.setOnDismissListener { request.cancel() }
@@ -1548,7 +1601,7 @@ class RadioActivity : ComponentActivity() {
                     playerCategory = this
                 }, LinearLayout.LayoutParams(-1, -2))
                 if (television && !mini) {
-                    addView(localInfoBar(), LinearLayout.LayoutParams(-1, dp(if (compactTv) 44 else 52)).apply {
+                    addView(localInfoBar(), LinearLayout.LayoutParams(-1, dp(if (compactTv) 56 else 64)).apply {
                         topMargin = dp(4)
                     })
                 }
