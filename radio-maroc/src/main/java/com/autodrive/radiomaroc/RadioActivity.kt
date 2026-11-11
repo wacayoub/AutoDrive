@@ -54,6 +54,10 @@ import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.net.toUri
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
@@ -144,12 +148,14 @@ class RadioActivity : ComponentActivity() {
     private lateinit var stationSearch: EditText
     private lateinit var worldRegion: TextView
     private lateinit var sortButton: TextView
+    private lateinit var categoryButton: TextView
     private lateinit var directoryAction: TextView
     private lateinit var list: AbsListView
     private lateinit var empty: TextView
     private lateinit var playerTitle: TextView
     private lateinit var playerPanel: LinearLayout
     private lateinit var playerSubtitle: TextView
+    private var playerWebsite: TextView? = null
     private var playerCategory: TextView? = null
     private lateinit var playerArtwork: StationArtwork
     private lateinit var playerStatus: TextView
@@ -762,6 +768,11 @@ class RadioActivity : ComponentActivity() {
             setCompoundDrawablesRelativeWithIntrinsicBounds(R.drawable.ic_radio_sort, 0, 0, 0)
             compoundDrawablePadding = dp(6)
         }
+        categoryButton = button("Genres", ::chooseCategory).apply {
+            textSize = 12f
+            maxLines = 1
+            setPadding(dp(4), 0, dp(4), 0)
+        }
         stationSearch = EditText(context).apply {
             if (tvGuide) id = View.generateViewId()
             hint = if (tightLandscape) "Chercher" else "Rechercher…"
@@ -821,6 +832,8 @@ class RadioActivity : ComponentActivity() {
             addView(countryButton, LinearLayout.LayoutParams(dp(if (shortLandscape) 84 else if (television && !compactTv) 128 else 104), -1)
                 .apply { marginStart = dp(6) })
             if (!television) addView(radioFilter, LinearLayout.LayoutParams(toolbarHeight, -1).apply { marginStart = dp(6) })
+            addView(categoryButton, LinearLayout.LayoutParams(dp(if (shortLandscape) 56 else 66), -1)
+                .apply { marginStart = dp(6) })
             addView(sortButton, LinearLayout.LayoutParams(dp(if (shortLandscape) 66 else if (television && !compactTv) 92 else 76), -1)
                 .apply { marginStart = dp(6) })
         }
@@ -881,6 +894,46 @@ class RadioActivity : ComponentActivity() {
 
     private fun activeSort(): StationSort = StationSort.options(tab)
         .firstOrNull { it.name == prefs.getString("sort_${tab.name}", null) } ?: StationSort.DEFAULT
+
+    private fun activeCategory(): MoroccoCategory = MoroccoCategory.entries
+        .firstOrNull { it.name == prefs.getString("morocco_category", null) } ?: MoroccoCategory.ALL
+
+    private fun chooseCategory() {
+        val options = MoroccoCategory.entries
+        val dialog = AlertDialog.Builder(this).setTitle("Catégories Radio Maroc")
+            .setSingleChoiceItems(options.map { it.label }.toTypedArray(), activeCategory().ordinal) { picker, index ->
+                prefs.edit().putString("morocco_category", options[index].name).apply()
+                picker.dismiss()
+                updateDirectory(resetScroll = true)
+            }.setNegativeButton("Fermer", null).show()
+        dialog.window?.setBackgroundDrawableResource(R.drawable.radio_dialog)
+        if (television) dialog.listView.requestFocus()
+        dialog.listView.setSelection(0)
+    }
+
+    private fun showStationWebsite() {
+        val station = findStation(controller?.currentMediaItem?.mediaId) ?: savedStation ?: return
+        val website = StationWebsites.forStation(station) ?: return
+        val dialog = AlertDialog.Builder(this)
+            .setTitle(station.name)
+            .setMessage("Chargement des informations du site…")
+            .setPositiveButton("Fermer", null)
+            .setNeutralButton("Ouvrir le site") { _, _ ->
+                runCatching { startActivity(Intent(Intent.ACTION_VIEW, website.toUri())) }
+                    .onFailure { Toast.makeText(this, "Navigateur indisponible", Toast.LENGTH_SHORT).show() }
+            }.show()
+        dialog.window?.setBackgroundDrawableResource(R.drawable.radio_dialog)
+        val request = lifecycleScope.launch {
+            val information = withContext(Dispatchers.IO) {
+                runCatching { StationWebsites.information(station) }.getOrNull()
+            }
+            if (dialog.isShowing) {
+                dialog.setMessage(listOf(website.toUri().host, information ?: "Informations du site indisponibles.")
+                    .joinToString("\n\n"))
+            }
+        }
+        dialog.setOnDismissListener { request.cancel() }
+    }
 
     private fun chooseSort() {
         val options = StationSort.options(tab)
@@ -986,6 +1039,7 @@ class RadioActivity : ComponentActivity() {
         val stackedPresentation = wide && !tightSidePlayer && !tightListening
         return (if (horizontalMini || splitListening) row() else column()).apply {
             playerCategory = null
+            playerWebsite = null
             background = getDrawable(R.drawable.radio_player)
             if (mini) gravity = Gravity.CENTER_VERTICAL
             if (full) gravity = Gravity.CENTER
@@ -1084,6 +1138,16 @@ class RadioActivity : ComponentActivity() {
                         ellipsize = TextUtils.TruncateAt.END
                     }
                     addView(playerSubtitle, LinearLayout.LayoutParams(-1, -2))
+                    if (television && !mini) {
+                        playerWebsite = button("", ::showStationWebsite).apply {
+                            textSize = if (compactTv) 11f else 13f
+                            maxLines = 1
+                            ellipsize = TextUtils.TruncateAt.END
+                            visibility = View.GONE
+                        }
+                        addView(playerWebsite, LinearLayout.LayoutParams(-1, dp(if (compactTv) 28 else 32))
+                            .apply { topMargin = dp(4) })
+                    }
                 }, if (stackedPresentation) LinearLayout.LayoutParams(-1, -2) else LinearLayout.LayoutParams(0, -2, 1f))
             }
             val presentationSize = when {
@@ -1537,7 +1601,8 @@ class RadioActivity : ComponentActivity() {
 
     private fun updateDirectory(resetScroll: Boolean = false) {
         val code = when {
-            tab == StationTab.MOROCCO && !radioFavoritesOnly -> "MA"
+            tab == StationTab.MOROCCO && !radioFavoritesOnly &&
+                activeCategory() in setOf(MoroccoCategory.ALL, MoroccoCategory.DIRECTORY) -> "MA"
             tab == StationTab.WORLD -> country
             else -> null
         }
@@ -1547,16 +1612,20 @@ class RadioActivity : ComponentActivity() {
 
     private fun renderRows(resetScroll: Boolean = false) {
         val sort = activeSort()
-        rows = Stations.visible(tab, favorites, query, radioFavoritesOnly, directory.stations, directoryBookmarks, sort)
+        val category = activeCategory()
+        rows = Stations.visible(tab, favorites, query, radioFavoritesOnly, directory.stations, directoryBookmarks, sort, category)
         PlaybackService.setVisibleStations(rows)
         listEntries = buildList {
             var previousSection: String? = null
             rows.forEachIndexed { index, station ->
                 val section = when {
                     tab == StationTab.QURAN -> Stations.quranSection(station)?.label
-                    tab == StationTab.MOROCCO -> {
+                    tab == StationTab.MOROCCO && sort == StationSort.GROUPS -> Stations.group(station).label
+                    tab == StationTab.MOROCCO && sort == StationSort.DEFAULT && category == MoroccoCategory.ARABIC ->
+                        Stations.musicCategory(station)?.label
+                    tab == StationTab.MOROCCO && sort == StationSort.DEFAULT && category == MoroccoCategory.ALL -> {
                         val group = Stations.group(station)
-                        if (sort == StationSort.GROUPS || group == StationGroup.REGIONAL) group.label
+                        if (group == StationGroup.REGIONAL) group.label
                         else "RADIOS NATIONALES ET WEBRADIOS"
                     }
                     else -> null
@@ -1576,6 +1645,10 @@ class RadioActivity : ComponentActivity() {
         worldRegion.text = WorldContinent.forCountry(country)?.label.orEmpty()
         sortButton.visibility = if (tab == StationTab.QURAN) View.GONE else View.VISIBLE
         sortButton.contentDescription = "Trier les stations · ${sort.labelFor(tab)}"
+        categoryButton.visibility = if (onRadioTab) View.VISIBLE else View.GONE
+        categoryButton.isSelected = category != MoroccoCategory.ALL
+        categoryButton.text = if (categoryButton.isSelected) "Genres ▾" else "Genres"
+        categoryButton.contentDescription = "Catégories Radio Maroc · ${category.label}"
         countryButton.visibility = if (tab == StationTab.WORLD) View.VISIBLE else View.GONE
         countryButton.text = "${StationDirectory.countryName(country)} ▾"
         countryButton.contentDescription = "Choisir un continent ou un pays · ${StationDirectory.countryName(country)}"
@@ -1651,6 +1724,12 @@ class RadioActivity : ComponentActivity() {
             listOfNotNull(it.title, it.hours, it.source.takeIf { playerCategory == null }).joinToString(" · ")
         } ?: station?.let(Stations::subtitle).orEmpty()
         playerSubtitle.visibility = if (playerSubtitle.text.isEmpty()) View.GONE else View.VISIBLE
+        playerWebsite?.apply {
+            val website = station?.let(StationWebsites::forStation)
+            visibility = if (website == null) View.GONE else View.VISIBLE
+            text = website?.let { "Site · ${it.toUri().host?.removePrefix("www.")}" }.orEmpty()
+            contentDescription = station?.let { "Informations du site officiel · ${it.name}" }
+        }
         playerArtwork.bind(station)
         playerStatus.visibility = if (live) View.GONE else View.VISIBLE
         playerStatus.text = when {

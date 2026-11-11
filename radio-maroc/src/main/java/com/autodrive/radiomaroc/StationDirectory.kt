@@ -66,6 +66,28 @@ internal class StationDirectory(context: Context) {
         private const val PAGE_SIZE = 100
         private const val CACHE_LIMIT = 512 * 1024
         private val cacheLock = Any()
+        // Entries checked against the broadcast identity, media response and HTTPS availability.
+        private val rejectedMoroccoUrls = setOf(
+            "https://d3ctxlq1ktw2nl.cloudfront.net/production/2022-0-3/240607172-44100-2-afb2485b0c30e.mp3",
+            "https://a5.asurahosting.com:7980/radio.mp3",
+            "https://stream.radio.co/s8cc7a5da4/listen",
+            "https://a2.asurahosting.com:6100/radio.mp3",
+            "https://asmaki.ma:8000/radio.mp3",
+            "https://atlantic-sonic.nindohost.net:9300/stream",
+            "https://stream.bodkas.com/playlist?id=chadafmradio",
+            "https://vdo.ninja/?view=9rhx6u2",
+            "https://broadcast.ice.infomaniak.ch/aswat-high.mp3",
+        )
+        private val rejectedMoroccoNames = listOf(
+            "Aziz Mustaphi", "Rap Lbeldi Maroc - Hip Hop Music from Morocco FR AR",
+            "Radio Plus Agadir FM 92.4", "Radio Atbir", "radio yan plus", "ACHKID FM",
+            "MA:-Hit Radio Maroc", "MRC:-Hip Hop Soul Radio Radio Music",
+        ).map { RadioCatalogue.searchKey(RadioCatalogue.cleanName(it)) }.toSet()
+
+        fun isEligible(station: RadioStation): Boolean = station.countryCode != "MA" ||
+            (station.url !in rejectedMoroccoUrls && !station.url.startsWith("https://radio.yabiladi.com:") &&
+                StationFamilies.directoryKey(station) !in rejectedMoroccoNames)
+
         val countries: List<String> = (Locale.getISOCountries().toList() + "XK")
             .sortedWith(compareBy(Collator.getInstance(Locale.FRENCH), ::countryName))
 
@@ -84,7 +106,7 @@ internal class StationDirectory(context: Context) {
                     tags = RadioCatalogue.parseTags(row.optString("tags")), countryCode = country,
                     isHls = row.optInt("hls") == 1,
                     directoryClicks = row.optInt("clickcount", -1).takeIf { it >= 0 }))
-            }.distinctBy { it.url }
+            }.filter(::isEligible).distinctBy { it.url }
             return Page(stations, if (rows.length() >= PAGE_SIZE) offset + PAGE_SIZE else null)
         }
 
@@ -105,7 +127,7 @@ internal class StationDirectory(context: Context) {
                     tags = RadioCatalogue.parseTags(row.optString("tags")), countryCode = country,
                     isHls = row.optBoolean("hls"),
                     directoryClicks = row.optInt("clickcount", -1).takeIf { it >= 0 })
-            }.distinctBy { it.url }
+            }.filter(::isEligible).distinctBy { it.url }
         }.getOrDefault(emptyList())
     }
 }

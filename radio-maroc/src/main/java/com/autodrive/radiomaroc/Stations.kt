@@ -8,6 +8,8 @@ import androidx.media3.common.MimeTypes
 import com.autodrive.launcher.RadioCatalogue
 import com.autodrive.launcher.RadioCategory
 import com.autodrive.launcher.RadioStation
+import java.text.Collator
+import java.util.Locale
 
 internal enum class StationTab(val label: String) {
     MOROCCO("Radio Maroc"), WORLD("Monde"), QURAN("القرآن"), FAVORITES("Favoris");
@@ -25,13 +27,27 @@ internal enum class QuranSection(val label: String) {
 }
 
 internal enum class StationSort(val label: String) {
-    DEFAULT("Popularité"), NAME_ASC("Nom A–Z"), NAME_DESC("Nom Z–A"), GROUPS("Par groupe");
+    DEFAULT("Popularité"), NAME_ASC("Nom A–Z"), NAME_DESC("Nom Z–A"), GROUPS("Par groupe"),
+    FAVORITES_FIRST("Favoris en premier");
 
     fun labelFor(tab: StationTab) = if (this == DEFAULT && tab == StationTab.FAVORITES) "Ordre du catalogue" else label
 
     companion object {
-        fun options(tab: StationTab) = if (tab == StationTab.MOROCCO) entries else entries.filter { it != GROUPS }
+        fun options(tab: StationTab) = entries.filter {
+            when (it) {
+                GROUPS -> tab == StationTab.MOROCCO
+                FAVORITES_FIRST -> tab == StationTab.MOROCCO || tab == StationTab.WORLD
+                else -> true
+            }
+        }
     }
+}
+
+internal enum class MoroccoCategory(val label: String) {
+    ALL("Toutes les radios"), ARABIC("Musique arabe · موسيقى عربية"),
+    FAYROUZ("Fayrouz · فيروز"), TARAB("Tarab · طرب"), CHAABI("Chaâbi · شعبي"),
+    ANDALOU("Andalou · أندلسي"), MOROCCAN("Scène marocaine · موسيقى مغربية"),
+    AMAZIGH("Amazigh · أمازيغي"), REGIONAL("Radios régionales"), DIRECTORY("Annuaire communautaire")
 }
 
 internal enum class StationGroup(val label: String) {
@@ -39,6 +55,9 @@ internal enum class StationGroup(val label: String) {
 }
 
 internal object Stations {
+    private const val RADIO_PLUS_ID = "https://stream-158.zeno.fm/bqdbb6hd0neuv"
+    private val fayrouz = RadioStation("Fayrouz · فيروزيات", "https://stream.zeno.fm/zv3e5wykprhvv.mp3",
+        tags = setOf("Webradio indépendante · فيروزيات"))
     private val morocco = listOf(
         RadioStation("Med Radio", "https://medradio.ice.infomaniak.ch/medradio-128.mp3",
             logoUrl = "https://medradio.ma/wp-content/uploads/2023/08/cropped-med-fav-jpg-192x192.jpg", tags = setOf("Débats")),
@@ -54,8 +73,8 @@ internal object Stations {
             logoUrl = "https://medinafm.ma/favicon-192.png", tags = setOf("Généraliste")),
         RadioStation("Skyrock Casablanca", "https://icecast.skyrock.net/s/casa_aac_64k",
             logoUrl = "https://www.skyrock.fm/images/logo-skyrock.png", tags = setOf("Rap")),
-        RadioStation("Radio Plus Agadir", "https://stream-158.zeno.fm/bqdbb6hd0neuv",
-            logoUrl = "https://www.haca.ma/sites/default/files/upload/radio%20plus%20agadir_0.jpg", tags = setOf("Agadir")),
+        RadioStation("Radio Plus", RADIO_PLUS_ID,
+            logoUrl = "https://www.haca.ma/sites/default/files/upload/radio%20plus%20agadir_0.jpg", tags = setOf("Généraliste")),
         RadioStation("Radio Azawan", "https://az-maroc.ice.infomaniak.ch/az-maroc-64.aac",
             logoUrl = "https://www.haca.ma/sites/default/files/upload/LOGO%20AZAWAN.PNG", tags = setOf("Musique")),
         RadioStation("U Dance", "https://udance.ice.infomaniak.ch/udance-128.aac",
@@ -64,6 +83,15 @@ internal object Stations {
             logoUrl = "https://api.medinafm.ma/uploads/11ee4925-5901-4d5f-81f3-23db7b0a3fa6-w320.webp", tags = setOf("Amazigh")),
         RadioStation("Medina FM Tarab", "https://medinatarab.ice.infomaniak.ch/medinatarab-128.mp3",
             logoUrl = "https://api.medinafm.ma/uploads/f0b5829f-c5ed-4acc-a775-d921ecd2edc7-w320.webp", tags = setOf("Tarab")),
+        RadioStation("Medina FM Andalou", "https://medinaandalou.ice.infomaniak.ch/medinaandalou-128.mp3",
+            logoUrl = "https://medinafm.ma/favicon-192.png", tags = setOf("Andalou")),
+        RadioStation("U Radio", "https://uradio-aac.ice.infomaniak.ch/uradio.aac",
+            tags = setOf("Musique")),
+        RadioStation("Radio Manarat", "https://listen.radioking.com/radio/252934/stream/297385",
+            tags = setOf("Éducation et culture", "راديو منارات")),
+        RadioStation("Ness Radio", "https://radio.nessradio.net:8212/nessradio-hd", tags = setOf("Musique")),
+        fayrouz,
+        RadioStation("Tarab Radio", "https://stream.zeno.fm/fy8achbq97zuv", tags = setOf("Webradio indépendante · طرب")),
     )
     val snrtNational = RadioCatalogue.featured.filter { RadioCatalogue.officialPlayer(it) != null }
     private val radio2m = RadioStation("Radio 2M", "https://radio2m.ma/", logoUrl = "https://radio2m.ma/favRadio2M.png")
@@ -104,8 +132,10 @@ internal object Stations {
             logoUrl = "https://www.haca.ma/sites/default/files/upload/images/rn.jpg",
             tags = setOf(arabicCity), isHls = true) to area
 
-    private val officialStreams = snrtStreams + (radio2m.url to
-        "https://$RADIO_2M_STREAM_HOST/live/eds/radio_2m/radio_hls_ts_hy217612tge1f21j83/radio_2m.m3u8")
+    private val officialStreams = snrtStreams + mapOf(
+        radio2m.url to "https://$RADIO_2M_STREAM_HOST/live/eds/radio_2m/radio_hls_ts_hy217612tge1f21j83/radio_2m.m3u8",
+        RADIO_PLUS_ID to "https://hosting.studioradiomedia.fr:3040/stream",
+    )
     private val regional = listOf(
         RadioStation("Cap Radio", "https://listen.radioking.com/radio/710810/stream/776366",
             logoUrl = "https://capradiotv.com/wp-content/uploads/2023/11/cropped-LOGO-PNG-CAP-RADIO-192x192.png",
@@ -121,11 +151,11 @@ internal object Stations {
         "capradio" to "Tanger–Tétouan–Al Hoceïma",
         "radiotangermed" to "Tanger–Tétouan–Al Hoceïma",
         "marrakechplus" to "Marrakech–Safi",
-        "radioplusagadir" to "Souss–Massa",
         "skyrockcasablanca" to "Casablanca–Settat",
     ) + snrtRegional.mapKeys { (station, _) -> StationFamilies.directoryKey(station) }
     private val localRadios = morocco + snrt + radio2m + luxe + StationFamilies.hit + StationFamilies.medi + regional
     private val localRadioNames = localRadios.map(StationFamilies::directoryKey).toSet()
+    private val localRadioUrls = localRadios.map(RadioStation::url).toSet()
     private val hitGroupNames = (StationFamilies.hit + morocco.filter { it.name == "HIT RADIO" || it.name == "Radio Azawan" })
         .map(StationFamilies::directoryKey).toSet()
     private val mediGroupNames = StationFamilies.medi.map(StationFamilies::directoryKey).toSet()
@@ -226,7 +256,8 @@ internal object Stations {
         else -> null
     }
     fun streamUrl(station: RadioStation): String = officialStreams[station.url] ?: station.url
-    fun isHls(station: RadioStation): Boolean = station.isHls || station.url in officialStreams
+    fun isHls(station: RadioStation): Boolean = station.isHls ||
+        officialStreams[station.url]?.substringBefore('?')?.endsWith(".m3u8", ignoreCase = true) == true
     fun region(station: RadioStation): String? = regionalAreas[StationFamilies.directoryKey(station)]
 
     fun group(station: RadioStation): StationGroup {
@@ -239,17 +270,41 @@ internal object Stations {
         }
     }
 
+    fun musicCategory(station: RadioStation): MoroccoCategory? = when (station.name) {
+        fayrouz.name -> MoroccoCategory.FAYROUZ
+        "Medina FM Tarab", "Medi 1 · Tarab", "Tarab Radio" -> MoroccoCategory.TARAB
+        "HIT RADIO · 100% Way Way" -> MoroccoCategory.CHAABI
+        "Medina FM Andalou", "Medi 1 · Andalouse" -> MoroccoCategory.ANDALOU
+        "HIT RADIO · 100% M’Gharba", "Medi 1 · Nayda" -> MoroccoCategory.MOROCCAN
+        "Medina FM Amazigh", "Radio Azawan" -> MoroccoCategory.AMAZIGH
+        else -> null
+    }
+
     fun visible(
         tab: StationTab, favorites: Set<String>, query: String, radioFavoritesOnly: Boolean = false,
         directory: List<RadioStation> = emptyList(), bookmarks: List<RadioStation> = emptyList(),
-        sort: StationSort = StationSort.DEFAULT,
+        sort: StationSort = StationSort.DEFAULT, category: MoroccoCategory = MoroccoCategory.ALL,
     ): List<RadioStation> {
         val candidates = when (tab) {
             StationTab.MOROCCO -> {
-                val listed = (directory + bookmarks).filter { it.countryCode == "MA" }.distinctBy { it.url }
+                val listed = (directory + bookmarks).filter { it.countryCode == "MA" && StationDirectory.isEligible(it) }
+                    .distinctBy { it.url }
                 val clicksByName = listed.groupBy(StationFamilies::directoryKey)
                     .mapValues { (_, entries) -> entries.maxOf { it.directoryClicks ?: -1 } }
-                (localRadios + listed.filter { StationFamilies.directoryKey(it) !in localRadioNames || it.url in favorites })
+                val community = listed.filter {
+                    StationFamilies.directoryKey(it) !in localRadioNames || (radioFavoritesOnly && it.url in favorites)
+                }
+                val pool = when (category) {
+                    MoroccoCategory.ALL -> localRadios + community
+                    MoroccoCategory.DIRECTORY -> community.filter { it.url !in localRadioUrls }
+                    MoroccoCategory.REGIONAL -> localRadios.filter { region(it) != null }
+                    MoroccoCategory.ARABIC -> localRadios.filter {
+                        val genre = musicCategory(it)
+                        genre != null && genre != MoroccoCategory.AMAZIGH
+                    }
+                    else -> localRadios.filter { musicCategory(it) == category }
+                }
+                pool
                     .distinctBy { it.url }
                     .filter { !radioFavoritesOnly || it.url in favorites }
                     .sortedWith(compareByDescending<RadioStation> { audienceShare(it) ?: -1 }
@@ -257,20 +312,29 @@ internal object Stations {
             }
             StationTab.WORLD -> directory
             StationTab.QURAN -> quranLibrary
-            StationTab.FAVORITES -> (all + bookmarks).distinctBy { it.url }.filter { it.url in favorites }
+            StationTab.FAVORITES -> (all + bookmarks.filter(StationDirectory::isEligible))
+                .distinctBy { it.url }.filter { it.url in favorites }
         }
+        val nameOrder = compareBy<RadioStation, String>(
+            Collator.getInstance(Locale.FRENCH).apply { strength = Collator.PRIMARY }, RadioStation::name,
+        ).thenBy { it.url }
         val ordered = when (sort) {
             StationSort.DEFAULT -> candidates
-            StationSort.NAME_ASC -> candidates.sortedBy { RadioCatalogue.searchKey(it.name) }
-            StationSort.NAME_DESC -> candidates.sortedByDescending { RadioCatalogue.searchKey(it.name) }
-            StationSort.GROUPS -> candidates.sortedWith(compareBy<RadioStation>(::group).thenBy { region(it).orEmpty() })
+            StationSort.NAME_ASC -> candidates.sortedWith(nameOrder)
+            StationSort.NAME_DESC -> candidates.sortedWith(nameOrder.reversed())
+            StationSort.GROUPS -> candidates.sortedWith(compareBy<RadioStation>(::group)
+                .thenBy { region(it).orEmpty() }.then(nameOrder))
+            StationSort.FAVORITES_FIRST -> candidates.sortedByDescending { it.url in favorites }
         }
-        val displayed = if (tab == StationTab.MOROCCO && sort != StationSort.GROUPS) {
+        val displayed = if (tab == StationTab.MOROCCO && category == MoroccoCategory.ARABIC && sort == StationSort.DEFAULT) {
+            ordered.sortedBy(::musicCategory)
+        } else if (tab == StationTab.MOROCCO && category == MoroccoCategory.ALL && sort == StationSort.DEFAULT) {
             val (local, national) = ordered.partition { region(it) != null }
             national + local
         } else ordered
         if (query.isBlank()) return displayed
         val key = RadioCatalogue.searchKey(query)
+        if (key.isEmpty()) return displayed
         val sections = if (tab == StationTab.QURAN && key.isNotEmpty()) {
             QuranSection.entries.filter { RadioCatalogue.searchKey(it.label).contains(key) }
         } else emptyList()
@@ -278,6 +342,8 @@ internal object Stations {
             RadioCatalogue.search(station, query) ||
                 (tab == StationTab.MOROCCO && group(station) != StationGroup.OTHER && RadioCatalogue.searchKey(group(station).label).contains(key)) ||
                 (tab == StationTab.MOROCCO && region(station)?.let { RadioCatalogue.searchKey(it).contains(key) } == true) ||
+                (station == fayrouz && listOf("fayroz", "fairouz", "fairouziat").any { it.contains(key) }) ||
+                (tab == StationTab.MOROCCO && musicCategory(station)?.let { RadioCatalogue.searchKey(it.label).contains(key) } == true) ||
                 aliases[reciterName(station)].orEmpty().any { RadioCatalogue.searchKey(it).contains(key) } ||
                 (sections.isNotEmpty() && quranSection(station) in sections)
         }
