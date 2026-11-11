@@ -16,8 +16,8 @@ internal class HeadlineTicker(context: Context, size: Int, textColor: Int) : Tex
     private val density = resources.displayMetrics.density
     private var drawing: StaticLayout? = null
     private var startedAt = 0L
-    private var travel = 0
-    private var scrollMillis = 0L
+    private var scrollMillis = 1L
+    private var isArticle = false
 
     init {
         textSize = size.toFloat()
@@ -31,16 +31,19 @@ internal class HeadlineTicker(context: Context, size: Int, textColor: Int) : Tex
         setPadding(padding, 0, padding, 0)
     }
 
-    fun showHeadline(headline: String): Long {
-        text = headline
+    fun durationFor(bulletin: NewsBulletin): Long {
+        if (!ValueAnimator.areAnimatorsEnabled()) return 8_000L
+        val textWidthDp = Layout.getDesiredWidth(bulletin.text, paint) / density
+        return ((textWidthDp + 32f) * 18f).toLong().coerceIn(4_500L, 14_000L)
+    }
+
+    fun showHeadline(bulletin: NewsBulletin, start: Long, duration: Long) {
+        isArticle = bulletin.url != null
+        startedAt = start
+        scrollMillis = duration.coerceAtLeast(1L)
+        text = bulletin.text
         prepareDrawing()
         invalidate()
-        return when {
-            !ValueAnimator.areAnimatorsEnabled() -> 10_000L
-            drawing != null -> (START_PAUSE + scrollMillis + 1_000L).coerceAtLeast(7_000L)
-            width == 0 -> (Layout.getDesiredWidth(headline, paint) / density * 25).toLong().coerceIn(7_000L, 48_000L)
-            else -> 7_000L
-        }
     }
 
     override fun onSizeChanged(width: Int, height: Int, oldWidth: Int, oldHeight: Int) {
@@ -51,16 +54,13 @@ internal class HeadlineTicker(context: Context, size: Int, textColor: Int) : Tex
     private fun prepareDrawing() {
         val viewport = width - paddingLeft - paddingRight
         val fullWidth = ceil(Layout.getDesiredWidth(text, paint)).toInt() + 2
-        travel = (fullWidth - viewport).coerceAtLeast(0)
-        drawing = if (viewport > 0 && travel > 0 && ValueAnimator.areAnimatorsEnabled()) {
+        drawing = if (isArticle && viewport > 0) {
             StaticLayout.Builder.obtain(text, 0, text.length, paint, fullWidth)
                 .setIncludePad(false)
                 .setMaxLines(1)
                 .setTextDirection(TextDirectionHeuristics.FIRSTSTRONG_LTR)
                 .build()
         } else null
-        startedAt = SystemClock.uptimeMillis()
-        scrollMillis = (travel / density * 25).toLong().coerceIn(900L, 45_000L)
     }
 
     override fun onDraw(canvas: Canvas) {
@@ -69,21 +69,21 @@ internal class HeadlineTicker(context: Context, size: Int, textColor: Int) : Tex
             super.onDraw(canvas)
             return
         }
-        val elapsed = SystemClock.uptimeMillis() - startedAt - START_PAUSE
+        val elapsed = SystemClock.uptimeMillis() - startedAt
         val fraction = (elapsed.toFloat() / scrollMillis).coerceIn(0f, 1f)
-        val offset = if (headline.getParagraphDirection(0) < 0) 1f - fraction else fraction
+        val viewport = width - paddingLeft - paddingRight
+        val entrance = viewport * .18f
+        val travel = headline.width + entrance
+        val left = entrance - fraction * travel
+        val offset = if (headline.getParagraphDirection(0) < 0) viewport - headline.width - left else left
         canvas.save()
         canvas.clipRect(paddingLeft, 0, width - paddingRight, height)
-        canvas.translate(paddingLeft - travel * offset, (height - headline.height) / 2f)
+        canvas.translate(paddingLeft + offset, (height - headline.height) / 2f)
         paint.color = currentTextColor
         headline.draw(canvas)
         canvas.restore()
         if (elapsed < scrollMillis && isShown && windowVisibility == VISIBLE) {
-            postInvalidateDelayed(if (elapsed < 0) -elapsed else 32L)
+            postInvalidateDelayed(32L)
         }
-    }
-
-    private companion object {
-        const val START_PAUSE = 1_300L
     }
 }

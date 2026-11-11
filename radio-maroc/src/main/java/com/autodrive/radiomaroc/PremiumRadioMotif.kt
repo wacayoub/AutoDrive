@@ -15,6 +15,10 @@ internal class PremiumRadioMotif(
 ) : View(context) {
     private val density = resources.displayMetrics.density
     private val motifColor = context.getColor(R.color.radio_motif)
+    private val bassColor = context.getColor(R.color.radio_motif_bass)
+    private val midColor = context.getColor(R.color.radio_motif_mid)
+    private val trebleColor = context.getColor(R.color.radio_motif_treble)
+    private val bandColors = intArrayOf(bassColor, bassColor, midColor, midColor, midColor, trebleColor, trebleColor)
     private val levelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         strokeCap = Paint.Cap.ROUND
         strokeWidth = 2.5f * density
@@ -55,7 +59,8 @@ internal class PremiumRadioMotif(
             heights[index] = level
             val x = start + index * spacing
             val halfHeight = density + level * scale
-            levelPaint.color = ColorUtils.setAlphaComponent(motifColor, 80 + (level * 175).toInt())
+            val color = if (playing) bandColors[index] else motifColor
+            levelPaint.color = ColorUtils.setAlphaComponent(color, 108 + (level * 147).toInt())
             canvas.drawLine(x, centerY - halfHeight, x, centerY + halfHeight, levelPaint)
             if (!belowLogo) canvas.drawLine(width - x, centerY - halfHeight, width - x, centerY + halfHeight, levelPaint)
         }

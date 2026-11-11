@@ -37,5 +37,8 @@
     <color name="radio_status_idle">#E8EDF7</color>
     <color name="radio_ripple">#24184DB6</color>
     <color name="radio_motif">#537BBB</color>
+    <color name="radio_motif_bass">#A65612</color>
+    <color name="radio_motif_mid">#147C61</color>
+    <color name="radio_motif_treble">#245FC2</color>
     <color name="radio_dolby_off">#59636E</color>
 </resources>

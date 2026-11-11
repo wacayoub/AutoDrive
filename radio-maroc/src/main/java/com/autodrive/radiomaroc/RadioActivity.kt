@@ -64,9 +64,11 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import androidx.media3.common.MediaItem
@@ -172,7 +174,6 @@ class RadioActivity : ComponentActivity() {
     private lateinit var playerTitle: TextView
     private lateinit var playerPanel: LinearLayout
     private lateinit var playerSubtitle: TextView
-    private data class Bulletin(val source: String, val text: String)
     private var newsTicker: HeadlineTicker? = null
     private var tickerSource: TextView? = null
     private var clockTime: TextView? = null
@@ -180,7 +181,9 @@ class RadioActivity : ComponentActivity() {
     private val clockTimeFormat = DateTimeFormatter.ofPattern("HH:mm", Locale.ROOT)
     private val clockDateFormat = DateTimeFormatter.ofPattern("EEE d MMM", Locale.FRENCH)
     private val shortClockDateFormat = DateTimeFormatter.ofPattern("dd/MM", Locale.ROOT)
-    private var tickerBulletin = Bulletin("ACTUS", "Chargement…")
+    private var tickerBulletin = NewsBulletin("ACTUS", "Chargement…")
+    private var tickerStartedAt = 0L
+    private var tickerDuration = 0L
     private var nextNewsFetchAt = 0L
     private val newsHeadlines = MutableStateFlow<Map<NewsTopic, List<NewsHeadline>>?>(null)
     private data class NewsEdition(val expiresAt: Long, val headlines: List<NewsHeadline>)
@@ -999,45 +1002,43 @@ class RadioActivity : ComponentActivity() {
                     }.awaitAll()
                 }
                 val available = feeds.filter { (_, headlines) -> headlines.isNotEmpty() }.toMap()
-                newsHeadlines.value = available
-                val refreshDelay = if (available.isEmpty()) 180_000L else 900_000L
+                newsHeadlines.value = newsHeadlines.value.orEmpty() + available
+                val refreshDelay = if (available.size < NewsTopic.entries.size) 180_000L else 900_000L
                 nextNewsFetchAt = SystemClock.elapsedRealtime() + refreshDelay
             }
             delay((nextNewsFetchAt - SystemClock.elapsedRealtime()).coerceAtLeast(1L))
         }
     }
 
-    private suspend fun rollNewsHeadlines() {
-        combine(stationPublisher, stationHeadlines, newsHeadlines) { publisher, station, fallback ->
-            val own = station.filter { it.publisher == publisher }.take(6)
-                .map { Bulletin(it.publisher.badge, it.title) }
-            if (own.isNotEmpty()) own else fallback?.let { feeds ->
-                val displayedUrls = mutableSetOf<String>()
-                (0 until 3).flatMap { slot ->
-                    NewsTopic.entries.mapNotNull { topic ->
-                        feeds[topic]?.getOrNull(slot)?.takeIf { displayedUrls.add(it.url) }
-                            ?.let { Bulletin("RFI", "${topic.label} · ${it.title}") }
-                    }
+    private suspend fun rollNewsHeadlines(): Unit = coroutineScope {
+        val rotation = combine(stationPublisher, stationHeadlines, newsHeadlines) { publisher, station, feeds ->
+            val stationItems = station.filter { it.publisher == publisher }
+            if (stationItems.isEmpty() && feeds == null) null else RadioNews.rotation(stationItems, feeds.orEmpty())
+        }.stateIn(this, SharingStarted.Eagerly, null)
+        while (true) {
+            var headlines = rotation.value
+            if (headlines.isNullOrEmpty()) {
+                setTickerBulletin(NewsBulletin("ACTUS", if (headlines == null) "Chargement…" else "Titres indisponibles"))
+                headlines = rotation.first { it != null }
+                if (headlines.isNullOrEmpty()) {
+                    setTickerBulletin(NewsBulletin("ACTUS", "Titres indisponibles"))
+                    headlines = rotation.first { !it.isNullOrEmpty() }
                 }
             }
-        }.distinctUntilChanged().collectLatest { rotation ->
-            if (rotation.isNullOrEmpty()) {
-                setTickerBulletin(Bulletin("ACTUS", if (rotation == null) "Chargement…" else "Titres indisponibles"))
-                return@collectLatest
-            }
-            var index = 0
-            while (true) {
-                val headline = rotation[index]
-                index = (index + 1) % rotation.size
-                delay(setTickerBulletin(headline))
-            }
+            val edition = requireNotNull(headlines)
+            val previous = edition.indexOfFirst { it.url == tickerBulletin.url }
+            val next = edition[(previous + 1) % edition.size]
+            delay(setTickerBulletin(next))
         }
     }
 
-    private fun setTickerBulletin(bulletin: Bulletin): Long {
+    private fun setTickerBulletin(bulletin: NewsBulletin): Long {
         tickerBulletin = bulletin
+        tickerStartedAt = SystemClock.uptimeMillis()
+        tickerDuration = newsTicker?.durationFor(bulletin) ?: 8_000L
         tickerSource?.text = bulletin.source
-        return newsTicker?.showHeadline(bulletin.text) ?: 8_000L
+        newsTicker?.showHeadline(bulletin, tickerStartedAt, tickerDuration)
+        return tickerDuration
     }
 
     private suspend fun refreshStationNews(publisher: NewsPublisher) {
@@ -1234,7 +1235,7 @@ class RadioActivity : ComponentActivity() {
         addView(source, LinearLayout.LayoutParams(dp(if (compactTv) 45 else 51), dp(if (compactTv) 21 else 24))
             .apply { marginStart = dp(4) })
         val ticker = HeadlineTicker(context, if (compactTv) 11 else 13, textColor).apply {
-            showHeadline(tickerBulletin.text)
+            showHeadline(tickerBulletin, tickerStartedAt, tickerDuration)
         }
         newsTicker = ticker
         addView(ticker, LinearLayout.LayoutParams(0, -1, 1f))
