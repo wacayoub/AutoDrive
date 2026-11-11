@@ -54,8 +54,14 @@ import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.net.toUri
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import androidx.media3.common.MediaItem
@@ -159,6 +165,10 @@ class RadioActivity : ComponentActivity() {
     private lateinit var playerTitle: TextView
     private lateinit var playerPanel: LinearLayout
     private lateinit var playerSubtitle: TextView
+    private var newsTicker: TextView? = null
+    private var tickerText = "Chargement des titres…"
+    private var nextNewsFetchAt = 0L
+    private val newsHeadlines = mutableMapOf<NewsTopic, List<NewsHeadline>>()
     private var playerCategory: TextView? = null
     private lateinit var playerArtwork: StationArtwork
     private lateinit var playerStatus: TextView
@@ -242,6 +252,9 @@ class RadioActivity : ComponentActivity() {
         window.decorView.addOnUnhandledKeyEventListener { _, event -> handleStationKey(event) }
         updateDirectory()
         restoreTvCatalogueFocus()
+        if (television) lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) { rollNewsHeadlines() }
+        }
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -914,10 +927,80 @@ class RadioActivity : ComponentActivity() {
         dialog.listView.setSelection(0)
     }
 
+    private suspend fun rollNewsHeadlines() {
+        var index = 0
+        while (true) {
+            if (SystemClock.elapsedRealtime() >= nextNewsFetchAt) {
+                val feeds = coroutineScope {
+                    NewsTopic.entries.map { topic ->
+                        async(Dispatchers.IO) { topic to runCatching { RadioNews.fetch(topic) }.getOrDefault(emptyList()) }
+                    }.awaitAll()
+                }
+                newsHeadlines.clear()
+                feeds.filter { (_, headlines) -> headlines.isNotEmpty() }.forEach { (topic, headlines) ->
+                    newsHeadlines[topic] = headlines
+                }
+                val refreshDelay = if (newsHeadlines.isEmpty()) 180_000L else 900_000L
+                nextNewsFetchAt = SystemClock.elapsedRealtime() + refreshDelay
+                index = 0
+            }
+            val rotation = (0 until 3).flatMap { slot ->
+                NewsTopic.entries.mapNotNull { topic ->
+                    newsHeadlines[topic]?.getOrNull(slot)?.let { "${topic.label} · ${it.title}" }
+                }
+            }
+            if (rotation.isEmpty()) {
+                setTickerText("Actualités indisponibles")
+                delay((nextNewsFetchAt - SystemClock.elapsedRealtime()).coerceAtLeast(1L))
+            } else {
+                index %= rotation.size
+                val headline = rotation[index++]
+                setTickerText(headline)
+                val ticker = newsTicker
+                val textWidthDp = (ticker?.paint?.measureText(headline) ?: 0f) / resources.displayMetrics.density
+                val seconds = if (ticker?.isSelected == true) textWidthDp / 30f + 3f else 10f
+                val displayTime = (seconds * 1_000).toLong().coerceIn(8_000L, 60_000L)
+                delay(minOf(displayTime, (nextNewsFetchAt - SystemClock.elapsedRealtime()).coerceAtLeast(1L)))
+            }
+        }
+    }
+
+    private fun setTickerText(text: String) {
+        tickerText = text
+        newsTicker?.apply {
+            isSelected = ValueAnimator.areAnimatorsEnabled()
+            this.text = tickerText
+        }
+    }
+
+    private fun newsBar(): View = row().apply {
+        layoutDirection = View.LAYOUT_DIRECTION_LTR
+        gravity = Gravity.CENTER_VERTICAL
+        background = pressable(R.drawable.radio_control)
+        isFocusable = true
+        contentDescription = "Actualités · RFI"
+        remoteFocus()
+        setRadioClick(::showNews)
+        addView(label("RFI", if (compactTv) 11 else 12, accent, bold = true).apply {
+            gravity = Gravity.CENTER
+        }, LinearLayout.LayoutParams(dp(if (compactTv) 34 else 40), -1))
+        addView(View(context).apply { setBackgroundColor(ripple.defaultColor) }, LinearLayout.LayoutParams(dp(1), dp(15)))
+        val ticker = label(tickerText, if (compactTv) 11 else 13, textColor).apply {
+            setSingleLine(true)
+            ellipsize = TextUtils.TruncateAt.MARQUEE
+            marqueeRepeatLimit = -1
+            isSelected = ValueAnimator.areAnimatorsEnabled()
+            gravity = Gravity.CENTER_VERTICAL or Gravity.START
+            setPadding(dp(6), 0, dp(6), 0)
+        }
+        newsTicker = ticker
+        addView(ticker, LinearLayout.LayoutParams(0, -1, 1f))
+    }
+
     private fun showNews() {
         val dateFormat = DateTimeFormatter.ofLocalizedDateTime(FormatStyle.SHORT)
             .withLocale(Locale.FRENCH).withZone(ZoneId.systemDefault())
-        val cache = mutableMapOf<NewsTopic, List<NewsHeadline>>()
+        val cache = newsHeadlines.toMutableMap()
         var request: Job? = null
         val status = label("", 14, muted).apply { gravity = Gravity.CENTER }
         val headlines = object : ArrayAdapter<NewsHeadline>(this, android.R.layout.simple_list_item_1) {
@@ -1105,6 +1188,7 @@ class RadioActivity : ComponentActivity() {
         val stackedPresentation = wide && !tightSidePlayer && !tightListening
         return (if (horizontalMini || splitListening) row() else column()).apply {
             playerCategory = null
+            newsTicker = null
             background = getDrawable(R.drawable.radio_player)
             if (mini) gravity = Gravity.CENTER_VERTICAL
             if (full) gravity = Gravity.CENTER
@@ -1204,12 +1288,7 @@ class RadioActivity : ComponentActivity() {
                     }
                     addView(playerSubtitle, LinearLayout.LayoutParams(-1, -2))
                     if (television && !mini) {
-                        val news = button("Actualités · RFI", ::showNews).apply {
-                            textSize = if (compactTv) 11f else 13f
-                            maxLines = 1
-                            ellipsize = TextUtils.TruncateAt.END
-                        }
-                        addView(news, LinearLayout.LayoutParams(-1, dp(if (compactTv) 28 else 32))
+                        addView(newsBar(), LinearLayout.LayoutParams(-1, dp(if (compactTv) 28 else 32))
                             .apply { topMargin = dp(4) })
                     }
                 }, if (stackedPresentation) LinearLayout.LayoutParams(-1, -2) else LinearLayout.LayoutParams(0, -2, 1f))

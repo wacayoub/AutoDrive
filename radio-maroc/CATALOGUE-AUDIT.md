@@ -21,4 +21,4 @@ Vérification pour Radio Maroc & Coran 2.5.16, le 11 novembre 2026. Les sondes o
 
 Le catalogue local comprend 59 entrées dans Radio Maroc, avec les résultats supplémentaires de l’annuaire selon le réseau. Le menu Genres propose les radios régionales, les entrées communautaires et la musique arabe, avec des filtres Fayrouz, Tarab, Chaâbi, Andalou et Scène marocaine. Amazigh a son propre filtre.
 
-À partir de 2.5.17, le bouton Actualités du lecteur TV affiche les titres et résumés publiés par RFI dans cinq rubriques. La lecture de la radio continue pendant la consultation. [Mode d’emploi des fils RSS de RFI](https://www1.rfi.fr/actufr/articles/072/article_40497.asp)
+À partir de 2.5.17, le bandeau RFI du lecteur TV fait défiler les titres de cinq rubriques et actualise les flux toutes les quinze minutes pendant que l’application est à l’écran. Un appui ouvre les rubriques et leurs résumés. La lecture de la radio continue pendant la consultation. [Mode d’emploi des fils RSS de RFI](https://www1.rfi.fr/actufr/articles/072/article_40497.asp)
