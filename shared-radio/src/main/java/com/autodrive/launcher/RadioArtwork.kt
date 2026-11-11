@@ -21,6 +21,7 @@ internal class RadioArtwork(
     context: Context,
     private val maxImageBytes: Int = 512 * 1024,
     memoryBytes: Int = 2 * 1024 * 1024,
+    private val normalizeLogoMargins: Boolean = false,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val io = Dispatchers.IO.limitedParallelism(2)
@@ -99,13 +100,24 @@ internal class RadioArtwork(
         val sourcePixels = maxOf(bounds.outWidth, bounds.outHeight)
         var sample = 1
         while (sourcePixels / (sample * 2) >= targetPixels) sample *= 2
-        val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options().apply { inSampleSize = sample })
+        val decoded = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options().apply { inSampleSize = sample })
             ?: return null
+        val bitmap = if (normalizeLogoMargins) cropLogoMargins(decoded) else decoded
         val decodedPixels = maxOf(bitmap.width, bitmap.height)
         if (decodedPixels <= targetPixels) return bitmap
         val width = (bitmap.width * targetPixels / decodedPixels).coerceAtLeast(1)
         val height = (bitmap.height * targetPixels / decodedPixels).coerceAtLeast(1)
         return Bitmap.createScaledBitmap(bitmap, width, height, true).also { bitmap.recycle() }
     }
+
+    private fun cropLogoMargins(bitmap: Bitmap): Bitmap {
+        val width = bitmap.width
+        val height = bitmap.height
+        val pixels = IntArray(width * height)
+        bitmap.getPixels(pixels, 0, width, 0, 0, width, height)
+        val crop = LogoContentBounds.find(pixels, width, height) ?: return bitmap
+        return Bitmap.createBitmap(bitmap, crop.left, crop.top, crop.width, crop.height).also { bitmap.recycle() }
+    }
+
     fun close() { scope.cancel(); memory.evictAll() }
 }

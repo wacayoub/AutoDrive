@@ -203,7 +203,8 @@ class RadioActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         prefs = getSharedPreferences(PREFERENCES, MODE_PRIVATE)
         val artworkCacheMb = if (television && resources.displayMetrics.density >= 2f) 8 else 2
-        artwork = RadioArtwork(this, maxImageBytes = 1024 * 1024, memoryBytes = artworkCacheMb * 1024 * 1024)
+        artwork = RadioArtwork(this, maxImageBytes = 1024 * 1024, memoryBytes = artworkCacheMb * 1024 * 1024,
+            normalizeLogoMargins = true)
         directory = DirectoryBrowser(StationDirectory(this)) { renderRows() }
         radioUpdates = RadioUpdates(this, savedInstanceState)
         tab = StationTab.restore(prefs.getString("tab", null))
@@ -1374,7 +1375,8 @@ class RadioActivity : ComponentActivity() {
                 addView(playingIcon, FrameLayout.LayoutParams(dp(18), dp(18), Gravity.CENTER))
             }, LinearLayout.LayoutParams(dp(38), dp(44)))
             val largeArt = television && !compactTv
-            addView(badge, LinearLayout.LayoutParams(dp(if (largeArt) 54 else 44), dp(if (largeArt) 50 else 40)).apply {
+            val logoSize = dp(if (largeArt) 54 else 44)
+            addView(badge, LinearLayout.LayoutParams(logoSize, logoSize).apply {
                 marginEnd = dp(if (largeArt) 12 else 9)
             })
             addView(column().apply { addView(name); addView(subtitle) }, LinearLayout.LayoutParams(0, -2, 1f))
