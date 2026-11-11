@@ -24,7 +24,11 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.datasource.ResolvingDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
+import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.analytics.AnalyticsListener
+import androidx.media3.exoplayer.audio.AudioSink
+import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.extractor.metadata.icy.IcyInfo
 import androidx.media3.session.LibraryResult
@@ -74,7 +78,7 @@ internal class PlaybackService : MediaLibraryService() {
     private var session: MediaLibrarySession? = null
     private lateinit var engine: ExoPlayer
     private val radioPreferences by lazy { getSharedPreferences("radio_maroc", MODE_PRIVATE) }
-    private val equalizer = RadioEqualizer()
+    private val audioProcessor = RadioAudioProcessor()
     private var soundStatus = RadioSound.Status.NORMAL
     private val soundPreferenceListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
         if (key == RadioSound.PROFILE) applySoundProfile()
@@ -118,12 +122,8 @@ internal class PlaybackService : MediaLibraryService() {
             applySoundProfile()
         }
 
-        override fun onAudioSessionIdChanged(audioSessionId: Int) {
-            applySoundProfile()
-        }
-
         override fun onPlaybackStateChanged(playbackState: Int) {
-            if (playbackState == Player.STATE_READY) applySoundProfile()
+            applySoundProfile()
         }
 
         override fun onMetadata(metadata: Metadata) {
@@ -175,7 +175,16 @@ internal class PlaybackService : MediaLibraryService() {
                 mapOf("Origin" to "https://radio2m.ma", "Referer" to "https://radio2m.ma/"),
             ) else request
         }
-        engine = ExoPlayer.Builder(this)
+        audioProcessor.profile = RadioSound.profile(radioPreferences)
+        RadioSound.prepareClicks(this, radioPreferences)
+        val renderers = object : DefaultRenderersFactory(this) {
+            override fun buildAudioSink(context: android.content.Context, enableFloatOutput: Boolean,
+                enableAudioOutputPlaybackParams: Boolean): AudioSink = DefaultAudioSink.Builder(context)
+                .setEnableAudioTrackPlaybackParams(enableAudioOutputPlaybackParams)
+                .setAudioProcessors(arrayOf(audioProcessor))
+                .build()
+        }
+        engine = ExoPlayer.Builder(this, renderers)
             .setMediaSourceFactory(DefaultMediaSourceFactory(broadcastNetwork))
             .setLoadControl(DefaultLoadControl.Builder().setBufferDurationsMs(3_000, 12_000, 900, 1_600).build())
             .setAudioAttributes(AudioAttributes.Builder().setUsage(C.USAGE_MEDIA)
@@ -184,6 +193,11 @@ internal class PlaybackService : MediaLibraryService() {
             .setWakeMode(C.WAKE_MODE_NETWORK)
             .build()
         engine.addListener(recoveryListener)
+        engine.addAnalyticsListener(object : AnalyticsListener {
+            override fun onAudioPositionAdvancing(eventTime: AnalyticsListener.EventTime, playoutStartSystemTimeMs: Long) {
+                applySoundProfile()
+            }
+        })
         radioPreferences.registerOnSharedPreferenceChangeListener(soundPreferenceListener)
         applySoundProfile()
         sessionPlayer = RadioSessionPlayer(engine, { stationQueue().size > 1 }, ::changeStation)
@@ -286,8 +300,14 @@ internal class PlaybackService : MediaLibraryService() {
     private fun lastStationId(): String? = radioPreferences.getString("last_station", null)
 
     private fun applySoundProfile() {
-        val audioSessionId = if (engine.currentMediaItem == null) 0 else engine.audioSessionId
-        val status = equalizer.apply(RadioSound.profile(radioPreferences), audioSessionId)
+        val profile = RadioSound.profile(radioPreferences)
+        audioProcessor.profile = profile
+        val status = when {
+            profile == SoundProfile.NORMAL -> RadioSound.Status.NORMAL
+            engine.currentMediaItem == null || engine.playbackState != Player.STATE_READY -> RadioSound.Status.WAITING
+            audioProcessor.hasPcm -> RadioSound.Status.ACTIVE
+            else -> RadioSound.Status.UNAVAILABLE
+        }
         if (soundStatus != status) {
             soundStatus = status
             session?.setSessionExtras(sessionExtras())
@@ -408,7 +428,6 @@ internal class PlaybackService : MediaLibraryService() {
     override fun onDestroy() {
         connectivity.unregisterNetworkCallback(networkCallback)
         radioPreferences.unregisterOnSharedPreferenceChangeListener(soundPreferenceListener)
-        equalizer.close()
         scope.cancel()
         artwork.close()
         CarArtworkProvider.publish(null)

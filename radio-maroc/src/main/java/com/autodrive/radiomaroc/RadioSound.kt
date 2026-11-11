@@ -2,26 +2,13 @@ package com.autodrive.radiomaroc
 
 import android.content.Context
 import android.content.SharedPreferences
-import android.media.AudioManager
-import android.media.audiofx.AudioEffect
-import android.media.audiofx.Equalizer
+import android.media.AudioAttributes
+import android.media.SoundPool
 
-internal enum class SoundProfile(val label: String) {
-    NORMAL("Normal"), BASS("Basses"), VOICE("Voix");
-
-    fun bandLevel(frequencyHz: Int): Int = when (this) {
-        NORMAL -> 0
-        BASS -> when {
-            frequencyHz < 200 -> 0
-            frequencyHz < 650 -> -100
-            else -> -280
-        }
-        VOICE -> when {
-            frequencyHz < 250 -> -360
-            frequencyHz < 4_000 -> 0
-            else -> -180
-        }
-    }
+internal enum class SoundProfile(val label: String, val bass: Float, val mid: Float, val treble: Float) {
+    NORMAL("Normal", 1f, 1f, 1f),
+    BASS("Basses", 1f, .72f, .48f),
+    VOICE("Voix", .40f, 1f, .62f),
 }
 
 internal object RadioSound {
@@ -31,67 +18,44 @@ internal object RadioSound {
 
     enum class Status { NORMAL, WAITING, ACTIVE, UNAVAILABLE }
 
+    // The activity and the playback service share one short sample on the app's main thread.
+    private var clickPool: SoundPool? = null
+    private var clickSample = 0
+    private var clickReady = false
+    private var playWhenLoaded = false
+
     fun profile(prefs: SharedPreferences): SoundProfile {
         val saved = prefs.getString(PROFILE, null)
         return SoundProfile.entries.firstOrNull { it.name == saved } ?: SoundProfile.NORMAL
     }
 
+    fun prepareClicks(context: Context, prefs: SharedPreferences) {
+        if (clickPool != null || !prefs.getBoolean(CLICKS, false)) return
+        runCatching {
+            val pool = SoundPool.Builder().setMaxStreams(1).setAudioAttributes(
+                AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build(),
+            ).build()
+            clickPool = pool
+            pool.setOnLoadCompleteListener { _, sample, status ->
+                if (sample == clickSample && status == 0) {
+                    clickReady = true
+                    if (playWhenLoaded && prefs.getBoolean(CLICKS, false)) playLoadedClick(pool)
+                }
+                playWhenLoaded = false
+                pool.setOnLoadCompleteListener(null)
+            }
+            clickSample = pool.load(context.applicationContext, R.raw.radio_click, 1)
+        }
+    }
+
     fun playClick(context: Context, prefs: SharedPreferences) {
-        if (prefs.getBoolean(CLICKS, false)) {
-            runCatching {
-                context.getSystemService(AudioManager::class.java)?.playSoundEffect(AudioManager.FX_KEY_CLICK)
-            }
-        }
-    }
-}
-
-/** Owns an effect attached only to the radio player's current audio session. */
-internal class RadioEqualizer {
-    private var effect: Equalizer? = null
-    private var sessionId = 0
-    private var appliedProfile: SoundProfile? = null
-
-    fun apply(profile: SoundProfile, audioSessionId: Int): RadioSound.Status {
-        if (profile == SoundProfile.NORMAL || audioSessionId <= 0) {
-            close()
-            return if (profile == SoundProfile.NORMAL) RadioSound.Status.NORMAL else RadioSound.Status.WAITING
-        }
-        if (sessionId != audioSessionId) close()
-        return try {
-            val equalizer = effect ?: Equalizer(0, audioSessionId).also {
-                effect = it
-                sessionId = audioSessionId
-            }
-            if (!equalizer.hasControl()) return RadioSound.Status.UNAVAILABLE
-            if (appliedProfile != profile || !equalizer.enabled) {
-                val range = equalizer.bandLevelRange
-                // Use relative emphasis by attenuating other bands, without increasing their input gain.
-                for (index in 0 until equalizer.numberOfBands) {
-                    val band = index.toShort()
-                    val frequencyHz = equalizer.getCenterFreq(band) / 1_000
-                    val gain = profile.bandLevel(frequencyHz).coerceIn(range[0].toInt(), range[1].toInt())
-                    equalizer.setBandLevel(band, gain.toShort())
-                }
-                if (equalizer.setEnabled(true) != AudioEffect.SUCCESS) {
-                    close()
-                    return RadioSound.Status.UNAVAILABLE
-                }
-                appliedProfile = profile
-            }
-            RadioSound.Status.ACTIVE
-        } catch (_: RuntimeException) {
-            close()
-            RadioSound.Status.UNAVAILABLE
-        }
+        if (!prefs.getBoolean(CLICKS, false)) return
+        prepareClicks(context, prefs)
+        if (clickReady) clickPool?.let(::playLoadedClick) else playWhenLoaded = true
     }
 
-    fun close() {
-        effect?.let {
-            runCatching { if (it.hasControl()) it.setEnabled(false) }
-            runCatching { it.release() }
-        }
-        effect = null
-        sessionId = 0
-        appliedProfile = null
+    private fun playLoadedClick(pool: SoundPool) {
+        pool.play(clickSample, .72f, .72f, 1, 0, 1f)
     }
 }

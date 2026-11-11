@@ -151,6 +151,7 @@ class RadioActivity : ComponentActivity() {
     private lateinit var liveIndicator: LinearLayout
     private lateinit var liveDot: View
     private var livePulse: ObjectAnimator? = null
+    private lateinit var audioMotif: PremiumRadioMotif
     private lateinit var playButton: ImageButton
     private lateinit var previous: ImageButton
     private lateinit var next: ImageButton
@@ -235,6 +236,7 @@ class RadioActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
+        RadioSound.prepareClicks(this, prefs)
         if (!restoringActivity || carResume() == CarResume.AFTER_BOOT) armCarStartup()
         restoringActivity = false
         connectPlayer()
@@ -268,6 +270,7 @@ class RadioActivity : ComponentActivity() {
         controller = null
         controllerFuture?.let(MediaController::releaseFuture)
         controllerFuture = null
+        audioMotif.playing = false
         updateLiveDot(false)
         super.onStop()
     }
@@ -937,7 +940,8 @@ class RadioActivity : ComponentActivity() {
                 else -> 122
             })
             val artworkFrame = FrameLayout(context).apply {
-                addView(PremiumRadioMotif(context), FrameLayout.LayoutParams(-1, -1))
+                audioMotif = PremiumRadioMotif(context, artwork)
+                addView(audioMotif, FrameLayout.LayoutParams(-1, -1))
                 addView(artwork, FrameLayout.LayoutParams(artworkSize, artworkSize, Gravity.CENTER))
             }
             val presentation = (if (stackedPresentation) playerColumn(artworkFrame, artwork, motifHeight, artworkSize)
@@ -1122,9 +1126,9 @@ class RadioActivity : ComponentActivity() {
         ImageButton(this).apply {
             id = View.generateViewId()
             setImageResource(icon)
-            imageTintList = ColorStateList.valueOf(if (primary) getColor(R.color.radio_on_primary) else textColor)
+            imageTintList = ColorStateList.valueOf(if (primary) accent else textColor)
             scaleType = ImageView.ScaleType.CENTER
-            background = pressable(if (primary) R.drawable.radio_primary else R.drawable.radio_control)
+            background = pressable()
             contentDescription = description
             isFocusable = true
             remoteFocus()
@@ -1341,8 +1345,6 @@ class RadioActivity : ComponentActivity() {
         private var artworkGeneration = -1
 
         init {
-            background = getDrawable(R.drawable.radio_control)
-            clipToOutline = true
             importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
             if (showCredits) remoteFocus()
             addView(initials, LayoutParams(-1, -1))
@@ -1354,7 +1356,6 @@ class RadioActivity : ComponentActivity() {
             artworkKey = station?.url
             artworkGeneration = artwork.generation
             logoWork?.cancel()
-            background = getDrawable(R.drawable.radio_control)
             initials.text = when {
                 station == null -> "FM"
                 Stations.isReciter(station) -> "ق"
@@ -1378,7 +1379,6 @@ class RadioActivity : ComponentActivity() {
             }
             logoWork = artwork.load(station?.logoUrl) { bitmap ->
                 if (artworkKey == station?.url && bitmap != null) {
-                    background = getDrawable(R.drawable.radio_picon)
                     logo.setImageBitmap(bitmap)
                     logo.visibility = View.VISIBLE
                     initials.visibility = View.GONE
@@ -1523,6 +1523,7 @@ class RadioActivity : ComponentActivity() {
         val requesting = if (luxe != null) luxe == LuxeRadio.State.PLAYING || luxe == LuxeRadio.State.CONNECTING
             else player?.playWhenReady == true && (player.playerError == null || waitingForNetwork) && !ended
         val playing = if (luxe != null) luxe == LuxeRadio.State.PLAYING else player?.isPlaying == true
+        audioMotif.playing = luxe == null && playing
         val live = playing && !recording
         val streamInfo = player?.sessionExtras?.takeIf { it.getString(PlaybackService.STREAM_STATION) == active }
         val programme = streamInfo?.getString(PlaybackService.PROGRAMME_SOURCE)?.let { source ->
@@ -1810,7 +1811,7 @@ class RadioActivity : ComponentActivity() {
 
     private fun row() = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
     private fun column() = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-    private fun pressable(drawable: Int) = RippleDrawable(ripple, getDrawable(drawable),
+    private fun pressable(drawable: Int? = null) = RippleDrawable(ripple, drawable?.let(::getDrawable),
         GradientDrawable().apply { setColor(Color.WHITE); cornerRadius = dp(12).toFloat() })
     private fun dp(value: Int) = (value * resources.displayMetrics.density + .5f).toInt()
 }
