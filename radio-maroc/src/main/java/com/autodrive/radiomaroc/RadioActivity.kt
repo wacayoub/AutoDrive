@@ -566,6 +566,7 @@ class RadioActivity : ComponentActivity() {
                 view.setTextColor(getColorStateList(R.color.radio_tab_text))
                 if (inlineIcons) {
                     view.gravity = Gravity.START or Gravity.CENTER_VERTICAL
+                    view.textAlignment = View.TEXT_ALIGNMENT_VIEW_START
                     view.setCompoundDrawablesRelativeWithIntrinsicBounds(icon, 0, 0, 0)
                     view.compoundDrawablePadding = dp(5)
                 } else {
