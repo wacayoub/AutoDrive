@@ -17,33 +17,39 @@ import java.net.URL
 import java.security.MessageDigest
 
 /** Bounded, HTTPS-only station artwork. No synthetic branding or UI-thread downloads. */
-internal class RadioArtwork(context: Context, private val maxImageBytes: Int = 512 * 1024) {
+internal class RadioArtwork(
+    context: Context,
+    private val maxImageBytes: Int = 512 * 1024,
+    memoryBytes: Int = 2 * 1024 * 1024,
+) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val io = Dispatchers.IO.limitedParallelism(2)
     private val folder = File(context.cacheDir, "radio-logos")
-    private val memory = object : LruCache<String, Bitmap>(2 * 1024 * 1024) {
-        override fun sizeOf(key: String, value: Bitmap) = value.byteCount
+    private data class ArtworkSize(val url: String, val pixels: Int)
+    private val memory = object : LruCache<ArtworkSize, Bitmap>(memoryBytes) {
+        override fun sizeOf(key: ArtworkSize, value: Bitmap) = value.byteCount
     }
     private val failures = mutableSetOf<String>()
     var generation = 0
         private set
     fun retryFailures() { failures.clear(); generation++ }
-    fun load(url: String?, ready: (Bitmap?) -> Unit): Job = scope.launch {
+    fun load(url: String?, targetPixels: Int = 128, ready: (Bitmap?) -> Unit): Job = scope.launch {
         val valid = url?.let(RadioStation::validUrl)
         if (valid == null || valid in failures) { ready(null); return@launch }
-        memory.get(valid)?.let { ready(it); return@launch }
-        val bitmap = withContext(io) { runCatching { read(valid) }.getOrNull() }
-        if (bitmap != null) memory.put(valid, bitmap) else failures.add(valid)
+        val request = ArtworkSize(valid, ((targetPixels.coerceIn(32, 640) + 31) / 32) * 32)
+        memory.get(request)?.let { ready(it); return@launch }
+        val bitmap = withContext(io) { runCatching { read(request) }.getOrNull() }
+        if (bitmap != null) memory.put(request, bitmap) else failures.add(valid)
         ready(bitmap)
     }
-    private fun read(url: String): Bitmap? {
+    private fun read(request: ArtworkSize): Bitmap? {
         folder.mkdirs()
-        val key = MessageDigest.getInstance("SHA-256").digest(url.toByteArray()).joinToString("") { "%02x".format(it.toInt() and 255) }
+        val key = MessageDigest.getInstance("SHA-256").digest(request.url.toByteArray()).joinToString("") { "%02x".format(it.toInt() and 255) }
         val cached = File(folder, key)
         if (cached.exists() && cached.length() <= maxImageBytes && System.currentTimeMillis() - cached.lastModified() < 7 * 86400000L) {
-            decode(cached.readBytes())?.let { return it }
+            runCatching { decode(cached.readBytes(), request.pixels) }.getOrNull()?.let { return it }
         }
-        var target = url
+        var target = request.url
         repeat(4) {
             val connection = URL(target).openConnection() as HttpURLConnection
             try {
@@ -58,21 +64,31 @@ internal class RadioArtwork(context: Context, private val maxImageBytes: Int = 5
                     if (connection.responseCode != 200) return null
                     val bytes = connection.inputStream.use { it.readUpTo(maxImageBytes + 1) }
                     if (bytes.size > maxImageBytes) return null
-                    val bitmap = decode(bytes) ?: return null
-                    cached.writeBytes(bytes)
-                    val files = folder.listFiles().orEmpty().sortedByDescending { it.lastModified() }
-                    var total = 0L
-                    files.forEachIndexed { index, file ->
-                        total += file.length()
-                        if (index >= 64 || total > 12 * 1024 * 1024) file.delete()
-                    }
+                    val bitmap = decode(bytes, request.pixels) ?: return null
+                    runCatching { cacheOriginal(cached, bytes) }
                     return bitmap
                 }
             } finally { connection.disconnect() }
         }
         return null
     }
-    private fun decode(bytes: ByteArray): Bitmap? {
+    private fun cacheOriginal(cached: File, bytes: ByteArray) {
+        val temporary = File.createTempFile("logo-", ".part", folder)
+        try {
+            temporary.writeBytes(bytes)
+            if (!temporary.renameTo(cached)) return
+            val files = folder.listFiles().orEmpty().filter { it.name.length == 64 }.sortedByDescending { it.lastModified() }
+            var total = 0L
+            files.forEachIndexed { index, file ->
+                total += file.length()
+                if (index >= 64 || total > 12 * 1024 * 1024) file.delete()
+            }
+        } finally {
+            temporary.delete()
+        }
+    }
+
+    private fun decode(bytes: ByteArray, targetPixels: Int): Bitmap? {
         // A known generic WordPress favicon is not station branding. Match its bytes, not its
         // URL, so an eventual replacement by the broadcaster's real logo remains eligible.
         if (bytes.size == 4119 && MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it.toInt() and 255) } ==
@@ -80,9 +96,16 @@ internal class RadioArtwork(context: Context, private val maxImageBytes: Int = 5
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
         if (bounds.outWidth !in 1..8192 || bounds.outHeight !in 1..8192) return null
+        val sourcePixels = maxOf(bounds.outWidth, bounds.outHeight)
         var sample = 1
-        while (maxOf(bounds.outWidth, bounds.outHeight) / sample > 128) sample *= 2
-        return BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options().apply { inSampleSize = sample })
+        while (sourcePixels / (sample * 2) >= targetPixels) sample *= 2
+        val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options().apply { inSampleSize = sample })
+            ?: return null
+        val decodedPixels = maxOf(bitmap.width, bitmap.height)
+        if (decodedPixels <= targetPixels) return bitmap
+        val width = (bitmap.width * targetPixels / decodedPixels).coerceAtLeast(1)
+        val height = (bitmap.height * targetPixels / decodedPixels).coerceAtLeast(1)
+        return Bitmap.createScaledBitmap(bitmap, width, height, true).also { bitmap.recycle() }
     }
     fun close() { scope.cancel(); memory.evictAll() }
 }

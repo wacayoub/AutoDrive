@@ -202,7 +202,8 @@ class RadioActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         prefs = getSharedPreferences(PREFERENCES, MODE_PRIVATE)
-        artwork = RadioArtwork(this, maxImageBytes = 1024 * 1024)
+        val artworkCacheMb = if (television && resources.displayMetrics.density >= 2f) 8 else 2
+        artwork = RadioArtwork(this, maxImageBytes = 1024 * 1024, memoryBytes = artworkCacheMb * 1024 * 1024)
         directory = DirectoryBrowser(StationDirectory(this)) { renderRows() }
         radioUpdates = RadioUpdates(this, savedInstanceState)
         tab = StationTab.restore(prefs.getString("tab", null))
@@ -558,25 +559,39 @@ class RadioActivity : ComponentActivity() {
         }
         soundStatusLabel = status
         renderSoundStatus(controller?.sessionExtras ?: Bundle.EMPTY)
+        val panel = dolbyPanel
+        val dolbyAllowed = panel != null && prefs.getBoolean(RadioSound.DOLBY, false)
+        val dolbyText = when {
+            panel == null -> "Dolby · Indisponible"
+            dolbyAllowed -> "Dolby · ON"
+            else -> "Dolby · OFF"
+        }
         val dialog = choiceDialog("Effets sonores")
             .setView(content)
             .setNegativeButton("Fermer", null)
+            .setNeutralButton(dolbyText) { _, _ -> panel?.let(::showDolbySettings) }
             .setOnDismissListener { soundStatusLabel = null }
-        dolbyPanel?.let { panel ->
-            dialog.setNeutralButton("Dolby") { _, _ -> showDolbySettings(panel) }
+            .show()
+        dialog.getButton(AlertDialog.BUTTON_NEUTRAL).apply {
+            isEnabled = panel != null
+            setTextColor(if (dolbyAllowed) accent else getColor(R.color.radio_dolby_off))
+            stateDescription = when {
+                panel == null -> "Panneau Dolby indisponible sur cet appareil"
+                dolbyAllowed -> "Autorisé dans la radio"
+                else -> "Désactivé dans la radio"
+            }
         }
-        dialog.show()
     }
 
     private fun showDolbySettings(panel: DolbyPanel) {
         val enabled = prefs.getBoolean(RadioSound.DOLBY, false)
         val dialog = choiceDialog("Dolby")
-            .setSingleChoiceItems(arrayOf("Désactivé dans la radio", "Autoriser Dolby sur la radio"), if (enabled) 1 else 0) { prompt, which ->
+            .setSingleChoiceItems(arrayOf("OFF · Désactivé", "ON · Autorisé dans la radio"), if (enabled) 1 else 0) { prompt, which ->
                 val allow = which == 1
                 prefs.edit().putBoolean(RadioSound.DOLBY, allow).apply()
                 (prompt as AlertDialog).getButton(AlertDialog.BUTTON_POSITIVE).isEnabled = allow
             }
-            .setNegativeButton("Fermer", null)
+            .setNegativeButton("Retour") { _, _ -> showSoundEffects() }
             .setPositiveButton("Réglages Dolby") { _, _ ->
                 val sessionId = controller?.sessionExtras?.getInt(RadioSound.DOLBY_SESSION_ID) ?: 0
                 runCatching { openDolbyPanel.launch(panel.settingsIntent(this, sessionId)) }.onFailure {
@@ -1439,7 +1454,8 @@ class RadioActivity : ComponentActivity() {
                 logo.visibility = View.VISIBLE
                 initials.visibility = View.GONE
             }
-            logoWork = artwork.load(station?.logoUrl) { bitmap ->
+            val targetPixels = layoutParams?.let { maxOf(it.width, it.height) - dp(6) } ?: 128
+            logoWork = artwork.load(station?.logoUrl, targetPixels) { bitmap ->
                 if (artworkKey == station?.url && bitmap != null) {
                     logo.setImageBitmap(bitmap)
                     logo.visibility = View.VISIBLE

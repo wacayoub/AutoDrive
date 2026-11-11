@@ -33,4 +33,5 @@
     <color name="radio_status_idle">#E8EDF7</color>
     <color name="radio_ripple">#24184DB6</color>
     <color name="radio_motif">#537BBB</color>
+    <color name="radio_dolby_off">#59636E</color>
 </resources>
