@@ -173,8 +173,13 @@ class RadioActivity : ComponentActivity() {
     private lateinit var playerPanel: LinearLayout
     private lateinit var playerSubtitle: TextView
     private data class Bulletin(val source: String, val text: String)
-    private var newsTicker: TextView? = null
+    private var newsTicker: HeadlineTicker? = null
     private var tickerSource: TextView? = null
+    private var clockTime: TextView? = null
+    private var clockDate: TextView? = null
+    private val clockTimeFormat = DateTimeFormatter.ofPattern("HH:mm", Locale.ROOT)
+    private val clockDateFormat = DateTimeFormatter.ofPattern("EEE d MMM", Locale.FRENCH)
+    private val shortClockDateFormat = DateTimeFormatter.ofPattern("dd/MM", Locale.ROOT)
     private var tickerBulletin = Bulletin("ACTUS", "Chargement…")
     private var nextNewsFetchAt = 0L
     private val newsHeadlines = MutableStateFlow<Map<NewsTopic, List<NewsHeadline>>?>(null)
@@ -280,6 +285,12 @@ class RadioActivity : ComponentActivity() {
                 launch { radioCity.collectLatest { refreshWeather(it) } }
                 launch { refreshPrayerCalendars() }
                 launch { refreshLocalTiles() }
+                launch {
+                    while (true) {
+                        renderTvClock()
+                        delay(untilNextMinute())
+                    }
+                }
             }
         }
     }
@@ -414,9 +425,9 @@ class RadioActivity : ComponentActivity() {
         layoutDirection = View.LAYOUT_DIRECTION_LTR
         background = getDrawable(R.drawable.radio_background)
         isFocusableInTouchMode = !television
-        val inlineCategories = tvGuide || !television && landscape && showingCatalogue
+        val inlineCategories = showingCatalogue && (television || landscape)
         val mastheadHeight = dp(when {
-            tvGuide -> 36
+            television && inlineCategories -> 36
             television || inlineCategories -> 44
             landscape -> 36
             else -> 40
@@ -438,7 +449,7 @@ class RadioActivity : ComponentActivity() {
                 if (inlineCategories) contentDescription = getString(R.string.app_name)
             }, LinearLayout.LayoutParams(iconSize, iconSize))
             if (inlineCategories) {
-                addView(if (tvGuide) tvCategoryBar() else categoryBar(), LinearLayout.LayoutParams(0, -1, 1f).apply {
+                addView(if (television) tvCategoryBar() else categoryBar(), LinearLayout.LayoutParams(0, -1, 1f).apply {
                     marginStart = dp(6)
                     marginEnd = dp(6)
                 })
@@ -449,7 +460,10 @@ class RadioActivity : ComponentActivity() {
                     ellipsize = TextUtils.TruncateAt.END
                 }, LinearLayout.LayoutParams(0, -2, 1f))
             }
-            addView(menuButton, LinearLayout.LayoutParams(dp(if (television) 54 else if (inlineCategories) 44 else 48), -1))
+            if (television) {
+                addView(tvClockBar(), LinearLayout.LayoutParams(-2, -1).apply { marginEnd = dp(6) })
+            }
+            addView(menuButton, LinearLayout.LayoutParams(dp(if (television || inlineCategories) 44 else 48), -1))
         }
         addView(masthead, LinearLayout.LayoutParams(-1, mastheadHeight).apply { bottomMargin = dp(4) })
         val hideWhileTyping = mutableListOf<View>(masthead)
@@ -483,10 +497,7 @@ class RadioActivity : ComponentActivity() {
             addView(content, LinearLayout.LayoutParams(-1, 0, 1f))
         }
         DisplayLayout.MOSAIC -> column().apply {
-            if (television) {
-                addView(tvCategoryBar(), LinearLayout.LayoutParams(-1, dp(if (compactTv) 34 else 40))
-                    .apply { bottomMargin = dp(5) })
-            } else if (!landscape) addPortraitCategories()
+            if (!television && !landscape) addPortraitCategories()
             if (shortLandscape) {
                 val player = stationPanel(true).also(hideWhileTyping::add)
                 addView(wideColumns(player, stationList(grid = true)), LinearLayout.LayoutParams(-1, 0, 1f))
@@ -513,22 +524,47 @@ class RadioActivity : ComponentActivity() {
             .apply { bottomMargin = dp(4) })
     }
 
+    private fun tvClockBar(): View = row().apply {
+        gravity = Gravity.CENTER_VERTICAL
+        clockTime = label("", if (compactTv) 16 else 19, textColor, bold = true).apply {
+            includeFontPadding = false
+            setSingleLine()
+        }.also { addView(it, LinearLayout.LayoutParams(-2, -2)) }
+        clockDate = label("", if (compactTv) 10 else 12, muted).apply {
+            includeFontPadding = false
+            setSingleLine()
+        }.also { addView(it, LinearLayout.LayoutParams(-2, -2).apply { marginStart = dp(6) }) }
+        renderTvClock()
+    }
+
+    private fun renderTvClock() {
+        val now = LocalDateTime.now(RadioLocalInfo.moroccoTime)
+        clockTime?.text = clockTimeFormat.format(now)
+        val dateFormat = if (resources.configuration.screenWidthDp < 560) shortClockDateFormat else clockDateFormat
+        clockDate?.text = dateFormat.format(now)
+    }
+
     private fun tvCategoryBar(): LinearLayout = row().apply {
         val bar = this
+        background = getDrawable(R.drawable.radio_control)
+        setPadding(dp(3), dp(3), dp(3), dp(3))
         fun addCategory(title: String, icon: Int, action: () -> Unit): TextView = button(title, action).apply {
             id = View.generateViewId()
             nextFocusUpId = menuButton.id
             maxLines = 1
             ellipsize = TextUtils.TruncateAt.END
-            val maxSize = if (tvGuide || compactTv) 15 else 18
-            setAutoSizeTextTypeUniformWithConfiguration(11, maxSize, 1, TypedValue.COMPLEX_UNIT_SP)
+            val maxSize = if (compactTv) 13 else 15
+            setAutoSizeTextTypeUniformWithConfiguration(10, maxSize, 1, TypedValue.COMPLEX_UNIT_SP)
             gravity = Gravity.START or Gravity.CENTER_VERTICAL
             textAlignment = View.TEXT_ALIGNMENT_VIEW_START
-            setPadding(dp(12), 0, dp(5), 0)
-            setCompoundDrawablesRelativeWithIntrinsicBounds(icon, 0, 0, 0)
+            setPadding(dp(if (compactTv) 6 else 10), 0, dp(4), 0)
+            val size = dp(if (compactTv) 14 else 16)
+            val symbol = getDrawable(icon)?.apply { setBounds(0, 0, size, size) }
+            setCompoundDrawablesRelative(symbol, null, null, null)
             compoundDrawableTintList = getColorStateList(R.color.radio_tab_icon)
-            compoundDrawablePadding = dp(6)
-            bar.addView(this, LinearLayout.LayoutParams(0, -1, 1f).apply { marginEnd = dp(6) })
+            compoundDrawablePadding = dp(if (compactTv) 4 else 6)
+            bar.addView(this, LinearLayout.LayoutParams(0, -1, if (title == StationTab.MOROCCO.label) 1.3f else 1f)
+                .apply { marginEnd = dp(3) })
         }
         tabs = StationTab.entries.associateWith { choice ->
             addCategory(choice.label, stationTabIcon(choice)) { selectTab(choice) }
@@ -976,9 +1012,11 @@ class RadioActivity : ComponentActivity() {
             val own = station.filter { it.publisher == publisher }.take(6)
                 .map { Bulletin(it.publisher.badge, it.title) }
             if (own.isNotEmpty()) own else fallback?.let { feeds ->
+                val displayedUrls = mutableSetOf<String>()
                 (0 until 3).flatMap { slot ->
                     NewsTopic.entries.mapNotNull { topic ->
-                        feeds[topic]?.getOrNull(slot)?.let { Bulletin("RFI", "${topic.label} · ${it.title}") }
+                        feeds[topic]?.getOrNull(slot)?.takeIf { displayedUrls.add(it.url) }
+                            ?.let { Bulletin("RFI", "${topic.label} · ${it.title}") }
                     }
                 }
             }
@@ -991,22 +1029,15 @@ class RadioActivity : ComponentActivity() {
             while (true) {
                 val headline = rotation[index]
                 index = (index + 1) % rotation.size
-                setTickerBulletin(headline)
-                val ticker = newsTicker
-                val textWidthDp = (ticker?.paint?.measureText(headline.text) ?: 0f) / resources.displayMetrics.density
-                val seconds = if (ticker?.isSelected == true) textWidthDp / 30f + 3f else 10f
-                delay((seconds * 1_000).toLong().coerceIn(8_000L, 60_000L))
+                delay(setTickerBulletin(headline))
             }
         }
     }
 
-    private fun setTickerBulletin(bulletin: Bulletin) {
+    private fun setTickerBulletin(bulletin: Bulletin): Long {
         tickerBulletin = bulletin
         tickerSource?.text = bulletin.source
-        newsTicker?.apply {
-            isSelected = ValueAnimator.areAnimatorsEnabled()
-            text = bulletin.text
-        }
+        return newsTicker?.showHeadline(bulletin.text) ?: 8_000L
     }
 
     private suspend fun refreshStationNews(publisher: NewsPublisher) {
@@ -1202,13 +1233,8 @@ class RadioActivity : ComponentActivity() {
         tickerSource = source
         addView(source, LinearLayout.LayoutParams(dp(if (compactTv) 45 else 51), dp(if (compactTv) 21 else 24))
             .apply { marginStart = dp(4) })
-        val ticker = label(tickerBulletin.text, if (compactTv) 11 else 13, textColor).apply {
-            setSingleLine(true)
-            ellipsize = TextUtils.TruncateAt.MARQUEE
-            marqueeRepeatLimit = -1
-            isSelected = ValueAnimator.areAnimatorsEnabled()
-            gravity = Gravity.CENTER_VERTICAL or Gravity.START
-            setPadding(dp(6), 0, dp(6), 0)
+        val ticker = HeadlineTicker(context, if (compactTv) 11 else 13, textColor).apply {
+            showHeadline(tickerBulletin.text)
         }
         newsTicker = ticker
         addView(ticker, LinearLayout.LayoutParams(0, -1, 1f))
@@ -1584,12 +1610,21 @@ class RadioActivity : ComponentActivity() {
                 television -> 130
                 else -> 122
             })
+            val audioStrip = if (television) dp(if (compactTv) 17 else 21) else 0
+            val frameHeight = motifHeight + audioStrip
             val artworkFrame = FrameLayout(context).apply {
-                audioMotif = PremiumRadioMotif(context, artwork)
-                addView(audioMotif, FrameLayout.LayoutParams(-1, -1))
-                addView(artwork, FrameLayout.LayoutParams(artworkSize, artworkSize, Gravity.CENTER))
+                audioMotif = PremiumRadioMotif(context, artwork, belowLogo = television)
+                if (television) {
+                    addView(FrameLayout(context).apply {
+                        addView(artwork, FrameLayout.LayoutParams(artworkSize, artworkSize, Gravity.CENTER))
+                    }, FrameLayout.LayoutParams(-1, -1).apply { bottomMargin = audioStrip })
+                    addView(audioMotif, FrameLayout.LayoutParams(-1, audioStrip, Gravity.BOTTOM))
+                } else {
+                    addView(audioMotif, FrameLayout.LayoutParams(-1, -1))
+                    addView(artwork, FrameLayout.LayoutParams(artworkSize, artworkSize, Gravity.CENTER))
+                }
             }
-            val presentation = (if (stackedPresentation) playerColumn(artworkFrame, artwork, motifHeight, artworkSize)
+            val presentation = (if (stackedPresentation) playerColumn(artworkFrame, artwork, frameHeight, artworkSize, audioStrip)
                 else row()).apply {
                 playerPanel = this
                 gravity = if (stackedPresentation) Gravity.CENTER else Gravity.START or Gravity.CENTER_VERTICAL
@@ -1610,7 +1645,7 @@ class RadioActivity : ComponentActivity() {
                     tightSidePlayer -> dp(35)
                     tightListening -> dp(52)
                     else -> dp(76)
-                }, motifHeight).apply {
+                }, frameHeight).apply {
                     if (stackedPresentation) {
                         topMargin = dp(if (compactSidePlayer) 2 else if (compactLandscape) 4 else 5)
                         bottomMargin = dp(if (compactSidePlayer) 2 else if (compactLandscape) 4 else 6)
@@ -1669,7 +1704,9 @@ class RadioActivity : ComponentActivity() {
         }
     }
 
-    private fun playerColumn(frame: FrameLayout, artwork: View, preferredHeight: Int, preferredSize: Int): LinearLayout =
+    private fun playerColumn(
+        frame: FrameLayout, artwork: View, preferredHeight: Int, preferredSize: Int, audioStrip: Int,
+    ): LinearLayout =
         object : LinearLayout(this) {
             init { orientation = VERTICAL }
 
@@ -1690,7 +1727,7 @@ class RadioActivity : ComponentActivity() {
                     availableHeight = (MeasureSpec.getSize(heightMeasureSpec) - reserved).coerceIn(0, preferredHeight)
                 }
                 frameParams.height = availableHeight
-                val size = minOf(preferredSize, availableHeight)
+                val size = minOf(preferredSize, (availableHeight - audioStrip).coerceAtLeast(0))
                 artwork.layoutParams.apply {
                     width = size
                     height = size
