@@ -627,7 +627,7 @@ class RadioActivity : ComponentActivity() {
             compoundDrawablePadding = dp(6)
         }
         stationSearch = EditText(context).apply {
-            hint = "Rechercher…"
+            hint = if (tightLandscape) "Chercher" else "Rechercher…"
             contentDescription = "Rechercher une station ou un récitateur"
             setSingleLine(true)
             textSize = if (television && !compactTv) 17f else 14f
@@ -636,9 +636,12 @@ class RadioActivity : ComponentActivity() {
             setText(query)
             background = getDrawable(R.drawable.radio_control)
             remoteFocus()
-            setPadding(dp(12), 0, dp(12), 0)
-            setCompoundDrawablesRelativeWithIntrinsicBounds(R.drawable.ic_radio_search, 0, 0, 0)
-            compoundDrawablePadding = dp(9)
+            val searchPadding = dp(if (tightLandscape) 8 else 12)
+            setPadding(searchPadding, 0, searchPadding, 0)
+            if (!tightLandscape) {
+                setCompoundDrawablesRelativeWithIntrinsicBounds(R.drawable.ic_radio_search, 0, 0, 0)
+                compoundDrawablePadding = dp(9)
+            }
             imeOptions = EditorInfo.IME_ACTION_SEARCH or EditorInfo.IME_FLAG_NO_EXTRACT_UI
             setOnEditorActionListener { _, action, _ ->
                 if (action != EditorInfo.IME_ACTION_SEARCH) return@setOnEditorActionListener false
