@@ -38,6 +38,7 @@ import android.view.inputmethod.EditorInfo
 import android.widget.AbsListView
 import android.widget.ArrayAdapter
 import android.widget.BaseAdapter
+import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.GridView
@@ -45,6 +46,8 @@ import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ListView
+import android.widget.RadioButton
+import android.widget.RadioGroup
 import android.widget.TextView
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
@@ -152,6 +155,7 @@ class RadioActivity : ComponentActivity() {
     private lateinit var previous: ImageButton
     private lateinit var next: ImageButton
     private var playerFavorite: ImageButton? = null
+    private var soundStatusLabel: TextView? = null
     private val television: Boolean
         get() = resources.configuration.uiMode and Configuration.UI_MODE_TYPE_MASK == Configuration.UI_MODE_TYPE_TELEVISION
     private val compactTv: Boolean
@@ -320,6 +324,7 @@ class RadioActivity : ComponentActivity() {
     }
 
     private fun onNetworkStatus(extras: Bundle) {
+        renderSoundStatus(extras)
         val offline = extras.getBoolean(PlaybackService.NETWORK_UNAVAILABLE)
         if (piconsOffline && !offline) {
             artwork.retryFailures()
@@ -480,12 +485,79 @@ class RadioActivity : ComponentActivity() {
         val actions = listOf(
             "Affichage" to ::showDisplayMenu,
             "Jour / Nuit" to ::showAppearance,
+            "Effets sonores" to ::showSoundEffects,
             "Démarrage voiture" to ::showCarStartup,
             "Mises à jour" to radioUpdates::show,
         )
-        choiceDialog("Menu")
+        val menu = if (tightLandscape) AlertDialog.Builder(this, R.style.RadioCompactMenu) else choiceDialog("Menu")
+        menu
             .setItems(actions.map { it.first }.toTypedArray()) { _, index -> actions[index].second() }
             .show()
+    }
+
+    private fun showSoundEffects() {
+        val status = label("", 12, muted).apply {
+            maxLines = 1
+            ellipsize = TextUtils.TruncateAt.END
+            accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
+        }
+        val profiles = SoundProfile.entries.associateBy { View.generateViewId() }
+        val content = column().apply {
+            setPadding(dp(16), dp(8), dp(16), dp(6))
+            addView(CheckBox(context).apply {
+                text = "Clics de l’interface"
+                textSize = 14f
+                setTextColor(textColor)
+                isSoundEffectsEnabled = false
+                isChecked = prefs.getBoolean(RadioSound.CLICKS, false)
+                setOnCheckedChangeListener { _, enabled ->
+                    prefs.edit().putBoolean(RadioSound.CLICKS, enabled).apply()
+                    if (enabled) RadioSound.playClick(this@RadioActivity, prefs)
+                }
+            }, LinearLayout.LayoutParams(-1, dp(if (tightLandscape) 36 else 44)))
+            addView(label("Égaliseur", 13, textColor, bold = true))
+            addView(RadioGroup(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                for ((viewId, profile) in profiles) {
+                    addView(RadioButton(context).apply {
+                        id = viewId
+                        text = profile.label
+                        textSize = 13f
+                        setTextColor(textColor)
+                        isSoundEffectsEnabled = false
+                    }, RadioGroup.LayoutParams(0, -1, 1f))
+                }
+                check(profiles.entries.first { it.value == RadioSound.profile(prefs) }.key)
+                setOnCheckedChangeListener { _, id ->
+                    val profile = profiles[id] ?: return@setOnCheckedChangeListener
+                    prefs.edit().putString(RadioSound.PROFILE, profile.name).apply()
+                    RadioSound.playClick(this@RadioActivity, prefs)
+                    renderSoundStatus(controller?.sessionExtras ?: Bundle.EMPTY)
+                }
+            }, LinearLayout.LayoutParams(-1, dp(if (tightLandscape) 38 else 44)))
+            addView(status, LinearLayout.LayoutParams(-1, -2))
+        }
+        soundStatusLabel = status
+        renderSoundStatus(controller?.sessionExtras ?: Bundle.EMPTY)
+        choiceDialog("Effets sonores")
+            .setView(content)
+            .setNegativeButton("Fermer", null)
+            .setOnDismissListener { soundStatusLabel = null }
+            .show()
+    }
+
+    private fun renderSoundStatus(extras: Bundle) {
+        val label = soundStatusLabel ?: return
+        val selected = RadioSound.profile(prefs)
+        label.text = when {
+            selected == SoundProfile.NORMAL -> "Son d’origine"
+            savedStation == Stations.luxe && controller?.currentMediaItem == null -> "Luxe Radio utilise son propre lecteur"
+            else -> when (extras.getString(RadioSound.STATUS)) {
+                RadioSound.Status.ACTIVE.name -> "Actif sur le lecteur intégré"
+                RadioSound.Status.UNAVAILABLE.name -> "Égaliseur indisponible sur cet appareil"
+                else -> "En attente de lecture"
+            }
+        }
     }
 
     private fun showDisplayMenu() {
@@ -691,6 +763,7 @@ class RadioActivity : ComponentActivity() {
             }
             list = catalog.apply {
                 id = View.generateViewId()
+                isSoundEffectsEnabled = false
                 if (television) {
                     setSelector(R.drawable.radio_focus)
                     setDrawSelectorOnTop(true)
@@ -699,9 +772,11 @@ class RadioActivity : ComponentActivity() {
                     setOnItemClickListener { _, _, position, _ ->
                         val station = stationAt(position)
                         if (station != null) {
+                            RadioSound.playClick(this@RadioActivity, prefs)
                             catalogueStation = station.url
                             select(station)
                         } else if (inlineDirectoryPage && position == catalogueAdapter.count - 1) {
+                            RadioSound.playClick(this@RadioActivity, prefs)
                             directory.loadMore()
                         }
                     }
@@ -1053,7 +1128,7 @@ class RadioActivity : ComponentActivity() {
             contentDescription = description
             isFocusable = true
             remoteFocus()
-            setOnClickListener { action() }
+            setRadioClick(action)
         }
 
     private sealed interface ListEntry {
@@ -1238,7 +1313,7 @@ class RadioActivity : ComponentActivity() {
             selectionMark.visibility = if (selected) View.VISIBLE else View.GONE
             contentDescription = "Écouter ${station.name}"
             stateDescription = if (playing) "En écoute" else if (selected) "Sélectionnée" else null
-            if (!television) setOnClickListener {
+            if (!television) setRadioClick {
                 catalogueStation = station.url
                 select(station)
             }
@@ -1253,7 +1328,7 @@ class RadioActivity : ComponentActivity() {
             subtitle.setTextColor(if (playing) accent else muted)
             star?.let {
                 bindFavorite(it, station)
-                it.setOnClickListener { toggleFavorite(station) }
+                it.setRadioClick { toggleFavorite(station) }
             }
         }
     }
@@ -1718,7 +1793,15 @@ class RadioActivity : ComponentActivity() {
         background = pressable(R.drawable.radio_control)
         isFocusable = true
         remoteFocus()
-        setOnClickListener { action() }
+        setRadioClick(action)
+    }
+
+    private fun View.setRadioClick(action: () -> Unit) {
+        isSoundEffectsEnabled = false
+        setOnClickListener {
+            RadioSound.playClick(this@RadioActivity, prefs)
+            action()
+        }
     }
 
     private fun View.remoteFocus() {

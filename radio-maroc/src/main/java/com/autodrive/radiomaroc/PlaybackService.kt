@@ -2,6 +2,7 @@ package com.autodrive.radiomaroc
 
 import android.app.PendingIntent
 import android.content.Intent
+import android.content.SharedPreferences
 import android.graphics.Bitmap
 import android.net.ConnectivityManager
 import android.net.Network
@@ -72,6 +73,12 @@ internal class PlaybackService : MediaLibraryService() {
 
     private var session: MediaLibrarySession? = null
     private lateinit var engine: ExoPlayer
+    private val radioPreferences by lazy { getSharedPreferences("radio_maroc", MODE_PRIVATE) }
+    private val equalizer = RadioEqualizer()
+    private var soundStatus = RadioSound.Status.NORMAL
+    private val soundPreferenceListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+        if (key == RadioSound.PROFILE) applySoundProfile()
+    }
     private lateinit var sessionPlayer: RadioSessionPlayer
     private lateinit var artwork: RadioArtwork
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -108,6 +115,15 @@ internal class PlaybackService : MediaLibraryService() {
     private val recoveryListener = object : Player.Listener {
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
             watchStation(mediaItem)
+            applySoundProfile()
+        }
+
+        override fun onAudioSessionIdChanged(audioSessionId: Int) {
+            applySoundProfile()
+        }
+
+        override fun onPlaybackStateChanged(playbackState: Int) {
+            if (playbackState == Player.STATE_READY) applySoundProfile()
         }
 
         override fun onMetadata(metadata: Metadata) {
@@ -168,6 +184,8 @@ internal class PlaybackService : MediaLibraryService() {
             .setWakeMode(C.WAKE_MODE_NETWORK)
             .build()
         engine.addListener(recoveryListener)
+        radioPreferences.registerOnSharedPreferenceChangeListener(soundPreferenceListener)
+        applySoundProfile()
         sessionPlayer = RadioSessionPlayer(engine, { stationQueue().size > 1 }, ::changeStation)
         val reopen = PendingIntent.getActivity(this, 0, Intent(this, RadioActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
         session = MediaLibrarySession.Builder(this, sessionPlayer, object : MediaLibrarySession.Callback {
@@ -249,6 +267,7 @@ internal class PlaybackService : MediaLibraryService() {
     private fun sessionExtras() = Bundle().apply {
         putBoolean(NETWORK_UNAVAILABLE, networkUnavailable)
         putString(LUXE_STATE, luxeState.name)
+        putString(RadioSound.STATUS, soundStatus.name)
         val currentInfo = luxeProgramme?.let { Stations.luxe.url to it }
             ?: activeItem?.let { item -> (programme?.title ?: icyTitle)?.let { item.mediaId to it } }
         currentInfo?.let { (station, title) ->
@@ -264,7 +283,16 @@ internal class PlaybackService : MediaLibraryService() {
     private fun isOwnController(controller: MediaSession.ControllerInfo): Boolean =
         controller.uid == applicationInfo.uid && controller.packageName == packageName
 
-    private fun lastStationId(): String? = getSharedPreferences("radio_maroc", MODE_PRIVATE).getString("last_station", null)
+    private fun lastStationId(): String? = radioPreferences.getString("last_station", null)
+
+    private fun applySoundProfile() {
+        val audioSessionId = if (engine.currentMediaItem == null) 0 else engine.audioSessionId
+        val status = equalizer.apply(RadioSound.profile(radioPreferences), audioSessionId)
+        if (soundStatus != status) {
+            soundStatus = status
+            session?.setSessionExtras(sessionExtras())
+        }
+    }
 
     private val moroccoStations by lazy { Stations.visible(StationTab.MOROCCO, emptySet(), "").filter { it != Stations.luxe } }
     private val quranStations by lazy { Stations.visible(StationTab.QURAN, emptySet(), "") }
@@ -276,8 +304,9 @@ internal class PlaybackService : MediaLibraryService() {
 
     private fun changeStation(direction: Int) {
         val station = RadioQueue.neighbor(stationQueue(), engine.currentMediaItem?.mediaId, direction) ?: return
+        RadioSound.playClick(this, radioPreferences)
         if (station.countryCode != null) {
-            val prefs = getSharedPreferences("radio_maroc", MODE_PRIVATE)
+            val prefs = radioPreferences
             val favorites = prefs.getStringSet("favorites", emptySet()).orEmpty()
             val bookmarks = StationDirectory.decode(prefs.getString("directory_bookmarks", null).orEmpty())
             val retained = bookmarks.filter { it.url != station.url && it.url in favorites }
@@ -378,6 +407,8 @@ internal class PlaybackService : MediaLibraryService() {
 
     override fun onDestroy() {
         connectivity.unregisterNetworkCallback(networkCallback)
+        radioPreferences.unregisterOnSharedPreferenceChangeListener(soundPreferenceListener)
+        equalizer.close()
         scope.cancel()
         artwork.close()
         CarArtworkProvider.publish(null)

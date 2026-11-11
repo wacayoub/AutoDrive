@@ -10,4 +10,7 @@
         <item name="android:colorAccent">@color/radio_accent</item>
         <item name="android:listPreferredItemHeightSmall">36dp</item>
     </style>
+    <style name="RadioCompactMenu" parent="@style/RadioCompactAlert">
+        <item name="android:listPreferredItemHeightSmall">32dp</item>
+    </style>
 </resources>

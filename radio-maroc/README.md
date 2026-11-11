@@ -28,6 +28,8 @@ python tools/github_release.py --radio-maroc --apk radio-maroc/build/outputs/apk
 
 Dans **Menu ⋮ → Jour / Nuit**, choisis **Jour** pour le thème blanc et bleu cobalt, **Nuit** pour le thème sombre ou **Système** pour suivre le réglage d’Android. La radio mémorise ce choix pour les trois vues.
 
+Dans **Menu ⋮ → Effets sonores**, **Clics de l’interface** active le son de confirmation des boutons et des changements de station. Le clic suit le réglage des sons tactiles Android. L’égaliseur **Normal**, **Basses** ou **Voix** s’applique pendant l’écoute sur le lecteur intégré, selon la prise en charge de l’appareil. Luxe Radio gère le son dans sa propre application. [Clics Android](https://developer.android.com/reference/android/media/AudioManager#playSoundEffect(int)) · [Égaliseur Android](https://developer.android.com/reference/android/media/audiofx/Equalizer).
+
 Le thème graphite et turquoise regroupe les radios, le Coran et les favoris dans une barre de catégories avec icônes. Sur l’Incarlink, le lecteur occupe la colonne de gauche et les catégories commencent au bord de la liste. En portrait, les commandes restent en bas de l’écran.
 
 Ouvre **Menu ⋮ → Affichage**. **Guide** présente les stations en liste, **Mosaïque** les affiche en grille et **Écran d’écoute** agrandit le lecteur. Le choix est mémorisé. **Retour** ou **Toutes les radios** depuis l’écran d’écoute ramène au dernier catalogue. Sur Android TV, les flèches déplacent le cadre de sélection et **OK** lance la station. L’étoile du lecteur gère les favoris. [Navigation à la télécommande](https://developer.android.com/training/tv/get-started/controllers).
