@@ -1227,14 +1227,14 @@ class RadioActivity : ComponentActivity() {
         contentDescription = "Infos TV · Actualités, météo et salat"
         remoteFocus()
         setRadioClick(::showTvInfo)
-        val source = label(tickerBulletin.source, if (compactTv) 10 else 11, getColor(R.color.radio_news_badge), bold = true).apply {
+        val source = label(tickerBulletin.source, if (compactTv) 11 else 12, getColor(R.color.radio_news_badge), bold = true).apply {
             gravity = Gravity.CENTER
             background = getDrawable(R.drawable.radio_news_badge)
         }
         tickerSource = source
-        addView(source, LinearLayout.LayoutParams(dp(if (compactTv) 45 else 51), dp(if (compactTv) 21 else 24))
+        addView(source, LinearLayout.LayoutParams(dp(if (compactTv) 46 else 52), dp(if (compactTv) 23 else 26))
             .apply { marginStart = dp(4) })
-        val ticker = HeadlineTicker(context, if (compactTv) 11 else 13, textColor).apply {
+        val ticker = HeadlineTicker(context, if (compactTv) 13 else 15, textColor).apply {
             showHeadline(tickerBulletin, tickerStartedAt, tickerDuration)
         }
         newsTicker = ticker
@@ -1681,7 +1681,7 @@ class RadioActivity : ComponentActivity() {
                     }
                     addView(playerSubtitle, LinearLayout.LayoutParams(-1, -2))
                     if (television && !mini) {
-                        addView(newsBar(), LinearLayout.LayoutParams(-1, dp(if (compactTv) 28 else 32))
+                        addView(newsBar(), LinearLayout.LayoutParams(-1, dp(if (compactTv) 34 else 40))
                             .apply { topMargin = dp(4) })
                     }
                 }, if (stackedPresentation) LinearLayout.LayoutParams(-1, -2) else LinearLayout.LayoutParams(0, -2, 1f))
