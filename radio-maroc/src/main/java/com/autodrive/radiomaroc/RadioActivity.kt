@@ -353,17 +353,28 @@ class RadioActivity : ComponentActivity() {
         layoutDirection = View.LAYOUT_DIRECTION_LTR
         background = getDrawable(R.drawable.radio_background)
         isFocusableInTouchMode = !television
-        val mastheadHeight = dp(if (television) 44 else if (landscape) 36 else 40)
+        val inlineCategories = !television && landscape && showingCatalogue
+        val mastheadHeight = dp(if (television || inlineCategories) 44 else if (landscape) 36 else 40)
         val masthead = row().apply {
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(4), 0, 0, 0)
             val iconSize = dp(if (television) 28 else 24)
-            addView(ImageView(context).apply { setImageResource(R.drawable.ic_radio) }, LinearLayout.LayoutParams(iconSize, iconSize))
-            addView(label(getString(R.string.app_name), if (television) 18 else 14, textColor, bold = true).apply {
-                setPadding(dp(7), 0, dp(4), 0)
-                maxLines = 1
-                ellipsize = TextUtils.TruncateAt.END
-            }, LinearLayout.LayoutParams(0, -2, 1f))
+            addView(ImageView(context).apply {
+                setImageResource(R.drawable.ic_radio)
+                if (inlineCategories) contentDescription = getString(R.string.app_name)
+            }, LinearLayout.LayoutParams(iconSize, iconSize))
+            if (inlineCategories) {
+                addView(categoryBar(), LinearLayout.LayoutParams(0, -1, 1f).apply {
+                    marginStart = dp(6)
+                    marginEnd = dp(6)
+                })
+            } else {
+                addView(label(getString(R.string.app_name), if (television) 18 else 14, textColor, bold = true).apply {
+                    setPadding(dp(7), 0, dp(4), 0)
+                    maxLines = 1
+                    ellipsize = TextUtils.TruncateAt.END
+                }, LinearLayout.LayoutParams(0, -2, 1f))
+            }
             menuButton = button("⋮", ::showMainMenu).apply {
                 id = View.generateViewId()
                 contentDescription = "Menu"
@@ -372,7 +383,7 @@ class RadioActivity : ComponentActivity() {
                 includeFontPadding = false
                 background = pressable(R.drawable.radio_header)
             }
-            addView(menuButton, LinearLayout.LayoutParams(dp(if (television) 54 else 48), -1))
+            addView(menuButton, LinearLayout.LayoutParams(dp(if (television) 54 else if (inlineCategories) 44 else 48), -1))
         }
         addView(masthead, LinearLayout.LayoutParams(-1, mastheadHeight).apply { bottomMargin = dp(4) })
         val hideWhileTyping = mutableListOf<View>(masthead)
@@ -399,7 +410,7 @@ class RadioActivity : ComponentActivity() {
             list.nextFocusRightId = playButton.id
             previous.nextFocusLeftId = list.id
         } else column().apply {
-            addTouchCategories(hideWhileTyping)
+            if (!landscape) addPortraitCategories()
             val content = if (landscape) wideColumns(stationPanel(true).also(hideWhileTyping::add), stationList()) else column().apply {
                 addView(stationList(), LinearLayout.LayoutParams(-1, 0, 1f))
                 addView(stationPanel(false, mini = true), LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(6) })
@@ -410,7 +421,7 @@ class RadioActivity : ComponentActivity() {
             if (television) {
                 addView(tvCategoryBar(sidebar = false), LinearLayout.LayoutParams(-1, dp(if (compactTv) 34 else 40))
                     .apply { bottomMargin = dp(5) })
-            } else addTouchCategories(hideWhileTyping)
+            } else if (!landscape) addPortraitCategories()
             if (shortLandscape) {
                 val player = stationPanel(true).also(hideWhileTyping::add)
                 addView(wideColumns(player, stationList(grid = true)), LinearLayout.LayoutParams(-1, 0, 1f))
@@ -432,9 +443,8 @@ class RadioActivity : ComponentActivity() {
         }
     }
 
-    private fun LinearLayout.addTouchCategories(hideWhileTyping: MutableList<View>) {
-        val height = if (shortLandscape) 32 else if (landscape) 36 else 42
-        addView(categoryBar().also(hideWhileTyping::add), LinearLayout.LayoutParams(-1, dp(height))
+    private fun LinearLayout.addPortraitCategories() {
+        addView(categoryBar(), LinearLayout.LayoutParams(-1, dp(42))
             .apply { bottomMargin = dp(4) })
     }
 
@@ -629,6 +639,8 @@ class RadioActivity : ComponentActivity() {
         background = getDrawable(R.drawable.radio_category_line)
         val configuration = resources.configuration
         val inlineIcons = landscape
+        val compactTabs = inlineIcons && configuration.screenWidthDp < 480
+        val symbolSize = dp(if (compactTabs) 14 else 16)
         val maxTextSize = if (configuration.screenWidthDp >= 650) 14 else 13
         val tabFont = Typeface.create(Typeface.DEFAULT, 600, false)
         fun addCategory(title: String, icon: Int, weight: Float, action: () -> Unit): TextView {
@@ -636,28 +648,31 @@ class RadioActivity : ComponentActivity() {
                 setBackgroundColor(getColor(R.color.radio_list_rule))
                 importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
             }, LinearLayout.LayoutParams(dp(1), dp(22)).apply { gravity = Gravity.CENTER_VERTICAL })
-            return button(title, action).also { view ->
+            val caption = if (title == StationTab.MOROCCO.label && inlineIcons && configuration.screenWidthDp < 400)
+                "Maroc" else title
+            return button(caption, action).also { view ->
+                if (caption != title) view.contentDescription = title
                 view.typeface = tabFont
                 view.maxLines = 1
                 view.ellipsize = TextUtils.TruncateAt.END
                 view.setAutoSizeTextTypeUniformWithConfiguration(10, maxTextSize, 1, TypedValue.COMPLEX_UNIT_SP)
                 view.background = pressable(R.drawable.radio_tab)
-                view.setPadding(dp(if (inlineIcons) 8 else 2), dp(if (inlineIcons) 0 else 2), dp(2), dp(3))
+                view.setPadding(dp(if (inlineIcons && !compactTabs) 8 else 2), dp(if (inlineIcons) 0 else 2), dp(2), dp(3))
                 view.setTextColor(getColorStateList(R.color.radio_tab_text))
+                val symbol = getDrawable(icon)?.apply { setBounds(0, 0, symbolSize, symbolSize) }
                 if (inlineIcons) {
                     view.gravity = Gravity.START or Gravity.CENTER_VERTICAL
                     view.textAlignment = View.TEXT_ALIGNMENT_VIEW_START
-                    view.setCompoundDrawablesRelativeWithIntrinsicBounds(icon, 0, 0, 0)
-                    view.compoundDrawablePadding = dp(5)
+                    view.setCompoundDrawablesRelative(symbol, null, null, null)
+                    view.compoundDrawablePadding = dp(if (compactTabs) 3 else 5)
                 } else {
-                    val symbol = getDrawable(icon)?.apply { setBounds(0, 0, dp(16), dp(16)) }
                     view.setCompoundDrawablesRelative(null, symbol, null, null)
                     view.includeFontPadding = false
                 }
                 view.compoundDrawableTintList = getColorStateList(R.color.radio_tab_icon)
                 addView(view, LinearLayout.LayoutParams(0, -1, weight).apply {
-                    marginStart = dp(3)
-                    marginEnd = dp(3)
+                    marginStart = dp(if (compactTabs) 2 else 3)
+                    marginEnd = dp(if (compactTabs) 2 else 3)
                     bottomMargin = dp(3)
                 })
             }
