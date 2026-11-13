@@ -1,6 +1,7 @@
 package com.autodrive.radiomaroc
 
 import android.app.PendingIntent
+import android.app.NotificationManager
 import android.content.Intent
 import android.content.SharedPreferences
 import android.graphics.Bitmap
@@ -80,6 +81,7 @@ internal class PlaybackService : MediaLibraryService() {
     private var session: MediaLibrarySession? = null
     private lateinit var engine: ExoPlayer
     private val radioPreferences by lazy { getSharedPreferences("radio_maroc", MODE_PRIVATE) }
+    private val notifications by lazy { getSystemService(NotificationManager::class.java) }
     private val audioProcessor = RadioAudioProcessor()
     private val dolbySession = DolbySession(this)
     private var soundStatus = RadioSound.Status.NORMAL
@@ -126,7 +128,7 @@ internal class PlaybackService : MediaLibraryService() {
     private val recoveryListener = object : Player.Listener {
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
             val changed = activeItem != null && mediaItem != null && activeItem?.mediaId != mediaItem.mediaId
-            if (changed && !radioScreenActive) {
+            if (changed && !radioScreenActive && notifications.areNotificationsEnabled()) {
                 mediaItem?.mediaMetadata?.title?.takeIf { it.isNotBlank() }?.let { title ->
                     stationToast?.cancel()
                     stationToast = Toast.makeText(this@PlaybackService, title, Toast.LENGTH_SHORT).also { it.show() }

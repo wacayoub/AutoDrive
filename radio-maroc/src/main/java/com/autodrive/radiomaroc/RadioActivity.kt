@@ -1,8 +1,10 @@
 package com.autodrive.radiomaroc
 
+import android.Manifest
 import android.animation.ObjectAnimator
 import android.animation.ValueAnimator
 import android.app.AlertDialog
+import android.app.NotificationManager
 import android.app.SearchManager
 import android.app.UiModeManager
 import android.content.ActivityNotFoundException
@@ -10,6 +12,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
+import android.content.pm.PackageManager
 import android.content.res.ColorStateList
 import android.content.res.Configuration
 import android.graphics.Color
@@ -91,6 +94,7 @@ import java.util.Locale
 class RadioActivity : ComponentActivity() {
     private val dolbyPanel by lazy { DolbyPanel.find(this) }
     private val openDolbyPanel = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { }
+    private val stationPopupPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
     private companion object {
         const val PREFERENCES = "radio_maroc"
@@ -634,10 +638,30 @@ class RadioActivity : ComponentActivity() {
             "Mises à jour" to radioUpdates::show,
         )
         if (television) actions.add(1, "Infos TV" to ::showTvInfo)
+        if (!getSystemService(NotificationManager::class.java).areNotificationsEnabled()) {
+            actions.add(actions.lastIndex, "Activer le popup des stations" to ::enableStationPopups)
+        }
         val menu = if (tightLandscape) AlertDialog.Builder(this, R.style.RadioCompactMenu) else choiceDialog("Menu")
         menu
             .setItems(actions.map { it.first }.toTypedArray()) { _, index -> actions[index].second() }
             .show()
+    }
+
+    private fun enableStationPopups() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED &&
+            (!prefs.getBoolean("station_popup_permission_requested", false) ||
+                shouldShowRequestPermissionRationale(Manifest.permission.POST_NOTIFICATIONS))
+        ) {
+            prefs.edit().putBoolean("station_popup_permission_requested", true).apply()
+            stationPopupPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+            return
+        }
+        try {
+            startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, packageName))
+        } catch (_: ActivityNotFoundException) {
+            Toast.makeText(this, "Réglages de notifications indisponibles", Toast.LENGTH_SHORT).show()
+        }
     }
 
     private fun showLiveScores() {
