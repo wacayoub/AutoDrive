@@ -13,6 +13,8 @@ internal data class ReciterPortrait(
     val licenseUrl: String? get() = when (license) {
         "CC BY-SA 3.0" -> "https://creativecommons.org/licenses/by-sa/3.0/"
         "CC BY-SA 4.0" -> "https://creativecommons.org/licenses/by-sa/4.0/"
+        "CC BY 3.0" -> "https://creativecommons.org/licenses/by/3.0/"
+        "CC BY 4.0" -> "https://creativecommons.org/licenses/by/4.0/"
         "CC0 1.0" -> "https://creativecommons.org/publicdomain/zero/1.0/"
         else -> null
     }
@@ -27,6 +29,11 @@ internal object ReciterPortraits {
         "محمود خليل الحصري" to ReciterPortrait(R.drawable.reciter_hussary, "Hussary.jpg", "Zubairkhan1", "Domaine public"),
         "ماهر المعيقلي" to ReciterPortrait(R.drawable.reciter_maher, "Mahir Al-Muaiqly.png", "Sazwanmisuari", "CC0 1.0"),
         "سعود الشريم" to ReciterPortrait(R.drawable.reciter_shuraim, "Saud Shuraim.png", "Sazwanmisuari", "CC0 1.0"),
+        "سعد الغامدي" to ReciterPortrait(R.drawable.reciter_ghamdi, "Saad al Ghamdi.jpg", "الشيخ هيثم الدخين", "CC BY-SA 4.0"),
+        "ناصر القطامي" to ReciterPortrait(R.drawable.reciter_qatami, "صورة شخصية الشيخ ناصر القطامي.jpg", "Ayman dhū alghiná", "CC BY-SA 4.0"),
+        "صلاح البدير" to ReciterPortrait(R.drawable.reciter_budair, "Salah Ibn Mohammed Al Budair.jpg", "Salah Al Budair", "CC BY-SA 4.0"),
+        "عبد المحسن القاسم" to ReciterPortrait(R.drawable.reciter_qasim, "Abdul Mohsin Al-Qasim.jpg", "শেখ শরীফ", "CC BY 4.0"),
+        "علي الحذيفي" to ReciterPortrait(R.drawable.reciter_hudhayfi, "Ali al-Hudhayfi.jpg", "آيات", "CC BY 3.0"),
         "أحمد العجمي" to ReciterPortrait(R.drawable.reciter_ajmi, "Ahmad bin Ali Al-Ajmi.png", "أحمد زين", "CC BY-SA 3.0"),
         "ياسر الدوسري" to ReciterPortrait(R.drawable.reciter_dosari, "Yasser Al-Dosari.png", "أحمد زين", "CC BY-SA 3.0"),
         "عبد الله الجهني" to ReciterPortrait(R.drawable.reciter_juhany, "Abdullah Al Juhany (Cropped).png", "الشيخ هيثم الدخين", "CC BY-SA 4.0"),

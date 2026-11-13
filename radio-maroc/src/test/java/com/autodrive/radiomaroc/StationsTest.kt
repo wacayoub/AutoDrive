@@ -14,8 +14,8 @@ class StationsTest {
         val tajwid = quran.filter { Stations.quranSection(it) == QuranSection.TAJWID }
         assertEquals(59, morocco.size)
         assertTrue(morocco.mapNotNull { it.logoUrl }.all { RadioStation.validUrl(it) != null })
-        assertEquals(31, quran.size)
-        assertEquals(21, quran.count { Stations.quranSection(it) == QuranSection.MURATTAL })
+        assertEquals(32, quran.size)
+        assertEquals(22, quran.count { Stations.quranSection(it) == QuranSection.MURATTAL })
         assertEquals(4, tajwid.size)
         assertEquals(Stations.all.size, Stations.all.map { it.url }.toSet().size)
         assertTrue(Stations.all.all { RadioStation.validUrl(it.url) == it.url })
@@ -217,10 +217,26 @@ class StationsTest {
 
     @Test fun recurringRecitersUseTheSamePortraitAcrossSections() {
         val badr = Stations.visible(StationTab.QURAN, emptySet(), "Badr Turki").first()
-        val haram = Stations.visible(StationTab.QURAN, emptySet(), "").filter(Stations::isRecording)
+        val haram = Stations.visible(StationTab.QURAN, emptySet(), "").filter {
+            Stations.quranSection(it) == QuranSection.HARAM
+        }
         assertTrue(haram.all { ReciterPortraits.forStation(it) != null })
         val portrait = requireNotNull(ReciterPortraits.forStation(badr))
         assertTrue(haram.filter { Stations.reciterName(it) == badr.name }.all { ReciterPortraits.forStation(it) == portrait })
+    }
+
+    @Test fun herrazUsesThePublishedWarshCollectionAndMatchesTheRequestedSpelling() {
+        val herraz = Stations.visible(StationTab.QURAN, emptySet(), "Hicham Hezzaz").single()
+        assertEquals("هشام الهراز", herraz.name)
+        assertEquals(herraz, Stations.visible(StationTab.QURAN, emptySet(), "هشام لحراز").single())
+        assertEquals(herraz, CarRadioLibrary.stationForQuery("Hicham Hezzaz", null))
+        assertEquals(QuranSection.MURATTAL, Stations.quranSection(herraz))
+        assertTrue(Stations.isRecording(herraz))
+        assertTrue(Stations.subtitle(herraz).contains("ورش عن نافع"))
+        val chapters = HerrazRecitations.chapters
+        assertEquals((1..114).filterNot { it == 33 }, chapters.map { it.number })
+        assertEquals("الفاتحة", chapters.first().name)
+        assertTrue(chapters.last().url.endsWith("/114.mp3"))
     }
 
     @Test fun quranSectionsAreOrderedAndLegacyTabsRestoreToQuran() {

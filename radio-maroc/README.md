@@ -89,6 +89,13 @@ Le portrait du lecteur ouvre les crédits. Les images proviennent de Wikimedia C
 | أحمد العجمي | أحمد زين, CC BY-SA 3.0 | [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Ahmad_bin_Ali_Al-Ajmi.png) |
 | ياسر الدوسري | أحمد زين, CC BY-SA 3.0 | [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Yasser_Al-Dosari.png) |
 | عبد الله الجهني | الشيخ هيثم الدخين, CC BY-SA 4.0 | [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Abdullah_Al_Juhany_%28Cropped%29.png) |
+| سعد الغامدي | الشيخ هيثم الدخين, CC BY-SA 4.0 | [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Saad_al_Ghamdi.jpg) |
+| ناصر القطامي | Ayman dhū alghiná, CC BY-SA 4.0 | [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:صورة_شخصية_الشيخ_ناصر_القطامي.jpg) |
+| صلاح البدير | Salah Al Budair, CC BY-SA 4.0 | [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Salah_Ibn_Mohammed_Al_Budair.jpg) |
+| عبد المحسن القاسم | শেখ শরীফ, CC BY 4.0 | [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Abdul_Mohsin_Al-Qasim.jpg) |
+| علي الحذيفي | آيات, CC BY 3.0 | [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Ali_al-Hudhayfi.jpg) |
+
+**هشام الهراز (Hicham El Herraz)** est accessible dans **القرآن → الترتيل**. La recherche accepte aussi « Hicham Hezzaz ». Le lecteur enchaîne les 113 sourates en Warsh publiées par MP3Quran. La sourate 33, absente de cette édition, est passée. [Recueil officiel](https://www.mp3quran.net/ar/hsh-m-lhr-z)
 
 ## Vérification des sources de Radio 2M et de la SNRT
 

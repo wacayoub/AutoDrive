@@ -34,6 +34,7 @@ internal object CarRadioLibrary {
         if (key.isEmpty()) return null
         return playable.firstOrNull { RadioCatalogue.searchKey(it.name) == key }
             ?: playable.filter { RadioCatalogue.search(it, query.take(160)) }.singleOrNull()
+            ?: Stations.visible(StationTab.QURAN, emptySet(), query.take(160)).singleOrNull()
     }
 
     private fun items(tab: StationTab) = Stations.visible(tab, emptySet(), "").filter { it != Stations.luxe }

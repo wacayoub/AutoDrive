@@ -86,15 +86,17 @@ internal object Stations {
         RadioStation("Medina FM Andalou", "https://medinaandalou.ice.infomaniak.ch/medinaandalou-128.mp3",
             logoUrl = "https://medinafm.ma/favicon-512.png", tags = setOf("Andalou")),
         RadioStation("U Radio", "https://uradio-aac.ice.infomaniak.ch/uradio.aac",
+            logoUrl = "https://bo.uradio.ma/storage/streaming/U_RADIO.webp",
             tags = setOf("Musique")),
         RadioStation("Radio Manarat", "https://listen.radioking.com/radio/252934/stream/297385",
             tags = setOf("Éducation et culture", "راديو منارات")),
-        RadioStation("Ness Radio", "https://radio.nessradio.net:8212/nessradio-hd", tags = setOf("Musique")),
+        RadioStation("Ness Radio", "https://radio.nessradio.net:8212/nessradio-hd",
+            logoUrl = "https://nessradio.com/wp-content/uploads/2026/09/ness_logo_outline_723px_2026.png", tags = setOf("Musique")),
         fayrouz,
         RadioStation("Tarab Radio", "https://stream.zeno.fm/fy8achbq97zuv", tags = setOf("Webradio indépendante · طرب")),
     )
     val snrtNational = RadioCatalogue.featured.filter { RadioCatalogue.officialPlayer(it) != null }
-    private val radio2m = RadioStation("Radio 2M", "https://radio2m.ma/", logoUrl = "https://radio2m.ma/favRadio2M.png")
+    private val radio2m = RadioStation("Radio 2M", "https://radio2m.ma/", logoUrl = "https://radio2m.ma/_nuxt/img/Logo@2x.df151f1.png")
     val luxe = RadioStation("Luxe Radio", "https://open.luxeradio.ma/radio/live",
         logoUrl = "https://www.haca.ma/sites/default/files/upload/images/logo-luxeradio.PNG", tags = setOf("Musique"))
     const val SNRT_STREAM_HOST = "cdn.live.easybroadcast.io"
@@ -172,12 +174,13 @@ internal object Stations {
     private fun quranStation(name: String, path: String) = RadioStation(name, "https://backup.qurango.net/radio/$path")
 
     private val badr = quranStation("بدر التركي", "bader")
+    private val herraz = RadioStation(HerrazRecitations.RECITER, HerrazRecitations.SOURCE)
     private val excludedQuranPaths = setOf("mishary_alafasi", "abdulrahman_alsudaes", "yasser_aldosari")
     private val quran = (RadioCatalogue.featured.filter {
         RadioCatalogue.matches(it, RadioCategory.QURAN) && RadioCatalogue.officialPlayer(it) == null &&
             it.url.substringAfterLast('/') !in excludedQuranPaths
     } + listOf(
-        badr,
+        badr, herraz,
         quranStation("محمود خليل الحصري · ورش", "mahmoud_khalil_alhussary_warsh"),
         quranStation("إبراهيم الدوسري", "ibrahim_aldosari"),
         quranStation("فارس عباد", "fares_abbad"),
@@ -194,7 +197,8 @@ internal object Stations {
             "aloyoon_alkoshi" -> 0
             "omar_alqazabri" -> 1
             "bader" -> 2
-            else -> 3
+            "hsh-m-lhr-z" -> 3
+            else -> 4
         }
     }
     private val tajwid = listOf(
@@ -226,6 +230,8 @@ internal object Stations {
     private val haramStations = haram.values.map { it.station }
     private val aliases = mapOf(
         "بدر التركي" to listOf("Badr Turki", "Badr Al Turki", "Bader Alturki"),
+        HerrazRecitations.RECITER to listOf("Hicham Hezzaz", "Hicham El Herraz", "Hicham Lharraz",
+            "Hicham Elherraz", "Hisham Al Haraz", "هشام لحراز", "هشام الهزاز"),
         "فارس عباد" to listOf("Fares Abbad", "Faris Abbad"),
         "ناصر القطامي" to listOf("Nasser Al Qatami"),
         "أحمد نعينع" to listOf("Ahmed Nuainaa", "Ahmad Nauina"),
@@ -247,12 +253,12 @@ internal object Stations {
     val all = localRadios + quranLibrary
 
     fun reciterName(station: RadioStation): String = station.name.substringBefore(" ·")
-    fun isRecording(station: RadioStation): Boolean = station.url in haram
+    fun isRecording(station: RadioStation): Boolean = station.url in haram || station == herraz
     fun isReciter(station: RadioStation): Boolean = quranSection(station) != null
     fun quranSection(station: RadioStation): QuranSection? = when {
         station in quran -> QuranSection.MURATTAL
         station in tajwid -> QuranSection.TAJWID
-        isRecording(station) -> QuranSection.HARAM
+        station.url in haram -> QuranSection.HARAM
         else -> null
     }
     fun streamUrl(station: RadioStation): String = officialStreams[station.url] ?: station.url
@@ -356,7 +362,8 @@ internal object Stations {
         station.url == radio2m.url -> "SOREAD 2M · Maroc"
         station == luxe -> "Luxe Radio · Maroc"
         station.countryCode != null -> StationDirectory.countryName(station.countryCode)
-        isRecording(station) -> "${station.tags.single()} · المسجد الحرام · ${station.url.removeSuffix(".mp3").takeLast(10)}"
+        station in haramStations -> "${station.tags.single()} · المسجد الحرام · ${station.url.removeSuffix(".mp3").takeLast(10)}"
+        station == herraz -> HerrazRecitations.NARRATION
         station in tajwid -> "المصحف المجوّد · MP3Quran"
         station == badr -> "حفص عن عاصم · MP3Quran"
         else -> station.tags.firstOrNull() ?: "القرآن الكريم · MP3Quran"
@@ -364,6 +371,7 @@ internal object Stations {
 
     fun listDescription(station: RadioStation): String? = when {
         station.name == "HIT RADIO" && group(station) == StationGroup.HIT -> "Variétés · Hits"
+        station.url == radio2m.url || station.url in snrtStreams || station == luxe -> subtitle(station)
         station.countryCode != null -> listOfNotNull(station.tags.firstOrNull(), StationDirectory.countryName(station.countryCode))
             .distinct().joinToString(" · ")
         station.tags.isNotEmpty() || region(station) != null || isReciter(station) -> subtitle(station)
@@ -386,7 +394,7 @@ internal object Stations {
 
     fun item(station: RadioStation): MediaItem = MediaItem.Builder()
         .setMediaId(station.url)
-        .setUri(streamUrl(station))
+        .setUri(if (station == herraz) HerrazRecitations.chapters.first().url else streamUrl(station))
         .setMediaMetadata(metadata(station))
         .apply {
             if (isHls(station)) setMimeType(MimeTypes.APPLICATION_M3U8)
@@ -401,6 +409,16 @@ internal object Stations {
                     .build())
             }
         }.build()
+
+    fun playbackItems(station: RadioStation): List<MediaItem> {
+        val entry = item(station)
+        if (station != herraz) return listOf(entry)
+        return HerrazRecitations.chapters.map { chapter ->
+            entry.buildUpon().setUri(chapter.url)
+                .setMediaMetadata(entry.mediaMetadata.buildUpon().setSubtitle("سورة ${chapter.name}").build())
+                .build()
+        }
+    }
 
     fun directoryItem(request: MediaItem): MediaItem? {
         val metadata = request.requestMetadata

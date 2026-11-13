@@ -2417,6 +2417,8 @@ class RadioActivity : ComponentActivity() {
         val station = findStation(active) ?: savedStation
         val luxe = if (station == Stations.luxe) luxeState() else null
         val recording = station?.let(Stations::isRecording) == true
+        val chapter = player?.currentMediaItem?.takeIf { it.mediaId == HerrazRecitations.SOURCE }
+            ?.mediaMetadata?.subtitle
         val ended = player?.playbackState == Player.STATE_ENDED
         val waitingForNetwork = luxe == null && player?.let(::waitingForNetwork) == true
         val requesting = if (luxe != null) luxe == LuxeRadio.State.PLAYING || luxe == LuxeRadio.State.CONNECTING
@@ -2433,12 +2435,15 @@ class RadioActivity : ComponentActivity() {
             ?.let { BroadcastProgrammes.fromStream(it, streamInfo?.getString(PlaybackService.STREAM_TITLE)) }
         if (dashboardInfo.value) updateTvStationInfo(station, programme?.title ?: streamInfo?.getString(PlaybackService.STREAM_TITLE))
         playerCategory?.apply {
-            text = if (recording) "تلاوات الحرم" else programme?.source.orEmpty()
+            val source = if (recording) station?.let(Stations::quranSection)?.label else programme?.source
+            val format = player?.sessionExtras?.getString(PlaybackService.AUDIO_FORMAT)
+                ?.takeIf { playing && !recording && luxe == null }
+            text = listOfNotNull(source, format).joinToString(" · ")
             visibility = if (text.isEmpty()) View.GONE else View.VISIBLE
         }
         playerPanel.layoutDirection = directionOf(station?.name.orEmpty())
         playerTitle.text = station?.name ?: "Choisir une station"
-        playerSubtitle.text = programme?.let {
+        playerSubtitle.text = if (chapter != null) "$chapter · ${HerrazRecitations.NARRATION}" else programme?.let {
             listOfNotNull(it.title, it.hours, it.source.takeIf { playerCategory == null }).joinToString(" · ")
         } ?: station?.let(Stations::subtitle).orEmpty()
         playerSubtitle.visibility = if (playerSubtitle.text.isEmpty()) View.GONE else View.VISIBLE

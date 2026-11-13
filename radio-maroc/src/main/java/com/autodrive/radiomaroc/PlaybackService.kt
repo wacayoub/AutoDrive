@@ -63,6 +63,7 @@ internal class PlaybackService : MediaLibraryService() {
         const val NETWORK_UNAVAILABLE = "com.autodrive.radiomaroc.NETWORK_UNAVAILABLE"
         const val STREAM_STATION = "com.autodrive.radiomaroc.STREAM_STATION"
         const val STREAM_TITLE = "com.autodrive.radiomaroc.STREAM_TITLE"
+        const val AUDIO_FORMAT = "com.autodrive.radiomaroc.AUDIO_FORMAT"
         const val PROGRAMME_SOURCE = "com.autodrive.radiomaroc.PROGRAMME_SOURCE"
         const val PROGRAMME_HOURS = "com.autodrive.radiomaroc.PROGRAMME_HOURS"
         const val LUXE_STATE = "com.autodrive.radiomaroc.LUXE_STATE"
@@ -270,16 +271,16 @@ internal class PlaybackService : MediaLibraryService() {
 
                 override fun onAddMediaItems(session: MediaSession, controller: MediaSession.ControllerInfo,
                     mediaItems: List<MediaItem>): ListenableFuture<List<MediaItem>> {
-                    val resolved = mediaItems.mapNotNull { item ->
+                    val resolved = mediaItems.flatMap { item ->
                         val station = Stations.all.firstOrNull { it.url == item.mediaId }
                             ?: item.requestMetadata.searchQuery?.let { query ->
                                 CarRadioLibrary.stationForQuery(query, lastStationId())
                             }
                         when {
-                            station == Stations.luxe -> null
-                            station != null -> Stations.item(station)
-                            isOwnController(controller) -> Stations.directoryItem(item)
-                            else -> null
+                            station == Stations.luxe -> emptyList()
+                            station != null -> Stations.playbackItems(station)
+                            isOwnController(controller) -> listOfNotNull(Stations.directoryItem(item))
+                            else -> emptyList()
                         }
                     }
                     if (resolved.isNotEmpty() && luxeState != LuxeRadio.State.IDLE) luxe.leave()
@@ -290,7 +291,7 @@ internal class PlaybackService : MediaLibraryService() {
                     ListenableFuture<MediaSession.MediaItemsWithStartPosition> {
                     val station = CarRadioLibrary.stationForQuery("", lastStationId())
                     return Futures.immediateFuture(MediaSession.MediaItemsWithStartPosition(
-                        listOfNotNull(station?.let(Stations::item)), 0, C.TIME_UNSET,
+                        station?.let(Stations::playbackItems).orEmpty(), 0, C.TIME_UNSET,
                     ))
                 }
             }).setSessionActivity(reopen).setSessionExtras(sessionExtras()).build()
@@ -312,6 +313,22 @@ internal class PlaybackService : MediaLibraryService() {
                 putString(PROGRAMME_SOURCE, it.source)
                 putString(PROGRAMME_HOURS, it.hours)
             }
+        }
+        if (::engine.isInitialized) {
+            val format = engine.audioFormat
+            val codec = when (format?.sampleMimeType) {
+                "audio/mpeg" -> "MP3"
+                "audio/mp4a-latm" -> "AAC"
+                "audio/opus" -> "Opus"
+                "audio/flac" -> "FLAC"
+                "audio/vorbis" -> "Vorbis"
+                else -> null
+            }
+            val specs = listOfNotNull(
+                codec,
+                format?.bitrate?.takeIf { it >= 1_000 }?.let { "${it / 1_000} kbit/s" },
+            ).joinToString(" · ")
+            if (specs.isNotEmpty()) putString(AUDIO_FORMAT, specs)
         }
     }
 
@@ -361,7 +378,7 @@ internal class PlaybackService : MediaLibraryService() {
             prefs.edit().putString("last_station", station.url)
                 .putString("directory_bookmarks", StationDirectory.encode(listOf(station) + retained)).apply()
         }
-        engine.setMediaItem(Stations.item(station))
+        engine.setMediaItems(Stations.playbackItems(station))
         engine.prepare()
         engine.play()
     }
