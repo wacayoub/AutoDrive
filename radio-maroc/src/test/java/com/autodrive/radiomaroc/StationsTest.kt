@@ -4,6 +4,7 @@ import com.autodrive.launcher.RadioQueue
 import com.autodrive.launcher.RadioStation
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -253,5 +254,28 @@ class StationsTest {
         assertEquals(StationTab.QURAN, StationTab.restore("TAJWID"))
         assertEquals(StationTab.QURAN, StationTab.restore("HARAM"))
         assertEquals(StationTab.WORLD, StationTab.restore("WORLD"))
+    }
+
+    @Test fun carStationSelectionKeepsTheBrowsedCategoryForSkip() {
+        val snrt = Stations.snrtNational.first()
+        val selected = requireNotNull(CarRadioLibrary.selection("station/snrt/${snrt.url}", emptyList()))
+        assertEquals(snrt, selected.station)
+        assertEquals(Stations.snrt.toSet(), selected.queue.toSet())
+        assertTrue(RadioQueue.neighbor(selected.queue, snrt.url, 1) in Stations.snrt)
+        assertNull(CarRadioLibrary.selection("station/TAJWID/${snrt.url}", emptyList()))
+    }
+
+    @Test fun carSearchAndFavoritesResolveOnlyAvailableStations() {
+        val med = Stations.all.first { it.name == "Med Radio" }
+        val bookmark = RadioStation("Radio préférée", "https://example.org/favorite", countryCode = "FR")
+        val favorites = CarRadioLibrary.favorites(setOf(bookmark.url, med.url, Stations.luxe.url), listOf(bookmark))
+        assertEquals(listOf(med, bookmark), favorites)
+        assertEquals(favorites, CarRadioLibrary.selection("station/favorites/${bookmark.url}", favorites)?.queue)
+        assertNull(CarRadioLibrary.selection(bookmark.url, emptyList()))
+        assertEquals(bookmark, CarRadioLibrary.stationForQuery("", bookmark.url, favorites))
+        assertEquals(listOf(bookmark), CarRadioLibrary.search("radio preferee", favorites))
+        assertEquals(listOf(med), CarRadioLibrary.search("Med Radio", emptyList()).filter { it.name == med.name })
+        assertTrue(CarRadioLibrary.search("... ", favorites).isEmpty())
+        assertNull(CarRadioLibrary.stationForQuery(" ", Stations.luxe.url)?.takeIf { it == Stations.luxe })
     }
 }

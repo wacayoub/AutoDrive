@@ -8,9 +8,15 @@ Dans **AppBoot** ou le menu d’autodémarrage de l’Incarlink, choisis **Radio
 
 Le lecteur système Android reçoit le nom de la station, son logo et le titre de l’émission ou du morceau lorsque le diffuseur le fournit. Le logo de l’application sert de secours. Les programmes disponibles de SNRT et Radio 2M se rafraîchissent dans le service audio pendant la lecture. Luxe Radio fournit ses propres informations de lecture via son application officielle. [Métadonnées et commandes de la session média](https://developer.android.com/media/media3/session/background-playback).
 
-La 2.4.0 déclare une source audio Android Auto avec le catalogue embarqué **Radio Maroc** et **القرآن**. Le lecteur de la voiture choisit la source et les champs qu’il affiche. Le lancement AppBoot, l’affichage sur l’Incarlink et la projection dans un véhicule restent à vérifier sur le matériel. [Découverte des sources audio Android Auto](https://developer.android.com/training/cars/media/auto).
-
 Les commandes média Android **précédente** et **suivante** changent la station dans la liste filtrée de la radio, même en arrière-plan. Depuis la 2.4.2, elles lancent la station choisie même si la précédente était en pause. Les boutons **TRACK / SEEK** de la Toyota dépendent de la transmission de ces commandes par l’Incarlink. Luxe Radio utilise la session média de son application officielle. [Commandes média Android](https://developer.android.com/media/media3/session/control-playback).
+
+## Android Auto
+
+Installe ou mets à jour Radio Maroc & Coran sur le téléphone qui projette Android Auto. Une fois le téléphone connecté, ouvre Radio Maroc & Coran depuis le menu des applications de la voiture.
+
+La version 2.5.32 fournit trois onglets à l’interface média d’Android Auto. **Radio Maroc** regroupe les nationales et webradios, SNRT, les stations régionales et la musique arabe. **القرآن** donne accès au tartil, au tajwid et aux récitations du Haram. **Favoris** reprend les stations compatibles enregistrées sur le téléphone. La recherche accepte les noms et les alias du catalogue. Précédent et suivant suivent la catégorie depuis laquelle la lecture a été lancée. Les flux qui nécessitent une application tierce, comme Luxe Radio, sont accessibles depuis leur source dédiée lorsqu’elle est proposée par la voiture.
+
+Android Auto dessine les onglets et le lecteur à partir des catégories, des commandes et des métadonnées envoyées par l’application. Un client média externe sur l’émulateur Android 13 a vérifié la navigation, la recherche, l’accès aux favoris, les illustrations locales et la lecture avec les changements de station. Le rendu projeté et les commandes physiques restent à vérifier sur la Toyota. [Intégration média Android Auto](https://developer.android.com/media/implement/surfaces/cars).
 
 ## Mises à jour en ligne
 

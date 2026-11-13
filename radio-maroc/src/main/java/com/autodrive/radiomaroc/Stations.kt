@@ -388,6 +388,7 @@ internal object Stations {
         .setSubtitle(subtitle(station))
         .setStation(station.name)
         .setArtworkUri(Uri.parse(station.logoUrl?.let(RadioStation::validUrl) ?: DEFAULT_ARTWORK))
+        .apply { if (!isRecording(station)) setMediaType(MediaMetadata.MEDIA_TYPE_RADIO_STATION) }
         .setIsPlayable(true)
         .setIsBrowsable(false)
         .build()
