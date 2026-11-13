@@ -222,6 +222,8 @@ class RadioActivity : ComponentActivity() {
     private val landscape get() = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
     private val touchGuide get() = !television && landscape && displayLayout == DisplayLayout.GUIDE
     private val smallTouchGuide get() = touchGuide && resources.configuration.screenHeightDp < 300
+    private val compactGuideTabs get() = touchGuide && resources.configuration.screenWidthDp < 580
+    private val singleColumnGuide get() = touchGuide && resources.configuration.screenWidthDp < 640
     private val showDashboardTiles get() = !touchGuide || resources.configuration.screenHeightDp >= 360
     private val dashboardInfo = MutableStateFlow(false)
     private var typingInGuide = false
@@ -613,27 +615,33 @@ class RadioActivity : ComponentActivity() {
         val bar = this
         background = getDrawable(R.drawable.radio_control)
         setPadding(dp(3), dp(3), dp(3), dp(3))
-        fun addCategory(title: String, icon: Int, action: () -> Unit): TextView = button(title, action).apply {
+        fun addCategory(choice: StationTab): TextView = button(
+            if (compactGuideTabs && choice == StationTab.MOROCCO) "Maroc" else choice.label,
+        ) { selectTab(choice) }.apply {
             id = View.generateViewId()
             nextFocusUpId = menuButton.id
+            if (compactGuideTabs) contentDescription = choice.label
             maxLines = 1
             ellipsize = TextUtils.TruncateAt.END
             val maxSize = if (compactGuide) 13 else 15
             setAutoSizeTextTypeUniformWithConfiguration(10, maxSize, 1, TypedValue.COMPLEX_UNIT_SP)
-            gravity = Gravity.START or Gravity.CENTER_VERTICAL
-            textAlignment = View.TEXT_ALIGNMENT_VIEW_START
-            setPadding(dp(if (compactGuide) 6 else 10), 0, dp(4), 0)
-            val size = dp(if (compactGuide) 14 else 16)
-            val symbol = getDrawable(icon)?.apply { setBounds(0, 0, size, size) }
-            setCompoundDrawablesRelative(symbol, null, null, null)
-            compoundDrawableTintList = getColorStateList(R.color.radio_tab_icon)
-            compoundDrawablePadding = dp(if (compactGuide) 4 else 6)
-            bar.addView(this, LinearLayout.LayoutParams(0, -1, if (title == StationTab.MOROCCO.label) 1.3f else 1f)
+            if (compactGuideTabs) {
+                setPadding(dp(3), 0, dp(3), 0)
+            } else {
+                gravity = Gravity.START or Gravity.CENTER_VERTICAL
+                textAlignment = View.TEXT_ALIGNMENT_VIEW_START
+                setPadding(dp(if (compactGuide) 6 else 10), 0, dp(4), 0)
+                val size = dp(if (compactGuide) 14 else 16)
+                val symbol = getDrawable(stationTabIcon(choice))?.apply { setBounds(0, 0, size, size) }
+                setCompoundDrawablesRelative(symbol, null, null, null)
+                compoundDrawableTintList = getColorStateList(R.color.radio_tab_icon)
+                compoundDrawablePadding = dp(if (compactGuide) 4 else 6)
+            }
+            val weight = if (!compactGuideTabs && choice == StationTab.MOROCCO) 1.3f else 1f
+            bar.addView(this, LinearLayout.LayoutParams(0, -1, weight)
                 .apply { marginEnd = dp(3) })
         }
-        tabs = StationTab.entries.associateWith { choice ->
-            addCategory(choice.label, stationTabIcon(choice)) { selectTab(choice) }
-        }
+        tabs = StationTab.entries.associateWith(::addCategory)
     }
 
     private fun selectTab(choice: StationTab) {
@@ -1032,7 +1040,7 @@ class RadioActivity : ComponentActivity() {
             empty = label("", 15, muted).apply { gravity = Gravity.CENTER; setPadding(dp(10), 0, dp(10), 0) }
             val catalog = if (grid) GridView(context).apply {
                 numColumns = when {
-                    touchGuide -> if (resources.configuration.screenWidthDp >= 500) 2 else 1
+                    touchGuide -> if (singleColumnGuide) 1 else 2
                     tvGuide -> if (resources.configuration.screenWidthDp >= 1_250) 3 else 2
                     television -> if (resources.configuration.screenWidthDp < 760) 3 else 4
                     shortLandscape -> 2
@@ -1067,6 +1075,15 @@ class RadioActivity : ComponentActivity() {
                             RadioSound.playClick(this@RadioActivity, prefs)
                             directory.loadMore()
                         }
+                    }
+                }
+                if (touchGuide) {
+                    setOnItemLongClickListener { _, _, position, _ ->
+                        val station = stationAt(position) ?: return@setOnItemLongClickListener false
+                        toggleFavorite(station)
+                        val message = if (station.url in favorites) "Ajoutée aux favoris" else "Retirée des favoris"
+                        Toast.makeText(this@RadioActivity, "${station.name} · $message", Toast.LENGTH_SHORT).show()
+                        true
                     }
                 }
                 contentDescription = if (grid && !tvGuide) "Mosaïque des stations" else "Liste des stations"
@@ -2019,7 +2036,7 @@ class RadioActivity : ComponentActivity() {
         }, textColor, bold = true).apply {
             gravity = if (tvGuide) Gravity.START or Gravity.CENTER_VERTICAL else Gravity.CENTER
             includeFontPadding = false
-            maxLines = 1
+            maxLines = if (singleColumnGuide) 2 else 1
             ellipsize = TextUtils.TruncateAt.END
         }
         private val subtitle = label("", when {
@@ -2038,6 +2055,12 @@ class RadioActivity : ComponentActivity() {
             importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
             visibility = View.INVISIBLE
         } else null
+        private val favoriteMark = if (touchGuide) ImageView(context).apply {
+            setImageResource(R.drawable.ic_radio_favorite_filled)
+            imageTintList = ColorStateList.valueOf(amber)
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+            visibility = View.GONE
+        } else null
 
         init {
             layoutParams = AbsListView.LayoutParams(-1, dp(heightDp))
@@ -2052,6 +2075,7 @@ class RadioActivity : ComponentActivity() {
                     addView(name, LinearLayout.LayoutParams(-1, -2))
                     addView(subtitle, LinearLayout.LayoutParams(-1, -2))
                 }, LinearLayout.LayoutParams(0, -2, 1f))
+                favoriteMark?.let { addView(it, LinearLayout.LayoutParams(dp(14), dp(14)).apply { marginStart = dp(4) }) }
                 playingMark?.let { addView(it, LinearLayout.LayoutParams(dp(14), dp(14)).apply { marginStart = dp(4) }) }
             } else {
                 orientation = VERTICAL
@@ -2070,7 +2094,10 @@ class RadioActivity : ComponentActivity() {
             val tileBackground = if (selected) selectedBackground else idleBackground
             if (background !== tileBackground) background = tileBackground
             contentDescription = "Écouter ${station.name}"
-            stateDescription = if (playing) "En écoute" else if (selected) "Sélectionnée" else null
+            val favorite = touchGuide && station.url in favorites
+            val playbackState = if (playing) "En écoute" else if (selected) "Sélectionnée" else null
+            stateDescription = if (favorite) listOfNotNull(playbackState, "Favori").joinToString(" · ") else playbackState
+            favoriteMark?.visibility = if (favorite) View.VISIBLE else View.GONE
             if (tvGuide) layoutDirection = directionOf(station.name)
             logo.bind(station)
             name.text = station.name
@@ -2324,7 +2351,9 @@ class RadioActivity : ComponentActivity() {
         radioFilter.background = pressable(if (radioFavoritesOnly) R.drawable.radio_selected else R.drawable.radio_control)
         empty.text = when {
             onRadioTab && radioFavoritesOnly && query.isBlank() -> "Aucune radio marocaine favorite"
-            tab == StationTab.FAVORITES && favorites.isEmpty() -> "Utilise l’étoile pour ajouter une station"
+            tab == StationTab.FAVORITES && favorites.isEmpty() -> if (touchGuide) {
+                "Appuie longuement sur une station pour l’ajouter"
+            } else "Utilise l’étoile pour ajouter une station"
             directory.loading -> "Chargement des radios…"
             directory.failed -> "Annuaire indisponible"
             tab == StationTab.WORLD && query.isBlank() -> "Aucune station HTTPS disponible pour ce pays"
