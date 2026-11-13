@@ -75,7 +75,7 @@ Les limites de lecture ont été relevées dans l’audio source à l’aide de 
 
 ## Crédits photo
 
-Le portrait du lecteur ouvre les crédits. Les images proviennent de Wikimedia Commons. Trois fichiers sont les miniatures Commons de 250 px. Les autres fichiers sont repris tels quels depuis leur notice. Une icône de livre accompagne les récitateurs sans portrait disponible sous licence de réutilisation.
+Le portrait du lecteur ouvre les crédits. Les images proviennent de Wikimedia Commons. Les originaux de Badr Al-Turki (1 010 × 1 280), Al-Kouchi (600 × 915) et Maher Al-Muaiqly (405 × 403) remplacent les miniatures. Les logos et les portraits sont décodés selon la taille affichée. Une icône de livre accompagne les récitateurs sans portrait disponible sous licence de réutilisation.
 
 | Récitant | Crédit et licence | Source |
 | --- | --- | --- |

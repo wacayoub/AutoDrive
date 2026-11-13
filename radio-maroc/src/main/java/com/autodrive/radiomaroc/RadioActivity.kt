@@ -16,6 +16,7 @@ import android.content.pm.PackageManager
 import android.content.res.ColorStateList
 import android.content.res.Configuration
 import android.graphics.Color
+import android.graphics.Bitmap
 import android.graphics.Typeface
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.GradientDrawable
@@ -2205,8 +2206,11 @@ class RadioActivity : ComponentActivity() {
         private val initials = label("FM", textSize, accent, bold = true).apply { gravity = Gravity.CENTER }
         private val logo = ImageView(context).apply { scaleType = ImageView.ScaleType.FIT_CENTER; visibility = View.GONE }
         private var logoWork: Job? = null
-        private var artworkKey: String? = null
+        private var station: RadioStation? = null
         private var artworkGeneration = -1
+        private var requestedPixels = 0
+
+        private val targetPixels get() = (minOf(width, height) - dp(6)).coerceAtLeast(0)
 
         init {
             importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
@@ -2216,10 +2220,14 @@ class RadioActivity : ComponentActivity() {
         }
 
         fun bind(station: RadioStation?) {
-            if (artworkKey == station?.url && artworkGeneration == artwork.generation) return
-            artworkKey = station?.url
+            if (this.station == station && artworkGeneration == artwork.generation) {
+                if (requestedPixels != targetPixels) loadArtwork()
+                return
+            }
+            this.station = station
             artworkGeneration = artwork.generation
             logoWork?.cancel()
+            requestedPixels = 0
             initials.text = when {
                 station == null -> "FM"
                 Stations.isReciter(station) -> "ق"
@@ -2230,25 +2238,35 @@ class RadioActivity : ComponentActivity() {
             logo.setImageDrawable(null)
             val portrait = station?.let(ReciterPortraits::forStation)
             bindCredit(station, portrait)
-            if (portrait != null) {
-                logo.setImageResource(portrait.image)
-                logo.visibility = View.VISIBLE
-                initials.visibility = View.GONE
-                return
-            }
             if (station == null || Stations.isReciter(station)) {
                 logo.setImageResource(if (station == null) R.drawable.ic_radio else R.drawable.ic_tab_quran)
                 logo.visibility = View.VISIBLE
                 initials.visibility = View.GONE
             }
-            val targetPixels = layoutParams?.let { maxOf(it.width, it.height) - dp(6) } ?: 128
-            logoWork = artwork.load(station?.logoUrl, targetPixels) { bitmap ->
-                if (artworkKey == station?.url && bitmap != null) {
+            loadArtwork()
+        }
+
+        override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+            super.onSizeChanged(w, h, oldw, oldh)
+            if (targetPixels != requestedPixels) loadArtwork()
+        }
+
+        private fun loadArtwork() {
+            val size = targetPixels
+            logoWork?.cancel()
+            requestedPixels = size
+            val station = station ?: return
+            if (size == 0) return
+            val show: (Bitmap?) -> Unit = { bitmap ->
+                if (this.station == station && requestedPixels == size && bitmap != null) {
                     logo.setImageBitmap(bitmap)
                     logo.visibility = View.VISIBLE
                     initials.visibility = View.GONE
                 }
             }
+            val portrait = ReciterPortraits.forStation(station)
+            logoWork = if (portrait != null) artwork.loadPortrait(portrait.image, size, show)
+                else artwork.load(station.logoUrl, size, show)
         }
 
         private fun bindCredit(station: RadioStation?, portrait: ReciterPortrait?) {
@@ -2270,8 +2288,13 @@ class RadioActivity : ComponentActivity() {
 
         override fun onDetachedFromWindow() {
             logoWork?.cancel()
-            artworkKey = null
+            artworkGeneration = -1
             super.onDetachedFromWindow()
+        }
+
+        override fun onAttachedToWindow() {
+            super.onAttachedToWindow()
+            if (artworkGeneration == -1) bind(station)
         }
     }
 

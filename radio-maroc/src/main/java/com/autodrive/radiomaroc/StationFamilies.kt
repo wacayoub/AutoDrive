@@ -4,7 +4,7 @@ import com.autodrive.launcher.RadioCatalogue
 import com.autodrive.launcher.RadioStation
 
 internal object StationFamilies {
-    private const val HIT_LOGO = "https://www.hitradio.ma/logo/small-logo-hitradio.webp"
+    const val HIT_LOGO = "https://www.hitradio.ma/logo-hitradio.png"
     private const val MEDI_LOGO = "https://www.medi1.com/assets/imgs/medi1_logo_new.png"
     private const val MEDI_CDN = "https://cdn.live.easybroadcast.io"
     private const val MEDI_ART = "https://bridge.medi1.com/images"
@@ -51,7 +51,7 @@ internal object StationFamilies {
 
     private fun mediLive(name: String, mount: String, region: String, detail: String) = RadioStation(
         name, "$MEDI_CDN/live/$mount/playlist.m3u8",
-        logoUrl = "$MEDI_ART/live/btn_live_${region}_s.png", tags = setOf(detail), isHls = true,
+        logoUrl = "$MEDI_ART/live/btn_live_$region.png", tags = setOf(detail), isHls = true,
     )
 
     fun directoryKey(station: RadioStation): String {

@@ -25,6 +25,7 @@ internal class RadioArtwork(
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val io = Dispatchers.IO.limitedParallelism(2)
+    private val resources = context.resources
     private val folder = File(context.cacheDir, "radio-logos")
     private data class ArtworkSize(val url: String, val pixels: Int)
     private val memory = object : LruCache<ArtworkSize, Bitmap>(memoryBytes) {
@@ -37,12 +38,28 @@ internal class RadioArtwork(
     fun load(url: String?, targetPixels: Int = 128, ready: (Bitmap?) -> Unit): Job = scope.launch {
         val valid = url?.let(RadioStation::validUrl)
         if (valid == null || valid in failures) { ready(null); return@launch }
-        val request = ArtworkSize(valid, ((targetPixels.coerceIn(32, 640) + 31) / 32) * 32)
+        val request = ArtworkSize(valid, artworkBucket(targetPixels))
         memory.get(request)?.let { ready(it); return@launch }
         val bitmap = withContext(io) { runCatching { read(request) }.getOrNull() }
         if (bitmap != null) memory.put(request, bitmap) else failures.add(valid)
         ready(bitmap)
     }
+
+    fun loadPortrait(id: Int, targetPixels: Int, ready: (Bitmap?) -> Unit): Job = scope.launch {
+        val request = ArtworkSize("resource:$id", artworkBucket(targetPixels))
+        memory.get(request)?.let { ready(it); return@launch }
+        val bitmap = withContext(io) {
+            runCatching {
+                decodeToSize(request.pixels, crop = false) {
+                    BitmapFactory.decodeResource(resources, id, it)
+                }
+            }.getOrNull()
+        }
+        if (bitmap != null) memory.put(request, bitmap)
+        ready(bitmap)
+    }
+
+    private fun artworkBucket(pixels: Int) = ((pixels.coerceIn(32, 1024) + 31) / 32) * 32
     private fun read(request: ArtworkSize): Bitmap? {
         folder.mkdirs()
         val key = MessageDigest.getInstance("SHA-256").digest(request.url.toByteArray()).joinToString("") { "%02x".format(it.toInt() and 255) }
@@ -94,15 +111,19 @@ internal class RadioArtwork(
         // URL, so an eventual replacement by the broadcaster's real logo remains eligible.
         if (bytes.size == 4119 && MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it.toInt() and 255) } ==
             "6bdb369337ac2496761c6f063bffea0aa6a91d4662279c399071a468251f51f0") return null
-        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+        return decodeToSize(targetPixels, normalizeLogoMargins) { BitmapFactory.decodeByteArray(bytes, 0, bytes.size, it) }
+    }
+
+    private fun decodeToSize(targetPixels: Int, crop: Boolean, decode: (BitmapFactory.Options) -> Bitmap?): Bitmap? {
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true; inScaled = false }
+        decode(bounds)
         if (bounds.outWidth !in 1..8192 || bounds.outHeight !in 1..8192) return null
         val sourcePixels = maxOf(bounds.outWidth, bounds.outHeight)
         var sample = 1
         while (sourcePixels / (sample * 2) >= targetPixels) sample *= 2
-        val decoded = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options().apply { inSampleSize = sample })
+        val decoded = decode(BitmapFactory.Options().apply { inSampleSize = sample; inScaled = false })
             ?: return null
-        val bitmap = if (normalizeLogoMargins) cropLogoMargins(decoded) else decoded
+        val bitmap = if (crop) cropLogoMargins(decoded) else decoded
         val decodedPixels = maxOf(bitmap.width, bitmap.height)
         if (decodedPixels <= targetPixels) return bitmap
         val width = (bitmap.width * targetPixels / decodedPixels).coerceAtLeast(1)
