@@ -4,6 +4,7 @@ import android.animation.ObjectAnimator
 import android.animation.ValueAnimator
 import android.app.AlertDialog
 import android.app.SearchManager
+import android.app.UiModeManager
 import android.content.ActivityNotFoundException
 import android.content.ComponentName
 import android.content.Context
@@ -17,6 +18,7 @@ import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.RippleDrawable
 import android.os.Bundle
+import android.os.Build
 import android.os.SystemClock
 import android.provider.Settings
 import android.provider.MediaStore
@@ -104,10 +106,10 @@ class RadioActivity : ComponentActivity() {
         ON_OPEN("À chaque ouverture"),
     }
 
-    private enum class Appearance(val label: String, val nightFlag: Int?) {
-        DAY("Jour", Configuration.UI_MODE_NIGHT_NO),
-        NIGHT("Nuit", Configuration.UI_MODE_NIGHT_YES),
-        SYSTEM("Système", null);
+    private enum class Appearance(val label: String, val nightFlag: Int?, val androidMode: Int) {
+        DAY("Jour", Configuration.UI_MODE_NIGHT_NO, UiModeManager.MODE_NIGHT_NO),
+        NIGHT("Nuit", Configuration.UI_MODE_NIGHT_YES, UiModeManager.MODE_NIGHT_YES),
+        SYSTEM("Système", null, UiModeManager.MODE_NIGHT_AUTO);
 
         companion object {
             fun restore(prefs: SharedPreferences): Appearance {
@@ -242,15 +244,20 @@ class RadioActivity : ComponentActivity() {
     }
 
     override fun attachBaseContext(newBase: Context) {
-        val nightFlag = Appearance.restore(newBase.getSharedPreferences(PREFERENCES, MODE_PRIVATE)).nightFlag
-        super.attachBaseContext(if (nightFlag == null) newBase else {
+        val appearance = Appearance.restore(newBase.getSharedPreferences(PREFERENCES, MODE_PRIVATE))
+        val nightFlag = appearance.nightFlag
+        val context = if (Build.VERSION.SDK_INT == Build.VERSION_CODES.R && nightFlag != null) {
             newBase.createConfigurationContext(Configuration().apply { uiMode = nightFlag })
-        })
+        } else newBase
+        super.attachBaseContext(context)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         prefs = getSharedPreferences(PREFERENCES, MODE_PRIVATE)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            getSystemService(UiModeManager::class.java).setApplicationNightMode(Appearance.restore(prefs).androidMode)
+        }
         val artworkCacheMb = if (television && resources.displayMetrics.density >= 2f) 8 else 2
         artwork = RadioArtwork(this, maxImageBytes = 1024 * 1024, memoryBytes = artworkCacheMb * 1024 * 1024,
             normalizeLogoMargins = true)
@@ -350,6 +357,16 @@ class RadioActivity : ComponentActivity() {
         audioMotif.playing = false
         updateLiveDot(false)
         super.onStop()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        PlaybackService.radioScreenActive = true
+    }
+
+    override fun onPause() {
+        PlaybackService.radioScreenActive = false
+        super.onPause()
     }
 
     override fun dispatchTouchEvent(event: MotionEvent): Boolean {
@@ -1037,7 +1054,7 @@ class RadioActivity : ComponentActivity() {
                     return@collectLatest
                 }
                 newsFooter?.visibility = View.VISIBLE
-                if (edition.size == 1) {
+                if (edition.size == 1 && edition.single().url == null) {
                     setTickerBulletin(edition.single())
                     return@collectLatest
                 }
@@ -1050,7 +1067,7 @@ class RadioActivity : ComponentActivity() {
     }
 
     private fun setTickerBulletin(bulletin: NewsBulletin): Long {
-        if (tickerBulletin == bulletin) return tickerDuration
+        if (tickerBulletin == bulletin && bulletin.url == null) return tickerDuration
         tickerBulletin = bulletin
         tickerStartedAt = SystemClock.uptimeMillis()
         tickerDuration = if (bulletin.url == null) 0L else newsTicker?.durationFor(bulletin.text) ?: 8_000L
@@ -2407,7 +2424,11 @@ class RadioActivity : ComponentActivity() {
                 val selected = options[index]
                 if (selected != appearance) {
                     prefs.edit().putString(APPEARANCE, selected.name).apply()
-                    recreate()
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                        getSystemService(UiModeManager::class.java).setApplicationNightMode(selected.androidMode)
+                    } else {
+                        recreate()
+                    }
                 }
             }
             .setNegativeButton("Fermer", null)

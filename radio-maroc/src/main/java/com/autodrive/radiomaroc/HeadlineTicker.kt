@@ -11,6 +11,7 @@ import android.text.TextDirectionHeuristics
 import android.text.TextUtils
 import android.view.Gravity
 import android.widget.TextView
+import kotlin.math.abs
 import kotlin.math.ceil
 
 internal class HeadlineTicker(context: Context, size: Int, textColor: Int) : TextView(context) {
@@ -35,9 +36,9 @@ internal class HeadlineTicker(context: Context, size: Int, textColor: Int) : Tex
 
     fun durationFor(headline: String): Long {
         if (!ValueAnimator.areAnimatorsEnabled()) return 10_000L
-        val overflow = measuredWidth(headline) - viewport
-        if (viewport <= 0 || overflow <= 0) return STATIC_MILLIS
-        return (START_PAUSE + travelTime(overflow) + END_PAUSE).coerceIn(STATIC_MILLIS, MAX_DISPLAY_MILLIS)
+        if (viewport <= 0) return STATIC_MILLIS
+        val travel = abs(measuredWidth(headline) - viewport)
+        return (START_PAUSE + travelTime(travel) + END_PAUSE).coerceIn(STATIC_MILLIS, MAX_DISPLAY_MILLIS)
     }
 
     fun showHeadline(headline: String, start: Long, duration: Long) {
@@ -54,7 +55,7 @@ internal class HeadlineTicker(context: Context, size: Int, textColor: Int) : Tex
     }
 
     private fun prepareDrawing() {
-        drawing = if (displayMillis > 0 && viewport > 0 && measuredWidth(text) > viewport) {
+        drawing = if (displayMillis > 0 && viewport > 0 && text.isNotEmpty()) {
             val scrollBudget = (displayMillis - START_PAUSE - END_PAUSE).coerceAtLeast(0L)
             val maxWidth = viewport + (scrollBudget / 1_000f) * SCROLL_DP_PER_SECOND * density
             val headline = TextUtils.ellipsize(text, paint, maxWidth - 2, TextUtils.TruncateAt.END)
@@ -79,10 +80,12 @@ internal class HeadlineTicker(context: Context, size: Int, textColor: Int) : Tex
             return
         }
         val elapsed = SystemClock.uptimeMillis() - startedAt
-        val travel = (headline.width - viewport).coerceAtLeast(0)
-        val duration = travelTime(travel).coerceAtLeast(1L)
+        val space = viewport - headline.width
+        val budget = (displayMillis - START_PAUSE - END_PAUSE).coerceAtLeast(1L)
+        val duration = travelTime(abs(space)).coerceIn(1L, budget)
         val fraction = ((elapsed - START_PAUSE).toFloat() / duration).coerceIn(0f, 1f)
-        val offset = -travel * if (headline.getParagraphDirection(0) < 0) 1f - fraction else fraction
+        val rtl = headline.getParagraphDirection(0) < 0
+        val offset = if (rtl == (space < 0)) space * (1f - fraction) else space * fraction
         canvas.save()
         canvas.clipRect(paddingLeft, 0, width - paddingRight, height)
         canvas.translate(paddingLeft + offset, (height - headline.height) / 2f)

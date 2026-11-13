@@ -11,6 +11,7 @@ import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.widget.Toast
 import androidx.annotation.OptIn
 import androidx.core.graphics.drawable.toBitmap
 import androidx.media3.common.AudioAttributes
@@ -69,6 +70,7 @@ internal class PlaybackService : MediaLibraryService() {
         val LUXE_PAUSE = SessionCommand("com.autodrive.radiomaroc.LUXE_PAUSE", Bundle.EMPTY)
         // The activity and service share a process. Keep the latest view's order when listening in the background.
         private val visibleStations = MutableStateFlow<List<RadioStation>?>(null)
+        var radioScreenActive = false
 
         fun setVisibleStations(stations: List<RadioStation>) {
             visibleStations.value = stations.filter { it != Stations.luxe }
@@ -93,6 +95,7 @@ internal class PlaybackService : MediaLibraryService() {
     private var logoWork: Job? = null
     private var programmeWork: Job? = null
     private var activeItem: MediaItem? = null
+    private var stationToast: Toast? = null
     private var activeLogo: ByteArray? = null
     private var activeLogoUri: Uri? = null
     private var programme: BroadcastProgramme? = null
@@ -122,6 +125,13 @@ internal class PlaybackService : MediaLibraryService() {
 
     private val recoveryListener = object : Player.Listener {
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+            val changed = activeItem != null && mediaItem != null && activeItem?.mediaId != mediaItem.mediaId
+            if (changed && !radioScreenActive) {
+                mediaItem?.mediaMetadata?.title?.takeIf { it.isNotBlank() }?.let { title ->
+                    stationToast?.cancel()
+                    stationToast = Toast.makeText(this@PlaybackService, title, Toast.LENGTH_SHORT).also { it.show() }
+                }
+            }
             watchStation(mediaItem)
             applySoundProfile()
             updateDolbySession()
@@ -442,6 +452,7 @@ internal class PlaybackService : MediaLibraryService() {
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibrarySession? = session
 
     override fun onDestroy() {
+        stationToast?.cancel()
         connectivity.unregisterNetworkCallback(networkCallback)
         radioPreferences.unregisterOnSharedPreferenceChangeListener(soundPreferenceListener)
         dolbySession.update(0)
