@@ -2467,7 +2467,9 @@ class RadioActivity : ComponentActivity() {
                 LuxeRadio.State.PAUSED -> "En pause"
                 LuxeRadio.State.IDLE -> "Prêt à écouter"
             }
-            waitingForNetwork && !playing -> "Connexion perdue · reprise automatique"
+            waitingForNetwork && !playing ->
+                if (player.sessionExtras.getBoolean(PlaybackService.NETWORK_UNAVAILABLE)) "Connexion perdue · reprise automatique"
+                else "Flux interrompu · reprise automatique"
             player.playerError != null && station in Stations.snrt -> "Flux SNRT inaccessible · réessayer"
             player.playerError?.errorCode == PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS -> "Source inaccessible · réessayer"
             player.playerError != null -> "Flux indisponible · réessayer"
@@ -2701,7 +2703,8 @@ class RadioActivity : ComponentActivity() {
     }
 
     private fun waitingForNetwork(player: MediaController): Boolean =
-        player.sessionExtras.getBoolean(PlaybackService.NETWORK_UNAVAILABLE) &&
+        (player.sessionExtras.getBoolean(PlaybackService.NETWORK_UNAVAILABLE) ||
+            player.sessionExtras.getBoolean(PlaybackService.RETRY_PENDING)) &&
             player.currentMediaItem != null && player.playWhenReady && player.playbackState != Player.STATE_ENDED
 
     private fun directionOf(text: String): Int =

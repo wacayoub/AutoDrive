@@ -31,7 +31,11 @@ internal class LuxeRadio(private val context: Context, private val onState: (Sta
     private var awaitingPlayback = false
     private var state = State.IDLE
     private var programme: String? = null
-    private val timeout = Runnable { fail(State.UNAVAILABLE) }
+    private val timeout = Runnable {
+        // Stop a start request that may still complete late in Luxe Radio, since this app is about to lose its controller.
+        if (awaitingPlayback) controller?.transportControls?.pause()
+        fail(State.UNAVAILABLE)
+    }
     private val sessionCallback = object : MediaController.Callback() {
         override fun onPlaybackStateChanged(state: PlaybackState?) = updatePlayback()
         override fun onMetadataChanged(metadata: MediaMetadata?) = updatePlayback()
@@ -175,7 +179,9 @@ internal class LuxeRadio(private val context: Context, private val onState: (Sta
                     ?: description?.subtitle?.toString()
                 setState(State.PLAYING, title?.trim()?.takeIf { it.isNotEmpty() && it.length <= 160 })
             }
-            playback == PlaybackState.STATE_BUFFERING && (awaitingPlayback || isLive()) -> waitForConnection()
+            playback == PlaybackState.STATE_BUFFERING && awaitingPlayback -> waitForConnection()
+            // Luxe Radio rebuffers its own live stream. Keep the controller so pause still reaches it.
+            playback == PlaybackState.STATE_BUFFERING && isLive() -> setState(State.CONNECTING)
             !awaitingPlayback -> {
                 handler.removeCallbacks(timeout)
                 setState(State.PAUSED)
