@@ -1,7 +1,6 @@
 package com.autodrive.radiomaroc
 
 import android.app.PendingIntent
-import android.app.NotificationManager
 import android.content.Intent
 import android.content.SharedPreferences
 import android.graphics.Bitmap
@@ -12,7 +11,6 @@ import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import android.widget.Toast
 import androidx.annotation.OptIn
 import androidx.core.graphics.drawable.toBitmap
 import androidx.media3.common.AudioAttributes
@@ -83,7 +81,7 @@ internal class PlaybackService : MediaLibraryService() {
     private var session: MediaLibrarySession? = null
     private lateinit var engine: ExoPlayer
     private val radioPreferences by lazy { getSharedPreferences("radio_maroc", MODE_PRIVATE) }
-    private val notifications by lazy { getSystemService(NotificationManager::class.java) }
+    private val stationPopup by lazy { StationPopup(this) }
     private val audioProcessor = RadioAudioProcessor()
     private val dolbySession = DolbySession(this)
     private var soundStatus = RadioSound.Status.NORMAL
@@ -103,7 +101,6 @@ internal class PlaybackService : MediaLibraryService() {
     private var logoWork: Job? = null
     private var programmeWork: Job? = null
     private var activeItem: MediaItem? = null
-    private var stationToast: Toast? = null
     private var activeLogo: ByteArray? = null
     private var activeLogoUri: Uri? = null
     private var programme: BroadcastProgramme? = null
@@ -134,11 +131,8 @@ internal class PlaybackService : MediaLibraryService() {
     private val recoveryListener = object : Player.Listener {
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
             val changed = activeItem != null && mediaItem != null && activeItem?.mediaId != mediaItem.mediaId
-            if (changed && !radioScreenActive && notifications.areNotificationsEnabled()) {
-                mediaItem?.mediaMetadata?.title?.takeIf { it.isNotBlank() }?.let { title ->
-                    stationToast?.cancel()
-                    stationToast = Toast.makeText(this@PlaybackService, title, Toast.LENGTH_SHORT).also { it.show() }
-                }
+            if (changed && !radioScreenActive) {
+                mediaItem?.mediaMetadata?.title?.takeIf { it.isNotBlank() }?.let(stationPopup::show)
             }
             watchStation(mediaItem)
             applySoundProfile()
@@ -517,7 +511,7 @@ internal class PlaybackService : MediaLibraryService() {
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibrarySession? = session
 
     override fun onDestroy() {
-        stationToast?.cancel()
+        stationPopup.dismiss()
         connectivity.unregisterNetworkCallback(networkCallback)
         radioPreferences.unregisterOnSharedPreferenceChangeListener(preferenceListener)
         dolbySession.update(0)

@@ -676,16 +676,15 @@ class RadioActivity : ComponentActivity() {
             "Mises à jour" to radioUpdates::show,
         )
         if (dashboardInfo.value) actions.add(1, infoLabel() to ::showTvInfo)
-        if (!getSystemService(NotificationManager::class.java).areNotificationsEnabled()) {
-            actions.add(actions.lastIndex, "Activer le popup des stations" to ::enableStationPopups)
-        }
+        actions.add(actions.lastIndex, "Pop-up des stations" to ::configureStationPopup)
         val menu = if (tightLandscape) AlertDialog.Builder(this, R.style.RadioCompactMenu) else choiceDialog("Menu")
         menu
             .setItems(actions.map { it.first }.toTypedArray()) { _, index -> actions[index].second() }
             .show()
     }
 
-    private fun enableStationPopups() {
+    private fun configureStationPopup() {
+        StationPopup.ensureChannel(this)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED &&
             (!prefs.getBoolean("station_popup_permission_requested", false) ||
@@ -696,7 +695,14 @@ class RadioActivity : ComponentActivity() {
             return
         }
         try {
-            startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, packageName))
+            val notificationsEnabled = getSystemService(NotificationManager::class.java).areNotificationsEnabled()
+            val settings = if (notificationsEnabled) {
+                Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS)
+                    .putExtra(Settings.EXTRA_CHANNEL_ID, StationPopup.CHANNEL_ID)
+            } else {
+                Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+            }
+            startActivity(settings.putExtra(Settings.EXTRA_APP_PACKAGE, packageName))
         } catch (_: ActivityNotFoundException) {
             Toast.makeText(this, "Réglages de notifications indisponibles", Toast.LENGTH_SHORT).show()
         }

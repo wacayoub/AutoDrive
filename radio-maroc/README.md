@@ -10,6 +10,8 @@ Le lecteur système Android reçoit le nom de la station, son logo et le titre d
 
 Les commandes média Android **précédente** et **suivante** changent la station dans la liste filtrée de la radio, même en arrière-plan. Depuis la 2.4.2, elles lancent la station choisie même si la précédente était en pause. Les boutons **TRACK / SEEK** de la Toyota dépendent de la transmission de ces commandes par l’Incarlink. Luxe Radio utilise la session média de son application officielle. [Commandes média Android](https://developer.android.com/media/media3/session/control-playback).
 
+Lorsque tu changes de station pendant qu’une autre application est ouverte, Android peut afficher son nom en haut de l’écran pendant environ 3,5 secondes. **Menu ⋮ → Pop-up des stations** ouvre les autorisations ou les réglages du canal **Changements de station**. [Notifications flottantes Android](https://developer.android.com/develop/ui/views/notifications#Heads-up).
+
 ## Android Auto
 
 Installe ou mets à jour Radio Maroc & Coran sur le téléphone qui projette Android Auto. Une fois le téléphone connecté, ouvre Radio Maroc & Coran depuis le menu des applications de la voiture.
