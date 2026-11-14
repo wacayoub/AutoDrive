@@ -100,6 +100,8 @@ internal object Stations {
             logoUrl = "https://api.medinafm.ma/uploads/f0b5829f-c5ed-4acc-a775-d921ecd2edc7.webp", tags = setOf("Tarab")),
         RadioStation("Medina FM Andalou", "https://medinaandalou.ice.infomaniak.ch/medinaandalou-128.mp3",
             logoUrl = "https://medinafm.ma/favicon-512.png", tags = setOf("Andalou")),
+        RadioStation("Medina FM Nostalgie", "https://medinanachat.ice.infomaniak.ch/medinanachat-128.mp3",
+            logoUrl = "https://medinafm.ma/favicon-512.png", tags = setOf("Nostalgie")),
         RadioStation("U Radio", "https://uradio-aac.ice.infomaniak.ch/uradio.aac",
             logoUrl = "https://bo.uradio.ma/storage/streaming/U_RADIO.webp",
             tags = setOf("Musique")),
@@ -152,6 +154,9 @@ internal object Stations {
     private val officialStreams = snrtStreams + mapOf(
         radio2m.url to "https://$RADIO_2M_STREAM_HOST/live/eds/radio_2m/radio_hls_ts_hy217612tge1f21j83/radio_2m.m3u8",
         RADIO_PLUS_ID to "https://hosting.studioradiomedia.fr:3040/stream",
+        // Same broadcasters, higher-quality mounts; the catalogue URLs stay as IDs so favourites keep working.
+        "https://medinafm.ice.infomaniak.ch/medinafm-64.mp3" to "https://medinafm.ice.infomaniak.ch/medinafm-128.mp3",
+        "https://az-maroc.ice.infomaniak.ch/az-maroc-64.aac" to "https://az-maroc.ice.infomaniak.ch/az-maroc-128.mp3",
     )
     private val regional = listOf(
         RadioStation("Cap Radio", "https://listen.radioking.com/radio/710810/stream/776366",
@@ -176,15 +181,20 @@ internal object Stations {
     private val hitGroupNames = (StationFamilies.hit + morocco.filter { it.name == "HIT RADIO" || it.name == "Radio Azawan" })
         .map(StationFamilies::directoryKey).toSet()
     private val mediGroupNames = StationFamilies.medi.map(StationFamilies::directoryKey).toSet()
-    // Radiométrie Maroc, Q2 2025, audience share in hundredths of a percentage point.
-    private val audienceShares = mapOf(
-        "محمد السادس للقرآن الكريم" to 1536,
-        "Med Radio" to 1282, "HIT RADIO" to 1025, "MFM Radio" to 809, "Radio Aswat" to 775,
-        "Radio Nationale" to 715, "Medi 1 Radio" to 626, "Chada FM" to 572, "Radio Mars" to 565,
-        "Radio 2M" to 535, "Radio Amazighe" to 484, "Medina FM" to 265, "Cap Radio" to 246, "Chaîne Inter" to 91,
-    ).mapKeys { (name, _) -> RadioCatalogue.searchKey(name) }
+    /**
+     * Most listened first. The top six follow Radiométrie Maroc wave 53 (April–June 2025, weekday daily reach:
+     * Mohammed VI 17.8 %, Med Radio 12.45 %, Hit Radio 12.25 %, MFM 10.55 %, Medi1 10.32 %, Al Idaâ Al Wataniya 10.10 %).
+     * The others keep the order of the previous published audience shares, which ranked them below these six.
+     */
+    private val popularityOrder = listOf(
+        "محمد السادس للقرآن الكريم", "Med Radio", "HIT RADIO", "MFM Radio", "Medi 1 Radio", "Radio Nationale",
+        "Radio Aswat", "Chada FM", "Radio Mars", "Radio 2M", "Radio Amazighe", "Medina FM", "Cap Radio", "Chaîne Inter",
+    ).map(RadioCatalogue::searchKey)
+    private val popularityRank = popularityOrder.withIndex().associate { (index, key) -> key to popularityOrder.size - index }
 
-    private fun audienceShare(station: RadioStation): Int? = audienceShares[RadioCatalogue.searchKey(station.name)]
+    /** Higher is more listened; null when the station is not in the published audience figures. */
+    private fun audienceShare(station: RadioStation): Int? = popularityRank[RadioCatalogue.searchKey(station.name)]
+        ?: popularityRank[StationFamilies.directoryKey(station)]
 
     private fun quranStation(name: String, path: String) = RadioStation(name, "https://backup.qurango.net/radio/$path")
 
@@ -305,7 +315,8 @@ internal object Stations {
             "Medi 1 · Hits", "Medi 1 · DJ", "Medi 1 · Latino", "Medi 1 · Lounge", "Medi 1 · Jazz",
             "Medi 1 · Acoustique", "Medi 1 · Classique", "Medi 1 · Chanson française")
         put(MoroccoCategory.TARAB, fayrouz.name, "Medina FM Tarab", "Medi 1 · Tarab", "Tarab Radio")
-        put(MoroccoCategory.MOROCCAN, "HIT RADIO · 100% Way Way", "HIT RADIO · 100% M'Gharba", "Medi 1 · Nayda")
+        put(MoroccoCategory.MOROCCAN, "HIT RADIO · 100% Way Way", "HIT RADIO · 100% M'Gharba", "Medi 1 · Nayda",
+            "Medina FM Nostalgie")
         put(MoroccoCategory.ANDALOU, "Medina FM Andalou", "Medi 1 · Andalouse", "Medi 1 · Soufi")
         put(MoroccoCategory.AMAZIGH, "Medina FM Amazigh", "Radio Azawan", "Radio Amazighe")
     }

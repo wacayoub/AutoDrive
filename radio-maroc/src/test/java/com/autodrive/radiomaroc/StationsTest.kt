@@ -13,7 +13,7 @@ class StationsTest {
         val morocco = Stations.visible(StationTab.MOROCCO, emptySet(), "")
         val quran = Stations.visible(StationTab.QURAN, emptySet(), "")
         val tajwid = quran.filter { Stations.quranSection(it) == QuranSection.TAJWID }
-        assertEquals(59, morocco.size)
+        assertEquals(60, morocco.size)
         assertTrue(morocco.mapNotNull { it.logoUrl }.all { RadioStation.validUrl(it) != null })
         assertEquals(32, quran.size)
         assertEquals(22, quran.count { Stations.quranSection(it) == QuranSection.MURATTAL })
@@ -70,8 +70,8 @@ class StationsTest {
     @Test fun favoritesSearchAndStationControlsUseTheVisibleList() {
         val morocco = Stations.visible(StationTab.MOROCCO, emptySet(), "")
         assertEquals(
-            listOf("محمد السادس للقرآن الكريم", "Med Radio", "HIT RADIO", "Radio Aswat", "Radio Nationale",
-                "Medi 1 Radio", "Chada FM", "Radio Mars", "Radio 2M", "Radio Amazighe", "Medina FM", "Chaîne Inter"),
+            listOf("محمد السادس للقرآن الكريم", "Med Radio", "HIT RADIO", "Medi 1 Radio", "Radio Nationale",
+                "Radio Aswat", "Chada FM", "Radio Mars", "Radio 2M", "Radio Amazighe", "Medina FM", "Chaîne Inter"),
             morocco.take(12).map { it.name },
         )
         assertEquals("Med Radio", RadioQueue.neighbor(morocco, morocco.first().url, 1)?.name)
@@ -90,11 +90,22 @@ class StationsTest {
         val stations = Stations.visible(StationTab.MOROCCO, emptySet(), "", directory = listOf(low, high, dance, mfm))
         val curatedDance = stations.single { it.name == dance.name }
         assertEquals("محمد السادس للقرآن الكريم", stations.first().name)
+        // Radiométrie wave 53: MFM is fourth in daily reach, even when it only comes from the community directory.
         assertEquals(mfm, stations[3])
+        assertEquals(listOf("محمد السادس للقرآن الكريم", "Med Radio", "HIT RADIO", "MFM Radio", "Medi 1 Radio", "Radio Nationale"),
+            stations.take(6).map { it.name })
         assertTrue(stations.indexOf(high) > stations.indexOfFirst { it.name == "Chaîne Inter" })
         assertTrue(stations.indexOf(high) < stations.indexOf(curatedDance))
         assertTrue(stations.indexOf(curatedDance) < stations.indexOf(low))
         assertEquals("https://udance.ice.infomaniak.ch/udance-128.aac", curatedDance.url)
+    }
+
+    @Test fun higherQualityMountsKeepTheSavedStationIds() {
+        val medina = Stations.visible(StationTab.MOROCCO, emptySet(), "Medina FM").first { it.name == "Medina FM" }
+        assertEquals("https://medinafm.ice.infomaniak.ch/medinafm-64.mp3", medina.url)
+        assertEquals("https://medinafm.ice.infomaniak.ch/medinafm-128.mp3", Stations.streamUrl(medina))
+        val azawan = Stations.visible(StationTab.MOROCCO, emptySet(), "Azawan").single()
+        assertEquals("https://az-maroc.ice.infomaniak.ch/az-maroc-128.mp3", Stations.streamUrl(azawan))
     }
 
     @Test fun radioFamiliesAreSearchableAndSortIntoContiguousGroups() {
@@ -141,7 +152,8 @@ class StationsTest {
     @Test fun themesGroupStationsAndOldGenresMapOntoMergedThemes() {
         fun names(theme: MoroccoCategory) = Stations.visible(StationTab.MOROCCO, emptySet(), "", category = theme).map { it.name }.toSet()
         assertEquals(setOf("Fayrouz · فيروزيات", "Medina FM Tarab", "Medi 1 · Tarab", "Tarab Radio"), names(MoroccoCategory.TARAB))
-        assertEquals(3, names(MoroccoCategory.MOROCCAN).size)
+        assertEquals(setOf("HIT RADIO · 100% Way Way", "HIT RADIO · 100% M’Gharba", "Medi 1 · Nayda", "Medina FM Nostalgie"),
+            names(MoroccoCategory.MOROCCAN))
         assertEquals(setOf("Medina FM Andalou", "Medi 1 · Andalouse", "Medi 1 · Soufi"), names(MoroccoCategory.ANDALOU))
         assertEquals(setOf("Medina FM Amazigh", "Radio Azawan", "Radio Amazighe"), names(MoroccoCategory.AMAZIGH))
         assertEquals(setOf("Radio Mars", "Radio Aswat"), names(MoroccoCategory.SPORT))
