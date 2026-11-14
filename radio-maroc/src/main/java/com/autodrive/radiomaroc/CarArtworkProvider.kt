@@ -39,6 +39,9 @@ internal class CarArtworkProvider : ContentProvider() {
 
         fun publish(bytes: ByteArray): Uri = uri(COVER, hash(bytes)).also { images.put(it, bytes) }
 
+        /** Rendered logo already held in memory for [uri], without any network or disk access. */
+        fun cached(uri: Uri): ByteArray? = images.get(uri)
+
         fun stationImage(uri: Uri, artwork: RadioArtwork): ByteArray? {
             images.get(uri)?.let { return it }
             val logo = curatedLogo(uri) ?: return null

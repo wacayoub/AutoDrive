@@ -108,6 +108,8 @@ internal class PlaybackService : MediaLibraryService() {
     private var activeItem: MediaItem? = null
     private var activeLogo: ByteArray? = null
     private var activeLogoUri: Uri? = null
+    // True while the station logo is still loading: media widgets then get its address, never the app icon.
+    private var logoPending = false
     private var programme: BroadcastProgramme? = null
     private var icyTitle: String? = null
     private val fallbackLogo by lazy { getDrawable(R.drawable.ic_radio)?.toBitmap(128, 128)?.let(CarArtworkProvider::png) }
@@ -488,6 +490,10 @@ internal class PlaybackService : MediaLibraryService() {
         val station = item?.let { selected -> Stations.all.firstOrNull { it.url == selected.mediaId } }
         activeLogoUri = station?.let(CarRadioLibrary::portraitUri)
             ?: CarArtworkProvider.stationUri(item?.mediaMetadata?.artworkUri?.toString())
+        // A logo shown once already is sent with the very first metadata, so widgets never start on the app icon.
+        activeLogo = activeLogoUri?.let(CarArtworkProvider::cached)
+        logoPending = activeLogo == null && (item?.mediaMetadata?.artworkUri?.scheme == "https" ||
+            station?.let(ReciterPortraits::forStation) != null)
         publishPresentation()
         if (item == null) return
         if (station != null) getSharedPreferences("radio_maroc", MODE_PRIVATE)
@@ -520,16 +526,18 @@ internal class PlaybackService : MediaLibraryService() {
         val portrait = station?.let(ReciterPortraits::forStation)
         val logo = item.mediaMetadata.artworkUri?.takeIf { it.scheme == "https" }
         val publishLogo: (ByteArray?) -> Unit = { bytes ->
-            if (activeItem === item && bytes != null) {
-                activeLogo = bytes
-                activeLogoUri = CarArtworkProvider.publish(bytes)
+            if (activeItem === item && (bytes != null || logoPending)) {
+                logoPending = false
+                if (bytes != null) {
+                    activeLogo = bytes
+                    activeLogoUri = CarArtworkProvider.publish(bytes)
+                }
                 publishPresentation()
             }
         }
-        val renderLogo: (Bitmap?) -> Unit = { bitmap ->
-            if (activeItem === item && bitmap != null) publishLogo(CarArtworkProvider.png(bitmap))
-        }
+        val renderLogo: (Bitmap?) -> Unit = { bitmap -> publishLogo(bitmap?.let(CarArtworkProvider::png)) }
         val curated = CarArtworkProvider.stationUri(logo?.toString())
+        if (activeLogo != null && portrait == null) return
         logoWork = when {
             portrait != null -> artwork.loadPortrait(portrait.image, 256, renderLogo)
             curated != null -> scope.launch {
@@ -551,8 +559,9 @@ internal class PlaybackService : MediaLibraryService() {
                 .setDisplayTitle(title ?: base.title)
                 .setArtist(if (title == null) base.artist else base.title)
                 .setSubtitle(if (title == null) base.subtitle else base.title)
-                .setArtworkUri(activeLogoUri ?: Stations.defaultArtwork())
-                .setArtworkData(activeLogo ?: fallbackLogo, MediaMetadata.PICTURE_TYPE_FRONT_COVER)
+                .setArtworkUri(activeLogoUri ?: base.artworkUri ?: Stations.defaultArtwork())
+                .setArtworkData(activeLogo ?: fallbackLogo.takeUnless { logoPending },
+                    if (activeLogo != null || !logoPending) MediaMetadata.PICTURE_TYPE_FRONT_COVER else null)
                 .build()
         }
         sessionPlayer.present(item?.mediaId, metadata)
