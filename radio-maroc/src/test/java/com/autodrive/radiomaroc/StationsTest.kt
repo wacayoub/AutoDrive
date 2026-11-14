@@ -100,6 +100,15 @@ class StationsTest {
         assertEquals("https://udance.ice.infomaniak.ch/udance-128.aac", curatedDance.url)
     }
 
+    @Test fun familyChannelsLeadWithTheirOwnNameInMediaWidgets() {
+        fun title(name: String) = Stations.mediaTitle(Stations.visible(StationTab.MOROCCO, emptySet(), "").first { it.name == name })
+        assertEquals("100% M’Gharba · HIT RADIO", title("HIT RADIO · 100% M’Gharba"))
+        assertEquals("Tarab · Medi 1", title("Medi 1 · Tarab"))
+        assertEquals("HIT RADIO", title("HIT RADIO"))
+        assertEquals("Medi 1 Radio", title("Medi 1 Radio"))
+        assertEquals("Med Radio", title("Med Radio"))
+    }
+
     @Test fun higherQualityMountsKeepTheSavedStationIds() {
         val medina = Stations.visible(StationTab.MOROCCO, emptySet(), "Medina FM").first { it.name == "Medina FM" }
         assertEquals("https://medinafm.ice.infomaniak.ch/medinafm-64.mp3", medina.url)

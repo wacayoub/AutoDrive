@@ -478,9 +478,18 @@ internal object Stations {
     private const val DEFAULT_ARTWORK = "android.resource://com.autodrive.radiomaroc/drawable/ic_radio"
     fun defaultArtwork(): Uri = Uri.parse(DEFAULT_ARTWORK)
 
+    /**
+     * Title for car and system media widgets, which often show only a dozen characters: family channels lead
+     * with their own name ("100% M’Gharba · HIT RADIO", "Tarab · Medi 1") instead of the shared brand.
+     */
+    fun mediaTitle(station: RadioStation): String {
+        val brand = listOf("HIT RADIO · ", "Medi 1 · ").firstOrNull { station.name.startsWith(it) } ?: return station.name
+        return station.name.removePrefix(brand) + " · " + brand.removeSuffix(" · ")
+    }
+
     fun metadata(station: RadioStation): MediaMetadata = MediaMetadata.Builder()
-        .setTitle(station.name)
-        .setDisplayTitle(station.name)
+        .setTitle(mediaTitle(station))
+        .setDisplayTitle(mediaTitle(station))
         .setArtist(subtitle(station))
         .setSubtitle(subtitle(station))
         .setStation(station.name)

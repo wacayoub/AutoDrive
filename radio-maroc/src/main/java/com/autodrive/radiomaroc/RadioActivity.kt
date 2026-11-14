@@ -2655,7 +2655,8 @@ class RadioActivity : ComponentActivity() {
     private fun carResume(): CarResume {
         val storedMode = prefs.getString("car_resume_mode", null)
         return CarResume.entries.firstOrNull { it.name == storedMode }
-            ?: if (prefs.getBoolean("car_autoplay", false)) CarResume.AFTER_BOOT else CarResume.OFF
+            // Without an explicit choice the radio resumes the last station whenever it opens.
+            ?: if (prefs.getBoolean("car_autoplay", false)) CarResume.AFTER_BOOT else CarResume.ON_OPEN
     }
 
     private fun armCarStartup() {
