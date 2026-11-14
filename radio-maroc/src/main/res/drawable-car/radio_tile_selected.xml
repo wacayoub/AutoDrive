@@ -1,0 +1,16 @@
+<!-- Incarlink: the selected preset keeps the tile shape with a mint outline and a mint-tinted name band. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape>
+            <corners android:radius="18dp" />
+            <gradient android:angle="270" android:startColor="#FF2A2C2F" android:endColor="#FF1F2023" />
+            <stroke android:width="2dp" android:color="@color/radio_selected_border" />
+        </shape>
+    </item>
+    <item android:gravity="bottom" android:height="35dp" android:left="2dp" android:right="2dp" android:bottom="2dp">
+        <shape>
+            <corners android:bottomLeftRadius="16dp" android:bottomRightRadius="16dp" />
+            <gradient android:angle="270" android:startColor="#FF24423B" android:endColor="#FF1C352F" />
+        </shape>
+    </item>
+</layer-list>

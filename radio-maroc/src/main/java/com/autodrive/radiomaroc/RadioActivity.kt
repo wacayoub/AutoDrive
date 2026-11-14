@@ -1607,9 +1607,24 @@ class RadioActivity : ComponentActivity() {
                 full -> dp(minOf(310, resources.configuration.screenWidthDp - 44))
                 else -> -1
             }
-            addView(playbackBar(wide, full, mini), LinearLayout.LayoutParams(controlsWidth, -2).apply {
+            // Incarlink: the docked player's controls sit on the lighter strip of its media tile, flush with the edges.
+            val band = horizontalMini && incarlinkStyle
+            val bandLead = dp(10)
+            val edge = padding - dp(1)
+            if (band) clipToPadding = false
+            addView(playbackBar(wide, full, mini).apply {
+                if (band) {
+                    background = getDrawable(R.drawable.radio_control_band_end)
+                    setPadding(bandLead, dp(2), edge, dp(2))
+                }
+            }, LinearLayout.LayoutParams(if (band) controlsWidth + bandLead + edge else controlsWidth, if (band) -1 else -2).apply {
                 if (splitListening) marginStart = dp(8)
                 else if (!horizontalMini && (mini || full)) topMargin = dp(6)
+                if (band) {
+                    topMargin = -(dp(topPadding) - dp(1))
+                    bottomMargin = -(dp(bottomPadding) - dp(1))
+                    marginEnd = -edge
+                }
             })
         }
     }
@@ -1942,8 +1957,14 @@ class RadioActivity : ComponentActivity() {
             else -> 96
         }
         private val logo = StationArtwork(18)
-        private val idleBackground = pressable(if (tvGuide) R.drawable.radio_station_rule else R.drawable.radio_control)
-        private val selectedBackground = pressable(R.drawable.radio_selected)
+        // Incarlink presets copy its home-screen tiles: logo on the dark face, name on the lighter bottom band.
+        private val bandTile = touchMosaic && incarlinkStyle
+        private val idleBackground = pressable(when {
+            tvGuide -> R.drawable.radio_station_rule
+            touchMosaic -> R.drawable.radio_tile
+            else -> R.drawable.radio_control
+        })
+        private val selectedBackground = pressable(if (touchMosaic) R.drawable.radio_tile_selected else R.drawable.radio_selected)
         private val name = label("", when {
             touchGuide -> 15
             touchMosaic -> 14
@@ -2000,8 +2021,8 @@ class RadioActivity : ComponentActivity() {
                 playingMark?.let { addView(it, LinearLayout.LayoutParams(markSize, markSize).apply { marginStart = dp(4) }) }
             } else {
                 orientation = VERTICAL
-                gravity = Gravity.CENTER
-                setPadding(dp(5), dp(3), dp(5), dp(3))
+                gravity = if (bandTile) Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL else Gravity.CENTER
+                setPadding(dp(5), dp(3), dp(5), dp(if (bandTile) 4 else 3))
                 val artSize = dp((heightDp - if (compactTv || shortLandscape) 37 else 47).coerceIn(20, 68))
                 addView(logo, LinearLayout.LayoutParams(artSize, artSize).apply { bottomMargin = dp(2) })
                 addView(name, LinearLayout.LayoutParams(-1, -2))

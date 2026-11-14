@@ -1,0 +1,5 @@
+<!-- Incarlink: the lighter control strip of the home-screen media tile, here on the end side of the docked player. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android">
+    <corners android:topRightRadius="21dp" android:bottomRightRadius="21dp" />
+    <gradient android:angle="270" android:startColor="#FF4B4D52" android:endColor="#FF37393D" />
+</shape>
