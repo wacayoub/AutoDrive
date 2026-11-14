@@ -92,3 +92,63 @@ private fun Context.tileLine(text: String, size: Int, color: Int, bold: Boolean 
         maxLines = 1
         ellipsize = TextUtils.TruncateAt.END
     }
+
+/** One-line weather pill for the car header: icon and temperature. */
+@SuppressLint("ViewConstructor") // Built in code only, never inflated.
+internal class WeatherChip(context: Context, open: () -> Unit) : LinearLayout(context) {
+    private val icon = WeatherIcon(context, context.getColor(R.color.radio_weather_label))
+    private val temperature = context.label("—", 14, context.getColor(R.color.radio_text), bold = true).apply {
+        includeFontPadding = false
+        maxLines = 1
+    }
+
+    init {
+        prepareChip(open)
+        val size = context.dp(20)
+        addView(icon, LayoutParams(size, size).apply { marginEnd = context.dp(5) })
+        addView(temperature, LayoutParams(-2, -2))
+    }
+
+    fun bind(report: RadioWeather?, city: RadioCity) {
+        icon.bind(report)
+        temperature.text = report?.let { "${it.degrees}°" } ?: "—"
+        contentDescription = listOfNotNull("Météo", city.label, report?.let { "${it.degrees} °C" },
+            report?.condition?.label ?: "Indisponible").joinToString(" · ")
+    }
+}
+
+/** One-line prayer pill for the car header: next prayer and its time. */
+@SuppressLint("ViewConstructor") // Built in code only, never inflated.
+internal class PrayerChip(context: Context, open: () -> Unit) : LinearLayout(context) {
+    private val name = context.label("Salat", 13, context.getColor(R.color.radio_prayer_label), bold = true).apply {
+        includeFontPadding = false
+        maxLines = 1
+    }
+    private val time = context.label("", 14, context.getColor(R.color.radio_text), bold = true).apply {
+        includeFontPadding = false
+        maxLines = 1
+    }
+
+    init {
+        prepareChip(open)
+        addView(name, LayoutParams(-2, -2).apply { marginEnd = context.dp(6) })
+        addView(time, LayoutParams(-2, -2))
+    }
+
+    fun bind(status: PrayerStatus, city: RadioCity) {
+        name.text = status.next?.prayer?.label ?: "Salat"
+        time.text = status.next?.dateTime?.toLocalTime()?.toString().orEmpty()
+        contentDescription = "Salat · ${city.label} · Ensuite ${prayerDescription(status.next, status.date)}"
+    }
+}
+
+private fun LinearLayout.prepareChip(action: () -> Unit) {
+    orientation = LinearLayout.HORIZONTAL
+    gravity = Gravity.CENTER_VERTICAL
+    layoutDirection = View.LAYOUT_DIRECTION_LTR
+    setPadding(context.dp(12), 0, context.dp(12), 0)
+    background = context.pressable(R.drawable.radio_chip)
+    isFocusable = true
+    remoteFocus()
+    setRadioClick(action)
+}

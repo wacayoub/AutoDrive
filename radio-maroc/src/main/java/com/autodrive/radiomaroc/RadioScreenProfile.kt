@@ -22,9 +22,19 @@ internal data class RadioScreenProfile(
     val layout: DisplayLayout,
 ) {
     val compactTv get() = television && (heightDp < 430 || widthDp < 760)
+    /** Car "Cockpit": large player on the left, one column of stations on the right. */
     val touchGuide get() = !television && landscape && layout == DisplayLayout.GUIDE
+
+    /** Car "Présélections": big logo tiles with the player docked at the bottom. */
+    val touchMosaic get() = !television && landscape && layout == DisplayLayout.MOSAIC
+
+    /** Either car layout: shared header with tabs, clock and info chips, long-press favourites. */
+    val carScreen get() = touchGuide || touchMosaic
+
+    // Weather and prayer chips only fit beside the tabs on wide headers (800 × 480 at 160 dpi).
+    val headerInfoChips get() = carScreen && widthDp >= 700
     val smallTouchGuide get() = touchGuide && heightDp < 300
-    val compactGuideTabs get() = touchGuide && widthDp < 580
+    val compactGuideTabs get() = carScreen && widthDp < 580
     val singleColumnGuide get() = touchGuide && widthDp < 640
 
     // Below 400 dp of height the weather and prayer tiles would squeeze the station logo out of the player.

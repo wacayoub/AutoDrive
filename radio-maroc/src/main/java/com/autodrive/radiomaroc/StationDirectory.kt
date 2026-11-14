@@ -32,7 +32,6 @@ internal class StationDirectory(context: Context) {
         val name = URLEncoder.encode(query.name.trim().take(80), Charsets.UTF_8.name())
         val order = when (query.sort) {
             StationSort.NAME_ASC -> "name&reverse=false"
-            StationSort.NAME_DESC -> "name&reverse=true"
             else -> "clickcount&reverse=true"
         }
         val path = "stations/search?countrycode=${query.country}&name=$name&hidebroken=true" +

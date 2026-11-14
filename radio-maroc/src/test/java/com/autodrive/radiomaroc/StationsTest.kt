@@ -107,8 +107,8 @@ class StationsTest {
         assertEquals(1, Stations.visible(StationTab.MOROCCO, emptySet(), "jazz", directory = listOf(oldJazz)).size)
         assertEquals(listOf(oldJazz), Stations.visible(StationTab.MOROCCO, setOf(oldJazz.url), "", true, bookmarks = listOf(oldJazz)))
         val ascending = Stations.visible(StationTab.MOROCCO, emptySet(), "", sort = StationSort.NAME_ASC)
-        val descending = Stations.visible(StationTab.MOROCCO, emptySet(), "", sort = StationSort.NAME_DESC)
-        assertEquals(ascending.reversed(), descending)
+        val collator = java.text.Collator.getInstance(java.util.Locale.FRENCH).apply { strength = java.text.Collator.PRIMARY }
+        assertTrue(ascending.zipWithNext().all { (a, b) -> collator.compare(a.name, b.name) <= 0 })
         assertFalse(StationSort.GROUPS in StationSort.options(StationTab.WORLD))
     }
 
@@ -138,15 +138,50 @@ class StationsTest {
         assertEquals(tanger, Stations.visible(StationTab.MOROCCO, tanger.map { it.url }.toSet(), "Tétouan", true))
     }
 
-    @Test fun arabicMusicGroupsAndOldFayrouzFavoriteResolveToTheCuratedStream() {
-        val arabic = Stations.visible(StationTab.MOROCCO, emptySet(), "", category = MoroccoCategory.ARABIC)
-        assertEquals(listOf(MoroccoCategory.FAYROUZ, MoroccoCategory.TARAB, MoroccoCategory.CHAABI,
-            MoroccoCategory.ANDALOU, MoroccoCategory.MOROCCAN), arabic.map(Stations::musicCategory).distinct())
+    @Test fun themesGroupStationsAndOldGenresMapOntoMergedThemes() {
+        fun names(theme: MoroccoCategory) = Stations.visible(StationTab.MOROCCO, emptySet(), "", category = theme).map { it.name }.toSet()
+        assertEquals(setOf("Fayrouz · فيروزيات", "Medina FM Tarab", "Medi 1 · Tarab", "Tarab Radio"), names(MoroccoCategory.TARAB))
+        assertEquals(3, names(MoroccoCategory.MOROCCAN).size)
+        assertEquals(setOf("Medina FM Andalou", "Medi 1 · Andalouse", "Medi 1 · Soufi"), names(MoroccoCategory.ANDALOU))
+        assertEquals(setOf("Medina FM Amazigh", "Radio Azawan", "Radio Amazighe"), names(MoroccoCategory.AMAZIGH))
+        assertEquals(setOf("Radio Mars", "Radio Aswat"), names(MoroccoCategory.SPORT))
+        assertTrue(names(MoroccoCategory.NEWS).containsAll(setOf("Med Radio", "Medi 1 Radio", "Radio Nationale", "Chaîne Inter")))
+        assertTrue(names(MoroccoCategory.HITS).containsAll(setOf("HIT RADIO", "Chada FM", "Radio 2M", "U Radio")))
+        // Every curated theme is distinct enough to deserve a chip.
+        MoroccoCategory.entries.forEach { assertTrue("$it is empty", names(it).size >= 2) }
+        assertEquals(MoroccoCategory.TARAB, MoroccoCategory.restore("FAYROUZ"))
+        assertEquals(MoroccoCategory.MOROCCAN, MoroccoCategory.restore("CHAABI"))
+        assertEquals(MoroccoCategory.ALL, MoroccoCategory.restore("DIRECTORY"))
+        assertEquals(MoroccoCategory.ALL, MoroccoCategory.restore("ARABIC"))
         val fayrouz = Stations.visible(StationTab.MOROCCO, emptySet(), "Fayroz").single()
         assertEquals("Fayrouz · فيروزيات", fayrouz.name)
         assertEquals(fayrouz, Stations.visible(StationTab.FAVORITES, setOf(fayrouz.url), "").single())
-        assertEquals(3, Stations.visible(StationTab.MOROCCO, emptySet(), "", category = MoroccoCategory.TARAB).size)
-        assertEquals(2, Stations.visible(StationTab.MOROCCO, emptySet(), "", category = MoroccoCategory.AMAZIGH).size)
+        val sportFromDirectory = RadioStation("Radio Foot MA", "https://audio.example/foot", countryCode = "MA",
+            tags = setOf("sport", "football"))
+        assertTrue(sportFromDirectory in Stations.visible(StationTab.MOROCCO, emptySet(), "",
+            directory = listOf(sportFromDirectory), category = MoroccoCategory.SPORT))
+    }
+
+    @Test fun favoritesFollowThePresetOrder() {
+        val med = Stations.visible(StationTab.MOROCCO, emptySet(), "Med Radio").first()
+        val mars = Stations.visible(StationTab.MOROCCO, emptySet(), "Radio Mars").single()
+        val hit = Stations.visible(StationTab.MOROCCO, emptySet(), "HIT RADIO").first { it.name == "HIT RADIO" }
+        val ids = setOf(med.url, mars.url, hit.url)
+        assertEquals(listOf(mars, hit, med), Stations.visible(StationTab.FAVORITES, ids, "",
+            favoriteOrder = listOf(mars.url, hit.url, med.url)))
+        assertEquals(listOf(hit), Stations.visible(StationTab.FAVORITES, ids, "", favoriteOrder = listOf(hit.url)).take(1))
+    }
+
+    @Test fun surahNamesFindTheHerrazChapterInArabicOrLatinLetters() {
+        assertEquals(18, HerrazRecitations.find("kahf")?.number)
+        assertEquals(18, HerrazRecitations.find("Sourate Al-Kahf")?.number)
+        assertEquals(18, HerrazRecitations.find("الكهف")?.number)
+        assertEquals(114, HerrazRecitations.find("nas")?.number)
+        assertEquals(36, HerrazRecitations.find("Ya-Sin")?.number)
+        assertEquals(55, HerrazRecitations.find("rahman")?.number)
+        assertEquals(null, HerrazRecitations.find("ab"))
+        assertEquals(17, HerrazRecitations.indexOf(18))
+        assertEquals(null, HerrazRecitations.indexOf(33))
     }
 
     @Test fun removedDirectoryEntriesDoNotReappearInFavoritesOrRecentPlayback() {
@@ -154,8 +189,9 @@ class StationsTest {
         val azrou = RadioStation("Radio Azrou", "https://audio.example/azrou", countryCode = "MA")
         val old = listOf(aziz, azrou)
         assertEquals(listOf(azrou), StationDirectory.decode(StationDirectory.encode(old)))
-        assertEquals(listOf(azrou), Stations.visible(StationTab.MOROCCO, emptySet(), "", directory = old,
-            category = MoroccoCategory.DIRECTORY))
+        val listed = Stations.visible(StationTab.MOROCCO, emptySet(), "", directory = old)
+        assertTrue(azrou in listed)
+        assertFalse(aziz in listed)
         assertEquals(listOf(azrou), Stations.visible(StationTab.FAVORITES, old.map { it.url }.toSet(), "", bookmarks = old))
         val plus = Stations.visible(StationTab.MOROCCO, emptySet(), "Radio Plus").single()
         assertEquals("https://stream-158.zeno.fm/bqdbb6hd0neuv", plus.url)

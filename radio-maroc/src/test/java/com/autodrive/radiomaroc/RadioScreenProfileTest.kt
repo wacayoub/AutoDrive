@@ -40,6 +40,18 @@ class RadioScreenProfileTest {
     }
 
     @Test
+    fun presetsAreACarScreenWithHeaderChipsOnlyWhenWide() {
+        val wide = car(800, 432, DisplayLayout.MOSAIC)
+        assertTrue(wide.touchMosaic)
+        assertTrue(wide.carScreen)
+        assertFalse(wide.touchGuide)
+        assertTrue(wide.headerInfoChips)
+        assertFalse(car(600, 324, DisplayLayout.MOSAIC).headerInfoChips)
+        assertFalse(RadioScreenProfile(television = true, landscape = true, widthDp = 960, heightDp = 540,
+            layout = DisplayLayout.MOSAIC).carScreen)
+    }
+
+    @Test
     fun listeningScreenIsNotAGuide() {
         val screen = car(800, 432, DisplayLayout.LISTENING)
         assertFalse(screen.touchGuide)
