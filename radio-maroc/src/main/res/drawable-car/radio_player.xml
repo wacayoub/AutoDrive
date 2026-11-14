@@ -1,0 +1,7 @@
+<!-- Incarlink: charcoal tile with large corners, as on the head unit's home screen. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android">
+    <corners android:radius="22dp" />
+    <gradient android:angle="270" android:startColor="@color/radio_player_top"
+        android:centerColor="@color/radio_player_center" android:endColor="@color/radio_player_bottom" />
+    <stroke android:width="1dp" android:color="@color/radio_player_border" />
+</shape>

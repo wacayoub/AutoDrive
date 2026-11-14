@@ -1,0 +1,5 @@
+<!-- Incarlink: the lighter strip that carries the controls at the bottom of the home-screen media tile. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android">
+    <corners android:bottomLeftRadius="21dp" android:bottomRightRadius="21dp" />
+    <gradient android:angle="270" android:startColor="#FF4B4D52" android:endColor="#FF37393D" />
+</shape>

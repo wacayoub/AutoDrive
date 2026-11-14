@@ -229,6 +229,9 @@ class RadioActivity : ComponentActivity() {
     private var typingInGuide = false
     // The screen variant follows the configuration and the chosen layout; RadioScreenProfile holds the thresholds.
     private val profile get() = RadioScreenProfile.of(resources.configuration, displayLayout)
+    // Set by attachBaseContext for Appearance.INCARLINK; the res/*-car resources hold that look.
+    private val incarlinkStyle get() =
+        resources.configuration.uiMode and Configuration.UI_MODE_TYPE_MASK == Configuration.UI_MODE_TYPE_CAR
     private val television get() = profile.television
     private val landscape get() = profile.landscape
     private val compactTv get() = profile.compactTv
@@ -1672,8 +1675,18 @@ class RadioActivity : ComponentActivity() {
         })
         val side = dp(if (short) 48 else 54)
         val main = dp(if (short) 58 else 66)
+        val band = incarlinkStyle
+        if (band) {
+            setPadding(paddingLeft, paddingTop, paddingRight, dp(1))
+            clipToPadding = false
+        }
         addView(row().apply {
             gravity = Gravity.CENTER
+            // Incarlink: the controls sit on a lighter strip across the bottom of the tile, like its media widget.
+            if (band) {
+                background = getDrawable(R.drawable.radio_control_band)
+                setPadding(0, dp(if (short) 6 else 10), 0, dp(if (short) 6 else 10))
+            }
             previous = transportButton(R.drawable.ic_radio_previous, "Station précédente") { skip(-1) }
             playButton = transportButton(R.drawable.ic_radio_play, "Écouter", primary = true) { toggle() }
             next = transportButton(R.drawable.ic_radio_next, "Station suivante") { skip(1) }
@@ -1689,7 +1702,12 @@ class RadioActivity : ComponentActivity() {
             addView(playButton, LinearLayout.LayoutParams(main, main).apply { marginStart = gap; marginEnd = gap })
             addView(next, LinearLayout.LayoutParams(side, side))
             addView(favoriteButton, LinearLayout.LayoutParams(side, side).apply { marginStart = gap })
-        }, LinearLayout.LayoutParams(-1, -2))
+        }, LinearLayout.LayoutParams(-1, -2).apply {
+            if (band) {
+                marginStart = -dp(13)
+                marginEnd = -dp(13)
+            }
+        })
     }
 
     private fun playerColumn(

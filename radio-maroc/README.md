@@ -111,6 +111,10 @@ Le flux de Radio 2M correspond au champ audio `link_ecouter` du service utilisé
 
 Les quatre pages de SNRT Live publient des flux HLS EasyBroadcast distincts. Une requête directe sans jeton reçoit HTTP 403. Avec un jeton temporaire obtenu auprès du service du lecteur officiel, les quatre manifestes, leurs variantes et des segments audio ont répondu lors des essais. L’application garde le jeton en mémoire jusqu’au renouvellement et ne transmet les paramètres qu’aux listes HLS correspondantes. [Radio Nationale](https://snrtlive.ma/fr/alidaa-alwatania) · [Radio Amazighe](https://snrtlive.ma/fr/alidaa-alamazighia) · [Chaîne Inter](https://snrtlive.ma/fr/chaine-inter) · [Mohammed VI du Saint Coran](https://snrtlive.ma/fr/idaat-mohammed-assadiss).
 
+## Vérifications de la version 2.5.38
+
+Le style **Incarlink** reprend la tuile média de l’accueil du boîtier : lecteur anthracite aux coins de 22 dp, commandes plates sur une bande gris clair en bas du Cockpit, liste et en-tête en tuiles arrondies. Ces formes se trouvent dans `res/drawable-car` ; la bande `radio_control_band` reste transparente pour les autres apparences. Sur l’émulateur Android 13 en 800 × 480, le Cockpit a été vérifié en Incarlink puis en Nuit, qui ne change pas. Les tests unitaires ont réussi et lint a signalé 0 erreur. Le test sur l’Incarlink reste à faire.
+
 ## Vérifications de la version 2.5.37
 
 **Réglages › Jour / Nuit** propose un quatrième choix, **Incarlink**, qui reprend l’écran d’accueil du boîtier : fond presque noir, panneaux anthracite, texte blanc et accent vert menthe. Sa palette se trouve dans `res/values-car` ; l’activité seule passe en mode d’interface voiture sombre pour la charger, sans toucher au réglage du système. Sur un appareil qui serait déjà en mode voiture, les autres choix forcent le mode normal pour garder leur palette. Sur l’émulateur Android 13 en 800 × 480, le Cockpit, les Réglages et le passage d’Incarlink à Nuit ont été vérifiés. Les tests unitaires ont réussi et lint a signalé 0 erreur. Le test sur l’Incarlink reste à faire.

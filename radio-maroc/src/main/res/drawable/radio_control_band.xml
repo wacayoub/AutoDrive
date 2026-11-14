@@ -1,0 +1,4 @@
+<!-- Band behind the transport controls. Invisible by default; drawable-car gives the Incarlink widget's lighter strip. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android">
+    <solid android:color="@android:color/transparent" />
+</shape>

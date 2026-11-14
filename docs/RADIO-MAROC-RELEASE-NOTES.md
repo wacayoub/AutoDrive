@@ -1,5 +1,5 @@
-Nouveau style « Incarlink » dans Réglages › Jour / Nuit. L’application reprend l’apparence de l’écran d’accueil de l’Incarlink : fond presque noir, panneaux gris anthracite, texte blanc et accent vert menthe. Jour, Nuit et Système restent disponibles, et le choix est conservé.
+Le style « Incarlink » (Réglages › Jour / Nuit) se rapproche de l’écran d’accueil du boîtier. Le lecteur devient une tuile anthracite aux grands coins arrondis, avec les commandes posées sur une bande gris clair en bas, comme le widget média de l’Incarlink. Les boutons sont plats, la liste et l’en-tête prennent la même forme de tuile. Jour, Nuit et Système ne changent pas.
 
-Cette version se met à jour automatiquement depuis la 2.5.35 et la 2.5.36.
+Cette version se met à jour automatiquement depuis la 2.5.35, la 2.5.36 et la 2.5.37.
 
 Ces changements ont été vérifiés sur un émulateur Android 13 en 800 × 480. L’Incarlink reste à vérifier sur le véhicule.
