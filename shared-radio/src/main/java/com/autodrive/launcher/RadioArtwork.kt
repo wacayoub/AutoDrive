@@ -45,6 +45,12 @@ internal class RadioArtwork(
         ready(bitmap)
     }
 
+    /** For callers already running on a worker thread. Uses the same bounded on-disk logo cache. */
+    fun readLogo(url: String, targetPixels: Int): Bitmap? {
+        val valid = RadioStation.validUrl(url) ?: return null
+        return runCatching { read(ArtworkSize(valid, artworkBucket(targetPixels))) }.getOrNull()
+    }
+
     fun loadPortrait(id: Int, targetPixels: Int, ready: (Bitmap?) -> Unit): Job = scope.launch {
         val request = ArtworkSize("resource:$id", artworkBucket(targetPixels))
         memory.get(request)?.let { ready(it); return@launch }

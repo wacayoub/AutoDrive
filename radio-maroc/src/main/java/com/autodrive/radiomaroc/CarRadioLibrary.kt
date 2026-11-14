@@ -133,7 +133,7 @@ internal object CarRadioLibrary {
         .setMediaId(if (folder == null) station.url else "$BROWSE_PREFIX$folder/${station.url}")
         .setMediaMetadata(Stations.metadata(station).buildUpon()
             .setSubtitle(Stations.listDescription(station))
-            .setArtworkUri(portraitUri(station) ?: resourceUri(
+            .setArtworkUri(portraitUri(station) ?: CarArtworkProvider.stationUri(station.logoUrl) ?: resourceUri(
                 if (Stations.isReciter(station)) R.drawable.ic_tab_quran else R.drawable.ic_tab_radio,
             ))
             .build())
