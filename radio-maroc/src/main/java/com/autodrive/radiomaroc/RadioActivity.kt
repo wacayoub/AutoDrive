@@ -112,7 +112,9 @@ class RadioActivity : ComponentActivity() {
     private enum class Appearance(val label: String, val nightFlag: Int?, val androidMode: Int) {
         DAY("Jour", Configuration.UI_MODE_NIGHT_NO, UiModeManager.MODE_NIGHT_NO),
         NIGHT("Nuit", Configuration.UI_MODE_NIGHT_YES, UiModeManager.MODE_NIGHT_YES),
-        SYSTEM("Système", null, UiModeManager.MODE_NIGHT_AUTO);
+        SYSTEM("Système", null, UiModeManager.MODE_NIGHT_AUTO),
+        // The head unit's home-screen look: res/values-car holds its palette, selected by a car UI mode on this activity only.
+        INCARLINK("Incarlink", Configuration.UI_MODE_NIGHT_YES, UiModeManager.MODE_NIGHT_YES);
 
         companion object {
             fun restore(prefs: SharedPreferences): Appearance {
@@ -269,9 +271,20 @@ class RadioActivity : ComponentActivity() {
     override fun attachBaseContext(newBase: Context) {
         val appearance = Appearance.restore(newBase.getSharedPreferences(PREFERENCES, MODE_PRIVATE))
         val nightFlag = appearance.nightFlag
-        val context = if (Build.VERSION.SDK_INT == Build.VERSION_CODES.R && nightFlag != null) {
-            newBase.createConfigurationContext(Configuration().apply { uiMode = nightFlag })
-        } else newBase
+        val baseMode = newBase.resources.configuration.uiMode
+        val baseType = baseMode and Configuration.UI_MODE_TYPE_MASK
+        val context = when {
+            appearance == Appearance.INCARLINK -> newBase.createConfigurationContext(Configuration().apply {
+                uiMode = Configuration.UI_MODE_TYPE_CAR or Configuration.UI_MODE_NIGHT_YES
+            })
+            // A device that really reports car mode would otherwise pick the Incarlink palette for every appearance.
+            baseType == Configuration.UI_MODE_TYPE_CAR -> newBase.createConfigurationContext(Configuration().apply {
+                uiMode = Configuration.UI_MODE_TYPE_NORMAL or (nightFlag ?: (baseMode and Configuration.UI_MODE_NIGHT_MASK))
+            })
+            Build.VERSION.SDK_INT == Build.VERSION_CODES.R && nightFlag != null ->
+                newBase.createConfigurationContext(Configuration().apply { uiMode = nightFlag })
+            else -> newBase
+        }
         super.attachBaseContext(context)
     }
 
@@ -2639,14 +2652,19 @@ class RadioActivity : ComponentActivity() {
                 Appearance.DAY -> "Fond clair"
                 Appearance.NIGHT -> "Fond sombre, idéal la nuit"
                 Appearance.SYSTEM -> "Suit le réglage d’Android"
+                Appearance.INCARLINK -> "Style de l’écran d’accueil Incarlink"
             }
         }
         showChoiceSheet("Jour / Nuit", options.map { it.label }, appearance.ordinal, details = details) { index ->
             val selected = options[index]
-            prefs.edit().putString(APPEARANCE, selected.name).apply()
+            if (selected == appearance) return@showChoiceSheet
+            prefs.edit().putString(APPEARANCE, selected.name).commit()
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 getSystemService(UiModeManager::class.java).setApplicationNightMode(selected.androidMode)
-            } else {
+            }
+            // The night mode alone does not change when entering or leaving Incarlink (both can be dark).
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||
+                selected == Appearance.INCARLINK || appearance == Appearance.INCARLINK) {
                 recreate()
             }
         }
