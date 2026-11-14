@@ -1537,6 +1537,7 @@ class RadioActivity : ComponentActivity() {
                     addView(artwork, FrameLayout.LayoutParams(artworkSize, artworkSize, Gravity.CENTER))
                 }
             }
+            var textColumn: LinearLayout? = null
             val presentation = (if (stackedPresentation) playerColumn(artworkFrame, artwork, frameHeight, artworkSize, audioStrip)
                 else row()).apply {
                 playerPanel = this
@@ -1566,6 +1567,7 @@ class RadioActivity : ComponentActivity() {
                 })
                 val alignment = if (stackedPresentation) View.TEXT_ALIGNMENT_CENTER else View.TEXT_ALIGNMENT_VIEW_START
                 addView(column().apply {
+                    textColumn = this
                     val titleSize = when {
                         tightListening -> 18
                         full -> if (shortLandscape) 23 else if (compactTv || !television) 26 else 36
@@ -1601,7 +1603,10 @@ class RadioActivity : ComponentActivity() {
                 else -> LinearLayout.LayoutParams(-1, -2)
             }
             addView(presentation, presentationSize)
+            // Docked presets player: the status goes under the station name; beside the round buttons it wrapped mid-word.
+            val statusUnderTitle = horizontalMini && touchMosaic
             val controlsWidth = when {
+                statusUnderTitle -> -2
                 splitListening -> dp(minOf(310, resources.configuration.screenWidthDp / 2))
                 horizontalMini -> dp(if (compactTv) 280 else if (television) 380 else 300)
                 full -> dp(minOf(310, resources.configuration.screenWidthDp - 44))
@@ -1617,7 +1622,16 @@ class RadioActivity : ComponentActivity() {
                     background = getDrawable(R.drawable.radio_control_band_end)
                     setPadding(bandLead, dp(2), edge, dp(2))
                 }
-            }, LinearLayout.LayoutParams(if (band) controlsWidth + bandLead + edge else controlsWidth, if (band) -1 else -2).apply {
+                if (statusUnderTitle) textColumn?.let { column ->
+                    (statusBadge.parent as? ViewGroup)?.removeView(statusBadge)
+                    playerStatus.maxLines = 1
+                    playerStatus.gravity = Gravity.START or Gravity.CENTER_VERTICAL
+                    statusBadge.gravity = Gravity.START or Gravity.CENTER_VERTICAL
+                    statusBadge.setPadding(dp(6), dp(1), dp(6), dp(1))
+                    column.addView(statusBadge, LinearLayout.LayoutParams(-2, -2).apply { topMargin = dp(2) })
+                }
+            }, LinearLayout.LayoutParams(if (band && controlsWidth > 0) controlsWidth + bandLead + edge else controlsWidth,
+                if (band) -1 else -2).apply {
                 if (splitListening) marginStart = dp(8)
                 else if (!horizontalMini && (mini || full)) topMargin = dp(6)
                 if (band) {

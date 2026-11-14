@@ -111,6 +111,10 @@ Le flux de Radio 2M correspond au champ audio `link_ecouter` du service utilisé
 
 Les quatre pages de SNRT Live publient des flux HLS EasyBroadcast distincts. Une requête directe sans jeton reçoit HTTP 403. Avec un jeton temporaire obtenu auprès du service du lecteur officiel, les quatre manifestes, leurs variantes et des segments audio ont répondu lors des essais. L’application garde le jeton en mémoire jusqu’au renouvellement et ne transmet les paramètres qu’aux listes HLS correspondantes. [Radio Nationale](https://snrtlive.ma/fr/alidaa-alwatania) · [Radio Amazighe](https://snrtlive.ma/fr/alidaa-alamazighia) · [Chaîne Inter](https://snrtlive.ma/fr/chaine-inter) · [Mohammed VI du Saint Coran](https://snrtlive.ma/fr/idaat-mohammed-assadiss).
 
+## Vérifications de la version 2.5.40
+
+Dans **Présélections**, le badge d’état du lecteur ancré en bas passe sous le nom de la station, sur une ligne. À côté des boutons ronds, « Connexion au flux… » se coupait en plein mot. Sur l’émulateur Android 13 en 800 × 480, « Connexion au lecteur… » puis le badge LIVE ont été vérifiés en Incarlink et en Nuit. Les tests unitaires ont réussi et lint a signalé 0 erreur. Le test sur l’Incarlink reste à faire.
+
 ## Vérifications de la version 2.5.39
 
 En style **Incarlink**, la vue **Présélections** reprend les tuiles de l’accueil du boîtier : logo sur une face sombre, nom sur une bande gris clair (`radio_tile`, `radio_tile_selected`), et commandes du lecteur du bas sur la bande claire `radio_control_band_end`. Les versions par défaut de ces formes reproduisent l’ancien rendu, si bien que Jour, Nuit et Système ne changent pas. Sur l’émulateur Android 13 en 800 × 480, Présélections a été vérifié en Incarlink sur les onglets Maroc et Monde, puis en Nuit. Les tests unitaires ont réussi et lint a signalé 0 erreur. Le test sur l’Incarlink reste à faire.

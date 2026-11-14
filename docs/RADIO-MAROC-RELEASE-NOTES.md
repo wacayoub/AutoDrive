@@ -1,4 +1,4 @@
-Le style « Incarlink » s’applique aussi à la vue Présélections. Chaque station prend la forme des tuiles de l’accueil de l’Incarlink : le logo sur une face sombre, le nom sur une bande gris clair en bas. La station choisie garde un contour vert menthe. En bas de l’écran, les commandes du lecteur sont posées sur la même bande claire que le widget média. Jour, Nuit et Système ne changent pas.
+Dans la vue Présélections, l’état du lecteur du bas (« Connexion au flux… », « LIVE », « Connexion perdue · reprise automatique ») s’affiche maintenant en entier sous le nom de la station. Il était coupé en plein mot à côté des boutons. La correction vaut pour tous les styles : Jour, Nuit, Système et Incarlink.
 
 Cette version se met à jour automatiquement depuis la 2.5.35 et les versions suivantes.
 
