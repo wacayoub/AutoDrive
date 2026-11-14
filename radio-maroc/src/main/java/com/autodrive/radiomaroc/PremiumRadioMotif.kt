@@ -91,6 +91,8 @@ internal class PremiumRadioMotif(
                 )
             }
         }
-        if (playing && isShown && windowVisibility == VISIBLE) postInvalidateDelayed(33)
+        // Without a fresh audio level the bars are flat, so only check for a signal a few times per second.
+        val settled = signal == null && heights.all { it < .005f } && peaks.all { it <= 0f }
+        if (playing && isShown && windowVisibility == VISIBLE) postInvalidateDelayed(if (settled) 250 else 33)
     }
 }

@@ -1,7 +1,6 @@
 package com.autodrive.radiomaroc
 
 import android.Manifest
-import android.animation.ObjectAnimator
 import android.animation.ValueAnimator
 import android.app.AlertDialog
 import android.app.NotificationManager
@@ -209,7 +208,19 @@ class RadioActivity : ComponentActivity() {
     private lateinit var statusBadge: LinearLayout
     private lateinit var liveIndicator: LinearLayout
     private lateinit var liveDot: View
-    private var livePulse: ObjectAnimator? = null
+    // A slow blink instead of a continuous fade: the LIVE dot no longer forces a redraw on every frame while listening.
+    private var livePulsing = false
+    private val livePulse = object : Runnable {
+        override fun run() {
+            if (!liveDot.isAttachedToWindow || liveIndicator.visibility != View.VISIBLE) {
+                livePulsing = false
+                liveDot.alpha = 1f
+                return
+            }
+            liveDot.alpha = if (liveDot.alpha > .6f) .3f else 1f
+            liveDot.postDelayed(this, 900)
+        }
+    }
     private lateinit var audioMotif: PremiumRadioMotif
     private lateinit var playButton: ImageButton
     private lateinit var previous: ImageButton
@@ -225,7 +236,8 @@ class RadioActivity : ComponentActivity() {
     private val smallTouchGuide get() = touchGuide && resources.configuration.screenHeightDp < 300
     private val compactGuideTabs get() = touchGuide && resources.configuration.screenWidthDp < 580
     private val singleColumnGuide get() = touchGuide && resources.configuration.screenWidthDp < 640
-    private val showDashboardTiles get() = !touchGuide || resources.configuration.screenHeightDp >= 360
+    // Below 400 dp of height the weather and prayer tiles would squeeze the station logo out of the player.
+    private val showDashboardTiles get() = !touchGuide || resources.configuration.screenHeightDp >= 400
     private val dashboardInfo = MutableStateFlow(false)
     private var typingInGuide = false
     private val compactGuide get() = compactTv || touchGuide
@@ -233,7 +245,10 @@ class RadioActivity : ComponentActivity() {
     private val tightLandscape get() = shortLandscape && resources.configuration.screenHeightDp < 280
     private val showingCatalogue get() = displayLayout != DisplayLayout.LISTENING
     private val tvGuide get() = touchGuide || television && displayLayout == DisplayLayout.GUIDE
-    private val tvGuideRowDp get() = if (touchGuide) 44 else if (compactTv) 30 else 36
+    // Touch rows stay at or above 48 dp so a driver can hit a station at arm's length.
+    private val tvGuideRowDp get() = if (touchGuide) (if (smallTouchGuide) 48 else 52) else if (compactTv) 30 else 36
+    // Short car screens (about 213 dpi at 800 × 480) keep one line of player text so the logo keeps its room.
+    private val shortTouchGuide get() = touchGuide && resources.configuration.screenHeightDp < 400
     private val catalogueInGrid get() = tvGuide || displayLayout == DisplayLayout.MOSAIC
     private val catalogueAdapter get() = if (catalogueInGrid) tileAdapter else stationAdapter
     private val compactDirectory get() = tvGuide || shortLandscape
@@ -473,7 +488,8 @@ class RadioActivity : ComponentActivity() {
         val inlineCategories = showingCatalogue && (television || landscape)
         val mastheadHeight = dp(when {
             television && inlineCategories -> 36
-            smallTouchGuide -> 40
+            smallTouchGuide -> 46
+            touchGuide && inlineCategories -> 52
             television || inlineCategories -> 44
             landscape -> 36
             else -> 40
@@ -509,7 +525,7 @@ class RadioActivity : ComponentActivity() {
             if (dashboardInfo.value) {
                 addView(tvClockBar(), LinearLayout.LayoutParams(-2, -1).apply { marginEnd = dp(6) })
             }
-            addView(menuButton, LinearLayout.LayoutParams(dp(if (television || inlineCategories) 44 else 48), -1))
+            addView(menuButton, LinearLayout.LayoutParams(dp(if (television || inlineCategories && !touchGuide) 44 else 48), -1))
         }
         addView(masthead, LinearLayout.LayoutParams(-1, mastheadHeight).apply { bottomMargin = dp(4) })
         val hideWhileTyping = mutableListOf<View>(masthead)
@@ -597,7 +613,7 @@ class RadioActivity : ComponentActivity() {
             setSingleLine()
         }.also { addView(it, LinearLayout.LayoutParams(-2, -2)) }
         if (!touchGuide || resources.configuration.screenWidthDp >= 600) {
-            clockDate = label("", if (compactGuide) 10 else 12, muted).apply {
+            clockDate = label("", if (compactTv) 10 else 12, muted).apply {
                 includeFontPadding = false
                 setSingleLine()
             }.also { addView(it, LinearLayout.LayoutParams(-2, -2).apply { marginStart = dp(6) }) }
@@ -615,7 +631,8 @@ class RadioActivity : ComponentActivity() {
     private fun tvCategoryBar(): LinearLayout = row().apply {
         val bar = this
         background = getDrawable(R.drawable.radio_control)
-        setPadding(dp(3), dp(3), dp(3), dp(3))
+        val barPadding = dp(if (touchGuide) 2 else 3)
+        setPadding(barPadding, barPadding, barPadding, barPadding)
         fun addCategory(choice: StationTab): TextView = button(
             if (compactGuideTabs && choice == StationTab.MOROCCO) "Maroc" else choice.label,
         ) { selectTab(choice) }.apply {
@@ -624,15 +641,15 @@ class RadioActivity : ComponentActivity() {
             if (compactGuideTabs) contentDescription = choice.label
             maxLines = 1
             ellipsize = TextUtils.TruncateAt.END
-            val maxSize = if (compactGuide) 13 else 15
-            setAutoSizeTextTypeUniformWithConfiguration(10, maxSize, 1, TypedValue.COMPLEX_UNIT_SP)
+            val maxSize = if (touchGuide) 15 else if (compactGuide) 13 else 15
+            setAutoSizeTextTypeUniformWithConfiguration(if (touchGuide) 12 else 10, maxSize, 1, TypedValue.COMPLEX_UNIT_SP)
             if (compactGuideTabs) {
                 setPadding(dp(3), 0, dp(3), 0)
             } else {
                 gravity = Gravity.START or Gravity.CENTER_VERTICAL
                 textAlignment = View.TEXT_ALIGNMENT_VIEW_START
                 setPadding(dp(if (compactGuide) 6 else 10), 0, dp(4), 0)
-                val size = dp(if (compactGuide) 14 else 16)
+                val size = dp(if (compactGuide && !touchGuide) 14 else 16)
                 val symbol = getDrawable(stationTabIcon(choice))?.apply { setBounds(0, 0, size, size) }
                 setCompoundDrawablesRelative(symbol, null, null, null)
                 compoundDrawableTintList = getColorStateList(R.color.radio_tab_icon)
@@ -850,8 +867,8 @@ class RadioActivity : ComponentActivity() {
             prefs.edit().putString(CATALOGUE_LAYOUT, layout.name).apply()
         }
         returnFromListening.isEnabled = !showingCatalogue
-        livePulse?.cancel()
-        livePulse = null
+        if (::liveDot.isInitialized) liveDot.removeCallbacks(livePulse)
+        livePulsing = false
         revealCatalogueSelection = true
         setContentView(screen())
         renderRows()
@@ -962,14 +979,14 @@ class RadioActivity : ComponentActivity() {
         }
         addView(worldRegion, LinearLayout.LayoutParams(-1, dp(22)))
         sortButton = button("Trier", ::chooseSort).apply {
-            textSize = 12f
+            textSize = if (touchGuide) 14f else 12f
             maxLines = 1
             setPadding(dp(if (shortLandscape) 6 else 10), 0, dp(if (shortLandscape) 6 else 10), 0)
             setCompoundDrawablesRelativeWithIntrinsicBounds(R.drawable.ic_radio_sort, 0, 0, 0)
             compoundDrawablePadding = dp(6)
         }
         categoryButton = button("Genres", ::chooseCategory).apply {
-            textSize = 12f
+            textSize = if (touchGuide) 14f else 12f
             maxLines = 1
             setPadding(dp(4), 0, dp(4), 0)
         }
@@ -1020,7 +1037,7 @@ class RadioActivity : ComponentActivity() {
             compoundDrawableTintList = ColorStateList.valueOf(accent)
         }
         val toolbarHeight = dp(when {
-            touchGuide -> 44
+            touchGuide -> 48
             tvGuide -> 34
             compactTv -> 38
             tightLandscape -> 40
@@ -1033,9 +1050,10 @@ class RadioActivity : ComponentActivity() {
             addView(countryButton, LinearLayout.LayoutParams(dp(if (shortLandscape || touchGuide) 84 else if (television && !compactTv) 128 else 104), -1)
                 .apply { marginStart = dp(6) })
             if (!television && !touchGuide) addView(radioFilter, LinearLayout.LayoutParams(toolbarHeight, -1).apply { marginStart = dp(6) })
-            addView(categoryButton, LinearLayout.LayoutParams(dp(if (shortLandscape) 56 else 66), -1)
+            addView(categoryButton, LinearLayout.LayoutParams(dp(if (touchGuide) 76 else if (shortLandscape) 56 else 66), -1)
                 .apply { marginStart = dp(6) })
-            addView(sortButton, LinearLayout.LayoutParams(dp(if (shortLandscape) 66 else if (television && !compactTv) 92 else 76), -1)
+            addView(sortButton, LinearLayout.LayoutParams(dp(if (touchGuide) 86 else if (shortLandscape) 66
+                else if (television && !compactTv) 92 else 76), -1)
                 .apply { marginStart = dp(6) })
         }
         addView(stationToolbar, LinearLayout.LayoutParams(-1, toolbarHeight).apply { bottomMargin = dp(if (tvGuide) 4 else 6) })
@@ -1055,7 +1073,7 @@ class RadioActivity : ComponentActivity() {
                     else -> 2
                 }
                 horizontalSpacing = dp(if (tvGuide) 4 else 10)
-                verticalSpacing = dp(if (tvGuide) 2 else 8)
+                verticalSpacing = dp(if (touchGuide) 4 else if (tvGuide) 2 else 8)
                 stretchMode = GridView.STRETCH_COLUMN_WIDTH
                 adapter = tileAdapter
             } else ListView(context).apply {
@@ -1269,12 +1287,12 @@ class RadioActivity : ComponentActivity() {
         private val headingColor = getColor(R.color.radio_weather_label)
         private val icon = WeatherIcon(context, headingColor)
         private val temperature = tileLine("", if (compactTv) 15 else 19, textColor, bold = true)
-        private val detail = tileLine("", if (compactTv) 10 else 11, muted)
+        private val detail = tileLine("", if (compactTv) 10 else 12, muted)
 
         init {
             prepareLocalTile(::showWeather)
             setPadding(dp(2), 0, dp(2), 0)
-            addView(tileLine("Météo", if (compactTv) 10 else 11, headingColor, bold = true), LayoutParams(-1, -2))
+            addView(tileLine("Météo", if (compactTv) 10 else 12, headingColor, bold = true), LayoutParams(-1, -2))
             addView(row().apply {
                 gravity = Gravity.CENTER
                 val size = dp(if (compactTv) 17 else 23)
@@ -1302,7 +1320,7 @@ class RadioActivity : ComponentActivity() {
 
         init {
             prepareLocalTile(::showPrayerTimes)
-            addView(tileLine("Salat", if (compactTv) 10 else 11, headingColor, bold = true), LayoutParams(-1, -2))
+            addView(tileLine("Salat", if (compactTv) 10 else 12, headingColor, bold = true), LayoutParams(-1, -2))
             addView(row().apply {
                 gravity = Gravity.CENTER_VERTICAL
                 addView(prayerColumn("Maint.", currentName, currentTime), LayoutParams(0, -2, 1f))
@@ -1313,7 +1331,7 @@ class RadioActivity : ComponentActivity() {
         }
 
         private fun prayerColumn(label: String, name: TextView, time: TextView) = column().apply {
-            addView(tileLine(label, if (compactTv) 9 else 10, muted), LayoutParams(-1, -2))
+            addView(tileLine(label, if (compactTv) 9 else 11, muted), LayoutParams(-1, -2))
             addView(name, LayoutParams(-1, -2))
             addView(time, LayoutParams(-1, -2))
         }
@@ -1760,7 +1778,7 @@ class RadioActivity : ComponentActivity() {
                     playerCategory = this
                 }, LinearLayout.LayoutParams(-1, -2))
                 if (dashboardInfo.value && showDashboardTiles && !mini) {
-                    addView(localInfoBar(), LinearLayout.LayoutParams(-1, dp(if (compactGuide) 56 else 64)).apply {
+                    addView(localInfoBar(), LinearLayout.LayoutParams(-1, dp(if (compactTv) 56 else 64)).apply {
                         topMargin = dp(4)
                     })
                 }
@@ -1791,7 +1809,8 @@ class RadioActivity : ComponentActivity() {
                     playerTitle = label("", titleSize, textColor, bold = true).apply {
                         textAlignment = alignment
                         if (compactSidePlayer) includeFontPadding = false
-                        maxLines = if ((compactTv && !tvGuide) || mini || (full && (television || shortLandscape))) 1 else 2
+                        maxLines = if ((compactTv && !tvGuide) || mini || shortTouchGuide ||
+                            (full && (television || shortLandscape))) 1 else 2
                         ellipsize = TextUtils.TruncateAt.END
                     }
                     addView(playerTitle, LinearLayout.LayoutParams(-1, -2))
@@ -1799,7 +1818,7 @@ class RadioActivity : ComponentActivity() {
                     playerSubtitle = label("", subtitleSize, muted).apply {
                         textAlignment = alignment
                         if (compactSidePlayer) includeFontPadding = false
-                        maxLines = if (tightSidePlayer || tightListening || mini || compactTv) 1 else 2
+                        maxLines = if (tightSidePlayer || tightListening || mini || compactTv || shortTouchGuide) 1 else 2
                         ellipsize = TextUtils.TruncateAt.END
                     }
                     addView(playerSubtitle, LinearLayout.LayoutParams(-1, -2))
@@ -1889,7 +1908,7 @@ class RadioActivity : ComponentActivity() {
                         }
                     }
                     addView(liveDot, LinearLayout.LayoutParams(dp(5), dp(5)).apply { marginEnd = dp(5) })
-                    addView(label("LIVE", 11, Color.WHITE, bold = true).apply {
+                    addView(label("LIVE", 12, Color.WHITE, bold = true).apply {
                         gravity = Gravity.CENTER
                         letterSpacing = .06f
                         importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
@@ -1906,7 +1925,9 @@ class RadioActivity : ComponentActivity() {
             addView(liveIndicator, LinearLayout.LayoutParams(-2, -2))
             addView(playerStatus, LinearLayout.LayoutParams(-2, -2))
         }
-        addView(statusBadge, if (wide) LinearLayout.LayoutParams(-1, dp(if (compactGuide) 28 else 33)).apply { bottomMargin = dp(4) }
+        // Grow with two-line messages such as "Connexion perdue · reprise automatique" instead of clipping them.
+        if (wide) statusBadge.minimumHeight = dp(if (compactGuide) 28 else 33)
+        addView(statusBadge, if (wide) LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(4) }
             else LinearLayout.LayoutParams(0, -2, 1f).apply { marginEnd = dp(6) })
         if (wide && !television && !touchGuide && !mini && !full) {
             addView(View(context).apply {
@@ -2036,6 +2057,7 @@ class RadioActivity : ComponentActivity() {
         private val idleBackground = pressable(if (tvGuide) R.drawable.radio_station_rule else R.drawable.radio_control)
         private val selectedBackground = pressable(R.drawable.radio_selected)
         private val name = label("", when {
+            touchGuide -> 15
             tvGuide && !compactTv -> 14
             tvGuide || compactTv || shortLandscape -> 13
             television -> 17
@@ -2043,10 +2065,12 @@ class RadioActivity : ComponentActivity() {
         }, textColor, bold = true).apply {
             gravity = if (tvGuide) Gravity.START or Gravity.CENTER_VERTICAL else Gravity.CENTER
             includeFontPadding = false
-            maxLines = if (singleColumnGuide) 2 else 1
+            // One line in every guide: a second line pushed the subtitle out of the fixed-height row.
+            maxLines = 1
             ellipsize = TextUtils.TruncateAt.END
         }
         private val subtitle = label("", when {
+            touchGuide -> 12
             tvGuide && compactTv -> 9
             tvGuide || compactTv || shortLandscape -> 10
             else -> 12
@@ -2076,14 +2100,15 @@ class RadioActivity : ComponentActivity() {
                 orientation = HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
                 setPadding(dp(7), 0, dp(7), 0)
-                val artSize = dp(heightDp - 6)
+                val artSize = dp((heightDp - 6).coerceAtMost(42))
                 addView(logo, LinearLayout.LayoutParams(artSize, artSize).apply { marginEnd = dp(8) })
                 addView(column().apply {
                     addView(name, LinearLayout.LayoutParams(-1, -2))
                     addView(subtitle, LinearLayout.LayoutParams(-1, -2))
                 }, LinearLayout.LayoutParams(0, -2, 1f))
-                favoriteMark?.let { addView(it, LinearLayout.LayoutParams(dp(14), dp(14)).apply { marginStart = dp(4) }) }
-                playingMark?.let { addView(it, LinearLayout.LayoutParams(dp(14), dp(14)).apply { marginStart = dp(4) }) }
+                val markSize = dp(if (touchGuide) 16 else 14)
+                favoriteMark?.let { addView(it, LinearLayout.LayoutParams(markSize, markSize).apply { marginStart = dp(4) }) }
+                playingMark?.let { addView(it, LinearLayout.LayoutParams(markSize, markSize).apply { marginStart = dp(4) }) }
             } else {
                 orientation = VERTICAL
                 gravity = Gravity.CENTER
@@ -2594,16 +2619,12 @@ class RadioActivity : ComponentActivity() {
     private fun updateLiveDot(live: Boolean) {
         liveIndicator.visibility = if (live) View.VISIBLE else View.GONE
         if (!live || !ValueAnimator.areAnimatorsEnabled()) {
-            livePulse?.cancel()
-            livePulse = null
+            liveDot.removeCallbacks(livePulse)
+            livePulsing = false
             liveDot.alpha = 1f
-        } else if (livePulse == null) {
-            livePulse = ObjectAnimator.ofFloat(liveDot, View.ALPHA, 1f, .2f).apply {
-                duration = 650
-                repeatMode = ValueAnimator.REVERSE
-                repeatCount = ValueAnimator.INFINITE
-                start()
-            }
+        } else if (!livePulsing) {
+            livePulsing = true
+            liveDot.postDelayed(livePulse, 900)
         }
     }
 

@@ -28,8 +28,10 @@ internal class DirectoryBrowser(private val source: StationDirectory, private va
     fun open(value: StationDirectory.Query?) {
         if (query == value) return
         job?.cancel()
+        // While typing in the same country and sort, keep the previous results on screen until the new ones arrive.
+        val refining = value != null && query?.country == value.country && query?.sort == value.sort
         query = value
-        stations = emptyList()
+        if (!refining) stations = emptyList()
         offset = if (value == null) null else 0
         loading = false
         failed = false
