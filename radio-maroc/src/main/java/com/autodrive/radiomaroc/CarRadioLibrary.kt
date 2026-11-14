@@ -50,7 +50,7 @@ internal object CarRadioLibrary {
             NATIONAL to moroccoStations.filter { Stations.region(it) == null },
             SNRT to moroccoStations.filter { it in Stations.snrt },
             REGIONAL to moroccoStations.filter { Stations.region(it) != null },
-            ARABIC_MUSIC to Stations.visible(StationTab.MOROCCO, emptySet(), "", category = MoroccoCategory.ARABIC),
+            ARABIC_MUSIC to Stations.arabicMusic().toSet().let { music -> moroccoStations.filter { it in music } },
         ) + QuranSection.entries.associate { section ->
             section.name to quranStations.filter { Stations.quranSection(it) == section }
         }
@@ -68,8 +68,8 @@ internal object CarRadioLibrary {
     }).setRecent(hints?.isRecent == true).setOffline(hints?.isOffline == true)
         .setSuggested(hints?.isSuggested == true).build()
 
-    fun favorites(ids: Set<String>, bookmarks: List<RadioStation>): List<RadioStation> =
-        Stations.visible(StationTab.FAVORITES, ids, "", bookmarks = bookmarks).filter { it != Stations.luxe }
+    fun favorites(ids: Set<String>, bookmarks: List<RadioStation>, order: List<String> = emptyList()): List<RadioStation> =
+        Stations.visible(StationTab.FAVORITES, ids, "", bookmarks = bookmarks, favoriteOrder = order).filter { it != Stations.luxe }
 
     fun children(parent: String, page: Int, pageSize: Int, favorites: List<RadioStation>, rootLimit: Int): List<MediaItem> {
         val folders = sections[parent]

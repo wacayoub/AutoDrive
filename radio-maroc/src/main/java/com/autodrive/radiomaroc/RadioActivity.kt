@@ -1,7 +1,6 @@
 package com.autodrive.radiomaroc
 
 import android.Manifest
-import android.animation.ObjectAnimator
 import android.animation.ValueAnimator
 import android.app.AlertDialog
 import android.app.NotificationManager
@@ -35,7 +34,6 @@ import android.text.TextWatcher
 import android.text.method.LinkMovementMethod
 import android.text.style.URLSpan
 import android.util.TypedValue
-import android.util.Log
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.MotionEvent
@@ -50,6 +48,7 @@ import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.GridView
+import android.widget.HorizontalScrollView
 import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -86,9 +85,7 @@ import com.autodrive.launcher.RadioStation
 import com.google.common.util.concurrent.ListenableFuture
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.coroutineScope
-import java.time.LocalDate
 import java.time.LocalDateTime
-import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 import java.util.Locale
@@ -123,14 +120,6 @@ class RadioActivity : ComponentActivity() {
                 return entries.firstOrNull { it.name == saved }
                     ?: if (prefs.getBoolean(LEGACY_DAY_APPEARANCE, false)) DAY else NIGHT
             }
-        }
-    }
-
-    private enum class DisplayLayout(val label: String) {
-        GUIDE("Guide TV"), MOSAIC("Mosaïque"), LISTENING("Écran d’écoute");
-
-        companion object {
-            fun restore(name: String?) = entries.firstOrNull { it.name == name } ?: GUIDE
         }
     }
 
@@ -173,6 +162,13 @@ class RadioActivity : ComponentActivity() {
     private lateinit var worldRegion: TextView
     private lateinit var sortButton: TextView
     private lateinit var categoryButton: TextView
+    private lateinit var stationToolbar: View
+    private lateinit var chipScroller: View
+    private lateinit var chipBar: LinearLayout
+    private var favoriteOrder = emptyList<String>()
+    // Per-row subtitle overrides (suggestion reasons, preset numbers) and the surah a Herraz row starts at.
+    private var rowNotes = emptyMap<String, String>()
+    private var rowChapters = emptyMap<String, Int>()
     private lateinit var directoryAction: TextView
     private lateinit var list: AbsListView
     private lateinit var empty: TextView
@@ -197,46 +193,59 @@ class RadioActivity : ComponentActivity() {
     private val tvStationInfo = MutableStateFlow<TvStationInfo?>(null)
     private val stationHeadlines = MutableStateFlow<List<NewsHeadline>>(emptyList())
     private val stationNews = mutableMapOf<NewsPublisher, NewsEdition>()
-    private val radioCity = MutableStateFlow(RadioCity.CASABLANCA)
-    private val weather = MutableStateFlow<RadioWeather?>(null)
-    private val prayerCalendars = MutableStateFlow<Map<YearMonth, HabousCalendar>>(emptyMap())
-    private var nextWeatherFetchAt = 0L
+    private lateinit var localInfo: LocalInfoFeed
     private var weatherTile: WeatherTile? = null
     private var prayerTile: PrayerTile? = null
+    private var weatherChip: WeatherChip? = null
+    private var prayerChip: PrayerChip? = null
     private var playerCategory: TextView? = null
     private lateinit var playerArtwork: StationArtwork
     private lateinit var playerStatus: TextView
     private lateinit var statusBadge: LinearLayout
     private lateinit var liveIndicator: LinearLayout
     private lateinit var liveDot: View
-    private var livePulse: ObjectAnimator? = null
+    // A slow blink instead of a continuous fade: the LIVE dot no longer forces a redraw on every frame while listening.
+    private var livePulsing = false
+    private val livePulse = object : Runnable {
+        override fun run() {
+            if (!liveDot.isAttachedToWindow || liveIndicator.visibility != View.VISIBLE) {
+                livePulsing = false
+                liveDot.alpha = 1f
+                return
+            }
+            liveDot.alpha = if (liveDot.alpha > .6f) .3f else 1f
+            liveDot.postDelayed(this, 900)
+        }
+    }
     private lateinit var audioMotif: PremiumRadioMotif
     private lateinit var playButton: ImageButton
     private lateinit var previous: ImageButton
     private lateinit var next: ImageButton
     private var playerFavorite: ImageButton? = null
     private var soundStatusLabel: TextView? = null
-    private val television: Boolean
-        get() = resources.configuration.uiMode and Configuration.UI_MODE_TYPE_MASK == Configuration.UI_MODE_TYPE_TELEVISION
-    private val compactTv: Boolean
-        get() = television && (resources.configuration.screenHeightDp < 430 || resources.configuration.screenWidthDp < 760)
-    private val landscape get() = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
-    private val touchGuide get() = !television && landscape && displayLayout == DisplayLayout.GUIDE
-    private val smallTouchGuide get() = touchGuide && resources.configuration.screenHeightDp < 300
-    private val compactGuideTabs get() = touchGuide && resources.configuration.screenWidthDp < 580
-    private val singleColumnGuide get() = touchGuide && resources.configuration.screenWidthDp < 640
-    private val showDashboardTiles get() = !touchGuide || resources.configuration.screenHeightDp >= 360
     private val dashboardInfo = MutableStateFlow(false)
     private var typingInGuide = false
-    private val compactGuide get() = compactTv || touchGuide
-    private val shortLandscape get() = !television && landscape && resources.configuration.screenHeightDp < 330
-    private val tightLandscape get() = shortLandscape && resources.configuration.screenHeightDp < 280
-    private val showingCatalogue get() = displayLayout != DisplayLayout.LISTENING
-    private val tvGuide get() = touchGuide || television && displayLayout == DisplayLayout.GUIDE
-    private val tvGuideRowDp get() = if (touchGuide) 44 else if (compactTv) 30 else 36
-    private val catalogueInGrid get() = tvGuide || displayLayout == DisplayLayout.MOSAIC
+    // The screen variant follows the configuration and the chosen layout; RadioScreenProfile holds the thresholds.
+    private val profile get() = RadioScreenProfile.of(resources.configuration, displayLayout)
+    private val television get() = profile.television
+    private val landscape get() = profile.landscape
+    private val compactTv get() = profile.compactTv
+    private val touchGuide get() = profile.touchGuide
+    private val touchMosaic get() = profile.touchMosaic
+    private val carScreen get() = profile.carScreen
+    private val smallTouchGuide get() = profile.smallTouchGuide
+    private val compactGuideTabs get() = profile.compactGuideTabs
+    private val showDashboardTiles get() = profile.showDashboardTiles
+    private val compactGuide get() = profile.compactGuide
+    private val shortLandscape get() = profile.shortLandscape
+    private val tightLandscape get() = profile.tightLandscape
+    private val showingCatalogue get() = profile.showingCatalogue
+    private val tvGuide get() = profile.tvGuide
+    private val tvGuideRowDp get() = profile.tvGuideRowDp
+    private val shortTouchGuide get() = profile.shortTouchGuide
+    private val catalogueInGrid get() = profile.catalogueInGrid
     private val catalogueAdapter get() = if (catalogueInGrid) tileAdapter else stationAdapter
-    private val compactDirectory get() = tvGuide || shortLandscape
+    private val compactDirectory get() = profile.compactDirectory
     private val inlineDirectoryPage get() = compactDirectory && directory.hasMore && (!directory.loading || rows.isNotEmpty())
     private val directoryPageLabel get() = when {
         directory.loading -> "Chargement de l’annuaire…"
@@ -277,9 +286,11 @@ class RadioActivity : ComponentActivity() {
             normalizeLogoMargins = true)
         directory = DirectoryBrowser(StationDirectory(this)) { renderRows() }
         radioUpdates = RadioUpdates(this, savedInstanceState)
+        localInfo = LocalInfoFeed(RadioCity.restore(prefs.getString("tv_info_city", null)))
         tab = StationTab.restore(prefs.getString("tab", null))
         country = prefs.getString("world_country", null)?.takeIf { it in StationDirectory.countries && it != "MA" } ?: "FR"
         favorites = prefs.getStringSet("favorites", emptySet()).orEmpty().toSet()
+        favoriteOrder = ListeningPrefs.favoriteOrder(prefs, favorites)
         directoryBookmarks = StationDirectory.decode(prefs.getString("directory_bookmarks", null).orEmpty())
         savedStation = findStation(prefs.getString("last_station", null))
         playbackQuery = voiceQuery(intent)
@@ -287,7 +298,7 @@ class RadioActivity : ComponentActivity() {
         startupDeadline = savedInstanceState?.getLong("startup_deadline") ?: 0L
         query = savedInstanceState?.getString("query").orEmpty()
         displayLayout = DisplayLayout.restore(savedInstanceState?.getString("display_screen") ?: prefs.getString(DISPLAY_LAYOUT, null))
-        radioFavoritesOnly = !television && !touchGuide && savedInstanceState?.getBoolean("radio_favorites_only") == true
+        radioFavoritesOnly = !television && !carScreen && savedInstanceState?.getBoolean("radio_favorites_only") == true
         catalogueLayout = DisplayLayout.restore(prefs.getString(CATALOGUE_LAYOUT, null))
             .takeUnless { it == DisplayLayout.LISTENING } ?: DisplayLayout.GUIDE
         catalogueFocusStation = savedInstanceState?.getString("catalogue_station")
@@ -300,7 +311,6 @@ class RadioActivity : ComponentActivity() {
         updateDirectory()
         restoreTvCatalogueFocus()
         if (television || landscape) lifecycleScope.launch {
-            radioCity.value = RadioCity.restore(prefs.getString("tv_info_city", null))
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 dashboardInfo.collectLatest { enabled ->
                     if (enabled) coroutineScope {
@@ -310,12 +320,13 @@ class RadioActivity : ComponentActivity() {
                                 publisher?.let { refreshStationNews(it) }
                             }
                         }
-                        launch { radioCity.collectLatest { refreshWeather(it) } }
-                        launch { refreshPrayerCalendars() }
+                        launch { localInfo.city.collectLatest { localInfo.refreshWeather(it) } }
+                        launch { localInfo.refreshPrayerCalendars() }
                         launch { refreshLocalTiles() }
                         launch {
                             while (true) {
                                 renderTvClock()
+                                if (tab == StationTab.FOR_YOU && showingCatalogue) renderRows()
                                 delay(untilNextMinute())
                             }
                         }
@@ -462,18 +473,23 @@ class RadioActivity : ComponentActivity() {
     }
 
     private fun screen(): LinearLayout = column().apply {
-        dashboardInfo.value = television || touchGuide
+        dashboardInfo.value = television || carScreen
         typingInGuide = false
         newsFooter = null
+        newsTicker = null
+        tickerSource = null
         clockTime = null
         clockDate = null
+        weatherChip = null
+        prayerChip = null
         layoutDirection = View.LAYOUT_DIRECTION_LTR
         background = getDrawable(R.drawable.radio_background)
         isFocusableInTouchMode = !television
         val inlineCategories = showingCatalogue && (television || landscape)
         val mastheadHeight = dp(when {
             television && inlineCategories -> 36
-            smallTouchGuide -> 40
+            smallTouchGuide -> 46
+            carScreen && inlineCategories -> 52
             television || inlineCategories -> 44
             landscape -> 36
             else -> 40
@@ -495,7 +511,7 @@ class RadioActivity : ComponentActivity() {
                 if (inlineCategories) contentDescription = getString(R.string.app_name)
             }, LinearLayout.LayoutParams(iconSize, iconSize))
             if (inlineCategories) {
-                addView(if (television || touchGuide) tvCategoryBar() else categoryBar(), LinearLayout.LayoutParams(0, -1, 1f).apply {
+                addView(if (television || carScreen) tvCategoryBar() else categoryBar(), LinearLayout.LayoutParams(0, -1, 1f).apply {
                     marginStart = dp(6)
                     marginEnd = dp(6)
                 })
@@ -509,12 +525,23 @@ class RadioActivity : ComponentActivity() {
             if (dashboardInfo.value) {
                 addView(tvClockBar(), LinearLayout.LayoutParams(-2, -1).apply { marginEnd = dp(6) })
             }
-            addView(menuButton, LinearLayout.LayoutParams(dp(if (television || inlineCategories) 44 else 48), -1))
+            if (profile.headerInfoChips && inlineCategories) {
+                val chipHeight = dp(40)
+                weatherChip = WeatherChip(context, ::showWeather).also {
+                    addView(it, LinearLayout.LayoutParams(-2, chipHeight).apply { marginEnd = dp(6) })
+                }
+                prayerChip = PrayerChip(context, ::showPrayerTimes).also {
+                    addView(it, LinearLayout.LayoutParams(-2, chipHeight).apply { marginEnd = dp(4) })
+                }
+                renderLocalTiles()
+            }
+            addView(menuButton, LinearLayout.LayoutParams(dp(if (television || inlineCategories && !carScreen) 44 else 48), -1))
         }
         addView(masthead, LinearLayout.LayoutParams(-1, mastheadHeight).apply { bottomMargin = dp(4) })
         val hideWhileTyping = mutableListOf<View>(masthead)
         addView(layoutContent(hideWhileTyping), LinearLayout.LayoutParams(-1, 0, 1f))
-        if (dashboardInfo.value) {
+        // The Cockpit carries the headlines inside its player; the presets keep the whole height for logos.
+        if (dashboardInfo.value && !carScreen) {
             val footer = newsBar()
             addView(footer, LinearLayout.LayoutParams(-1, dp(if (smallTouchGuide) 34 else if (compactGuide) 42 else 48)).apply {
                 topMargin = dp(6)
@@ -540,15 +567,16 @@ class RadioActivity : ComponentActivity() {
     }
 
     private fun layoutContent(hideWhileTyping: MutableList<View>): View = when (displayLayout) {
-        DisplayLayout.GUIDE -> if (tvGuide) row().apply {
-            val playerWeight = when {
-                smallTouchGuide -> .40f
-                touchGuide -> .34f
-                else -> .28f
-            }
+        DisplayLayout.GUIDE -> if (touchGuide) row().apply {
+            // Cockpit: the player is the hero on the left, one column of stations on the right.
+            val playerWeight = if (resources.configuration.screenWidthDp >= 700) .56f else .52f
+            addView(cockpitPanel().also(hideWhileTyping::add), LinearLayout.LayoutParams(0, -1, playerWeight)
+                .apply { marginEnd = dp(10) })
+            addView(stationList(grid = true), LinearLayout.LayoutParams(0, -1, 1f - playerWeight))
+        } else if (tvGuide) row().apply {
+            val playerWeight = .28f
             addView(stationList(grid = true), LinearLayout.LayoutParams(0, -1, 1f - playerWeight).apply { marginEnd = dp(10) })
-            val player = stationPanel(true).also { if (touchGuide) hideWhileTyping.add(it) }
-            addView(player, LinearLayout.LayoutParams(0, -1, playerWeight))
+            addView(stationPanel(true), LinearLayout.LayoutParams(0, -1, playerWeight))
             if (television) {
                 list.nextFocusRightId = playButton.id
                 list.nextFocusUpId = stationSearch.id
@@ -564,14 +592,10 @@ class RadioActivity : ComponentActivity() {
         }
         DisplayLayout.MOSAIC -> column().apply {
             if (!television && !landscape) addPortraitCategories()
-            if (shortLandscape) {
-                val player = stationPanel(true).also(hideWhileTyping::add)
-                addView(wideColumns(player, stationList(grid = true)), LinearLayout.LayoutParams(-1, 0, 1f))
-            } else {
-                addView(stationList(grid = true), LinearLayout.LayoutParams(-1, 0, 1f))
-                addView(stationPanel(false, mini = true).also(hideWhileTyping::add),
-                    LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
-            }
+            // Presets on car screens, mosaic elsewhere: logo tiles above a player docked at the bottom.
+            addView(stationList(grid = true), LinearLayout.LayoutParams(-1, 0, 1f))
+            addView(stationPanel(false, mini = true).also(hideWhileTyping::add),
+                LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(if (touchMosaic) 6 else 8) })
         }
         DisplayLayout.LISTENING -> column().apply {
             catalogueButton = button("‹  Toutes les radios") { openLayout(catalogueLayout) }.apply {
@@ -596,8 +620,9 @@ class RadioActivity : ComponentActivity() {
             includeFontPadding = false
             setSingleLine()
         }.also { addView(it, LinearLayout.LayoutParams(-2, -2)) }
-        if (!touchGuide || resources.configuration.screenWidthDp >= 600) {
-            clockDate = label("", if (compactGuide) 10 else 12, muted).apply {
+        // Car headers give the date's room to the five category tabs; the date stays in the Infos panel.
+        if (!carScreen) {
+            clockDate = label("", if (compactTv) 10 else 12, muted).apply {
                 includeFontPadding = false
                 setSingleLine()
             }.also { addView(it, LinearLayout.LayoutParams(-2, -2).apply { marginStart = dp(6) }) }
@@ -614,33 +639,39 @@ class RadioActivity : ComponentActivity() {
 
     private fun tvCategoryBar(): LinearLayout = row().apply {
         val bar = this
-        background = getDrawable(R.drawable.radio_control)
-        setPadding(dp(3), dp(3), dp(3), dp(3))
+        // Segmented control: one rounded track, the active category filled with the primary colour.
+        background = getDrawable(R.drawable.radio_segment)
+        val barPadding = dp(if (carScreen) 4 else 3)
+        setPadding(barPadding, barPadding, barPadding, barPadding)
         fun addCategory(choice: StationTab): TextView = button(
-            if (compactGuideTabs && choice == StationTab.MOROCCO) "Maroc" else choice.label,
+            if ((carScreen || compactGuideTabs) && choice == StationTab.MOROCCO) "Maroc" else choice.label,
         ) { selectTab(choice) }.apply {
             id = View.generateViewId()
             nextFocusUpId = menuButton.id
-            if (compactGuideTabs) contentDescription = choice.label
+            if (carScreen || compactGuideTabs) contentDescription = choice.label
             maxLines = 1
             ellipsize = TextUtils.TruncateAt.END
-            val maxSize = if (compactGuide) 13 else 15
-            setAutoSizeTextTypeUniformWithConfiguration(10, maxSize, 1, TypedValue.COMPLEX_UNIT_SP)
-            if (compactGuideTabs) {
+            val maxSize = if (carScreen) 15 else if (compactGuide) 13 else 15
+            setAutoSizeTextTypeUniformWithConfiguration(if (carScreen) 12 else 10, maxSize, 1, TypedValue.COMPLEX_UNIT_SP)
+            if (compactGuideTabs || carScreen && resources.configuration.screenWidthDp < 700) {
+                // Narrow car headers (213 dpi) keep the labels readable by dropping the tab icons.
                 setPadding(dp(3), 0, dp(3), 0)
             } else {
-                gravity = Gravity.START or Gravity.CENTER_VERTICAL
-                textAlignment = View.TEXT_ALIGNMENT_VIEW_START
-                setPadding(dp(if (compactGuide) 6 else 10), 0, dp(4), 0)
-                val size = dp(if (compactGuide) 14 else 16)
+                gravity = Gravity.CENTER
+                setPadding(dp(if (compactGuide) 6 else 10), 0, dp(if (compactGuide) 6 else 10), 0)
+                val size = dp(if (compactGuide && !carScreen) 14 else 16)
                 val symbol = getDrawable(stationTabIcon(choice))?.apply { setBounds(0, 0, size, size) }
                 setCompoundDrawablesRelative(symbol, null, null, null)
                 compoundDrawableTintList = getColorStateList(R.color.radio_tab_icon)
                 compoundDrawablePadding = dp(if (compactGuide) 4 else 6)
             }
-            val weight = if (!compactGuideTabs && choice == StationTab.MOROCCO) 1.3f else 1f
+            val weight = when {
+                carScreen -> if (choice == StationTab.FOR_YOU) 1.2f else 1f
+                !compactGuideTabs && choice == StationTab.MOROCCO -> 1.3f
+                else -> 1f
+            }
             bar.addView(this, LinearLayout.LayoutParams(0, -1, weight)
-                .apply { marginEnd = dp(3) })
+                .apply { if (choice != StationTab.entries.last()) marginEnd = dp(3) })
         }
         tabs = StationTab.entries.associateWith(::addCategory)
     }
@@ -653,34 +684,50 @@ class RadioActivity : ComponentActivity() {
     }
 
     private fun stationTabIcon(choice: StationTab): Int = when (choice) {
+        StationTab.FOR_YOU -> R.drawable.ic_tab_foryou
         StationTab.MOROCCO -> R.drawable.ic_tab_radio
         StationTab.WORLD -> R.drawable.ic_tab_world
         StationTab.QURAN -> R.drawable.ic_tab_quran
         StationTab.FAVORITES -> R.drawable.ic_tab_favorites
     }
 
-    private fun layoutLabel(layout: DisplayLayout): String =
-        if (!television && layout == DisplayLayout.GUIDE) "Guide" else layout.label
+    private fun layoutLabel(layout: DisplayLayout): String = when {
+        television -> layout.label
+        layout == DisplayLayout.GUIDE -> "Cockpit"
+        layout == DisplayLayout.MOSAIC -> "Présélections"
+        else -> layout.label
+    }
 
-    private fun choiceDialog(title: String): AlertDialog.Builder =
-        if (tightLandscape) AlertDialog.Builder(this, R.style.RadioCompactAlert)
-        else AlertDialog.Builder(this).setTitle(title)
+    private val wideSheet get() = resources.configuration.screenWidthDp >= 600
 
+    /** Settings panel: every option shows its current value, so the driver sees the state before tapping. */
     private fun showMainMenu() {
-        val actions = mutableListOf(
-            "Affichage" to ::showDisplayMenu,
-            "Jour / Nuit" to ::showAppearance,
-            "Effets sonores" to ::showSoundEffects,
-            "Démarrage voiture" to ::showCarStartup,
-            "Scores en direct" to ::showLiveScores,
-            "Mises à jour" to radioUpdates::show,
-        )
-        if (dashboardInfo.value) actions.add(1, infoLabel() to ::showTvInfo)
-        actions.add(actions.lastIndex, "Pop-up des stations" to ::configureStationPopup)
-        val menu = if (tightLandscape) AlertDialog.Builder(this, R.style.RadioCompactMenu) else choiceDialog("Menu")
-        menu
-            .setItems(actions.map { it.first }.toTypedArray()) { _, index -> actions[index].second() }
-            .show()
+        data class Entry(val icon: Int, val title: String, val value: String?, val action: () -> Unit)
+        val version = runCatching { packageManager.getPackageInfo(packageName, 0).versionName }.getOrNull()
+        val sound = RadioSound.profile(prefs).label + if (prefs.getBoolean(RadioSound.CLICKS, false)) " · clics" else ""
+        val entries = buildList {
+            add(Entry(R.drawable.ic_settings_display, "Affichage", layoutLabel(displayLayout), ::showDisplayMenu))
+            if (dashboardInfo.value) add(Entry(R.drawable.ic_settings_info, infoLabel(), "Actualités · météo · salat", ::showTvInfo))
+            add(Entry(R.drawable.ic_settings_theme, "Jour / Nuit", Appearance.restore(prefs).label, ::showAppearance))
+            add(Entry(R.drawable.ic_settings_sound, "Effets sonores", sound, ::showSoundEffects))
+            add(Entry(R.drawable.ic_radio_car_start, "Démarrage voiture", carResume().label, ::showCarStartup))
+            add(Entry(R.drawable.ic_tab_favorites, "Boutons du volant",
+                if (prefs.getBoolean(ListeningPrefs.WHEEL_PRESETS, false)) "Présélections seulement" else "Toute la liste",
+                ::showWheelSettings))
+            add(Entry(R.drawable.ic_settings_scores, "Scores en direct", "FotMob", ::showLiveScores))
+            add(Entry(R.drawable.ic_settings_popup, "Pop-up des stations", "Notifications Android", ::configureStationPopup))
+            add(Entry(R.drawable.ic_radio_update, "Mises à jour", version?.let { "Version $it" }, radioUpdates::show))
+        }
+        val sheet = RadioSheet(this, "Réglages", getString(R.string.app_name))
+        sheet.grid(if (wideSheet) 2 else 1, entries.map { entry ->
+            entry.title to {
+                sheet.optionView(entry.title, entry.value, entry.icon, chevron = true) {
+                    sheet.dismiss()
+                    entry.action()
+                }
+            }
+        })
+        sheet.show()
     }
 
     private fun configureStationPopup() {
@@ -710,106 +757,92 @@ class RadioActivity : ComponentActivity() {
 
     private fun showLiveScores() {
         val pages = listOf(
-            "Matchs en direct" to "https://www.fotmob.com/?show=ongoing",
-            "Botola Pro" to "https://www.fotmob.com/fr/leagues/530/fixtures/botola-pro",
+            Triple("Matchs en direct", "Tous les championnats", "https://www.fotmob.com/?show=ongoing"),
+            Triple("Botola Pro", "Calendrier et résultats", "https://www.fotmob.com/fr/leagues/530/fixtures/botola-pro"),
         )
-        val dialog = choiceDialog("Scores en direct · FotMob")
-            .setItems(pages.map { it.first }.toTypedArray()) { _, index ->
-                val link = Intent(Intent.ACTION_VIEW, pages[index].second.toUri()).addCategory(Intent.CATEGORY_BROWSABLE)
+        val sheet = RadioSheet(this, "Scores en direct", "FotMob")
+        for ((title, detail, url) in pages) {
+            sheet.option(title, detail, R.drawable.ic_settings_scores, chevron = true) {
+                sheet.dismiss()
+                val link = Intent(Intent.ACTION_VIEW, url.toUri()).addCategory(Intent.CATEGORY_BROWSABLE)
                 try {
                     startActivity(link)
                 } catch (_: ActivityNotFoundException) {
                     Toast.makeText(this, "FotMob ou un navigateur est nécessaire pour ouvrir les scores.",
                         Toast.LENGTH_LONG).show()
                 }
-            }.setNegativeButton("Fermer", null).show()
-        if (television) dialog.listView.requestFocus()
+            }
+        }
+        sheet.show()
     }
 
     private fun showSoundEffects() {
+        val sheet = RadioSheet(this, "Effets sonores")
         val status = label("", 12, muted).apply {
             maxLines = 1
             ellipsize = TextUtils.TruncateAt.END
             accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
+            setPadding(dp(4), 0, 0, dp(4))
         }
-        val profiles = SoundProfile.entries.associateBy { View.generateViewId() }
-        val content = column().apply {
-            setPadding(dp(16), dp(8), dp(16), dp(6))
-            addView(CheckBox(context).apply {
-                text = "Clics de l’interface"
-                textSize = 14f
-                setTextColor(textColor)
-                isSoundEffectsEnabled = false
-                isChecked = prefs.getBoolean(RadioSound.CLICKS, false)
-                setOnCheckedChangeListener { _, enabled ->
-                    prefs.edit().putBoolean(RadioSound.CLICKS, enabled).apply()
-                    if (enabled) RadioSound.playClick(this@RadioActivity, prefs)
-                }
-            }, LinearLayout.LayoutParams(-1, dp(if (tightLandscape) 36 else 44)))
-            addView(label("Égaliseur", 13, textColor, bold = true))
-            addView(RadioGroup(context).apply {
-                orientation = LinearLayout.HORIZONTAL
-                for ((viewId, profile) in profiles) {
-                    addView(RadioButton(context).apply {
-                        id = viewId
-                        text = profile.label
-                        textSize = 13f
-                        setTextColor(textColor)
-                        isSoundEffectsEnabled = false
-                    }, RadioGroup.LayoutParams(0, -1, 1f))
-                }
-                check(profiles.entries.first { it.value == RadioSound.profile(prefs) }.key)
-                setOnCheckedChangeListener { _, id ->
-                    val profile = profiles[id] ?: return@setOnCheckedChangeListener
+        lateinit var clicks: View
+        clicks = sheet.option("Clics de l’interface", "Son discret à chaque appui",
+            selected = prefs.getBoolean(RadioSound.CLICKS, false)) {
+            val enabled = !prefs.getBoolean(RadioSound.CLICKS, false)
+            prefs.edit().putBoolean(RadioSound.CLICKS, enabled).apply()
+            if (enabled) RadioSound.playClick(this, prefs)
+            sheet.markSelected(clicks, enabled)
+        }
+        sheet.caption("ÉGALISEUR")
+        val profileRows = mutableMapOf<SoundProfile, View>()
+        sheet.grid(SoundProfile.entries.size, SoundProfile.entries.map { profile ->
+            profile.label to {
+                sheet.optionView(profile.label, selected = profile == RadioSound.profile(prefs)) {
                     prefs.edit().putString(RadioSound.PROFILE, profile.name).apply()
-                    RadioSound.playClick(this@RadioActivity, prefs)
+                    profileRows.forEach { (choice, row) -> sheet.markSelected(row, choice == profile) }
                     renderSoundStatus(controller?.sessionExtras ?: Bundle.EMPTY)
-                }
-            }, LinearLayout.LayoutParams(-1, dp(if (tightLandscape) 38 else 44)))
-            addView(status, LinearLayout.LayoutParams(-1, -2))
-        }
+                }.also { profileRows[profile] = it }
+            }
+        })
+        sheet.body.addView(status, LinearLayout.LayoutParams(-1, -2))
         soundStatusLabel = status
         renderSoundStatus(controller?.sessionExtras ?: Bundle.EMPTY)
         val panel = dolbyPanel
         val dolbyAllowed = panel != null && prefs.getBoolean(RadioSound.DOLBY, false)
-        val dolbyText = when {
-            panel == null -> "Dolby · Indisponible"
-            dolbyAllowed -> "Dolby · ON"
-            else -> "Dolby · OFF"
+        val dolby = sheet.option("Dolby", when {
+            panel == null -> "Indisponible sur cet appareil"
+            dolbyAllowed -> "ON · Autorisé dans la radio"
+            else -> "OFF · Désactivé dans la radio"
+        }, chevron = true) {
+            sheet.dismiss()
+            panel?.let(::showDolbySettings)
         }
-        val dialog = choiceDialog("Effets sonores")
-            .setView(content)
-            .setNegativeButton("Fermer", null)
-            .setNeutralButton(dolbyText) { _, _ -> panel?.let(::showDolbySettings) }
-            .setOnDismissListener { soundStatusLabel = null }
-            .show()
-        dialog.getButton(AlertDialog.BUTTON_NEUTRAL).apply {
-            isEnabled = panel != null
-            setTextColor(if (dolbyAllowed) accent else getColor(R.color.radio_dolby_off))
-            stateDescription = when {
-                panel == null -> "Panneau Dolby indisponible sur cet appareil"
-                dolbyAllowed -> "Autorisé dans la radio"
-                else -> "Désactivé dans la radio"
-            }
-        }
+        enable(dolby, panel != null)
+        sheet.dialog.setOnDismissListener { soundStatusLabel = null }
+        sheet.show()
     }
 
     private fun showDolbySettings(panel: DolbyPanel) {
+        val sheet = RadioSheet(this, "Dolby")
+        lateinit var off: View
+        lateinit var on: View
+        lateinit var settings: View
+        fun allow(value: Boolean) {
+            prefs.edit().putBoolean(RadioSound.DOLBY, value).apply()
+            sheet.markSelected(off, !value)
+            sheet.markSelected(on, value)
+            enable(settings, value)
+        }
         val enabled = prefs.getBoolean(RadioSound.DOLBY, false)
-        val dialog = choiceDialog("Dolby")
-            .setSingleChoiceItems(arrayOf("OFF · Désactivé", "ON · Autorisé dans la radio"), if (enabled) 1 else 0) { prompt, which ->
-                val allow = which == 1
-                prefs.edit().putBoolean(RadioSound.DOLBY, allow).apply()
-                (prompt as AlertDialog).getButton(AlertDialog.BUTTON_POSITIVE).isEnabled = allow
+        off = sheet.option("OFF", "Désactivé", selected = !enabled) { allow(false) }
+        on = sheet.option("ON", "Autorisé dans la radio", selected = enabled) { allow(true) }
+        settings = sheet.option("Réglages Dolby", "Ouvre le panneau du système", chevron = true) {
+            val sessionId = controller?.sessionExtras?.getInt(RadioSound.DOLBY_SESSION_ID) ?: 0
+            runCatching { openDolbyPanel.launch(panel.settingsIntent(this, sessionId)) }.onFailure {
+                Toast.makeText(this, "Réglages Dolby indisponibles", Toast.LENGTH_SHORT).show()
             }
-            .setNegativeButton("Retour") { _, _ -> showSoundEffects() }
-            .setPositiveButton("Réglages Dolby") { _, _ ->
-                val sessionId = controller?.sessionExtras?.getInt(RadioSound.DOLBY_SESSION_ID) ?: 0
-                runCatching { openDolbyPanel.launch(panel.settingsIntent(this, sessionId)) }.onFailure {
-                    Toast.makeText(this, "Réglages Dolby indisponibles", Toast.LENGTH_SHORT).show()
-                }
-            }.show()
-        dialog.getButton(AlertDialog.BUTTON_POSITIVE).isEnabled = enabled
+        }
+        enable(settings, enabled)
+        sheet.show()
     }
 
     private fun renderSoundStatus(extras: Bundle) {
@@ -828,30 +861,33 @@ class RadioActivity : ComponentActivity() {
 
     private fun showDisplayMenu() {
         val layouts = DisplayLayout.entries
-        val title = if (television) "Affichage TV" else "Affichage"
-        choiceDialog(title)
-            .setSingleChoiceItems(layouts.map(::layoutLabel).toTypedArray(), displayLayout.ordinal) { dialog, index ->
-                dialog.dismiss()
-                val layout = layouts[index]
-                prefs.edit().putString(DISPLAY_LAYOUT, layout.name).apply()
-                openLayout(layout)
+        val details = layouts.map {
+            when (it) {
+                DisplayLayout.GUIDE -> if (television) "Grille des stations et lecteur" else "Lecteur à gauche, stations à droite"
+                DisplayLayout.MOSAIC -> if (television) "Grandes vignettes" else "Grandes tuiles de logos, lecteur en bas"
+                DisplayLayout.LISTENING -> "Lecteur plein écran"
             }
-            .setNegativeButton("Fermer", null)
-            .show()
+        }
+        showChoiceSheet(if (television) "Affichage TV" else "Affichage", layouts.map(::layoutLabel), displayLayout.ordinal,
+            details = details) { index ->
+            val layout = layouts[index]
+            prefs.edit().putString(DISPLAY_LAYOUT, layout.name).apply()
+            openLayout(layout)
+        }
     }
 
     private fun openLayout(layout: DisplayLayout) {
         if (layout == displayLayout) return
         if (television) rememberTvFocus()
         displayLayout = layout
-        if (touchGuide) radioFavoritesOnly = false
+        if (carScreen) radioFavoritesOnly = false
         if (layout != DisplayLayout.LISTENING) {
             catalogueLayout = layout
             prefs.edit().putString(CATALOGUE_LAYOUT, layout.name).apply()
         }
         returnFromListening.isEnabled = !showingCatalogue
-        livePulse?.cancel()
-        livePulse = null
+        if (::liveDot.isInitialized) liveDot.removeCallbacks(livePulse)
+        livePulsing = false
         revealCatalogueSelection = true
         setContentView(screen())
         renderRows()
@@ -891,9 +927,23 @@ class RadioActivity : ComponentActivity() {
         if (position < 0) return false
         val child = list.getChildAt(position - list.firstVisiblePosition)
         if (child == null || child.top < list.paddingTop || child.bottom > list.height - list.paddingBottom) {
-            list.setSelectionFromTop(position, 0)
+            scrollCatalogueTo(position)
         }
         return true
+    }
+
+    /**
+     * In touch mode GridView lays out setSelectionFromTop() from its invalid selected position (-1), drawing the
+     * "load more" cell first and breaking later scrolling. Grids use setSelection() before their first layout,
+     * which falls back to the requested position, and a short smooth scroll once they show rows.
+     */
+    private fun scrollCatalogueTo(position: Int) {
+        when {
+            television -> list.setSelection(position)
+            list !is GridView -> list.setSelectionFromTop(position, 0)
+            list.childCount == 0 -> list.setSelection(position)
+            else -> list.smoothScrollToPositionFromTop(position, 0, 150)
+        }
     }
 
     private fun wideColumns(left: View, right: View): LinearLayout = row().apply {
@@ -962,20 +1012,20 @@ class RadioActivity : ComponentActivity() {
         }
         addView(worldRegion, LinearLayout.LayoutParams(-1, dp(22)))
         sortButton = button("Trier", ::chooseSort).apply {
-            textSize = 12f
+            textSize = if (carScreen) 14f else 12f
             maxLines = 1
             setPadding(dp(if (shortLandscape) 6 else 10), 0, dp(if (shortLandscape) 6 else 10), 0)
             setCompoundDrawablesRelativeWithIntrinsicBounds(R.drawable.ic_radio_sort, 0, 0, 0)
             compoundDrawablePadding = dp(6)
         }
-        categoryButton = button("Genres", ::chooseCategory).apply {
-            textSize = 12f
+        categoryButton = button("Genres") {}.apply {
+            textSize = if (carScreen) 14f else 12f
             maxLines = 1
             setPadding(dp(4), 0, dp(4), 0)
         }
         stationSearch = EditText(context).apply {
             if (tvGuide) id = View.generateViewId()
-            hint = if (tightLandscape) "Chercher" else "Rechercher…"
+            hint = if (tightLandscape || touchGuide && resources.configuration.screenWidthDp < 700) "Chercher" else "Rechercher…"
             contentDescription = "Rechercher une station ou un récitateur"
             setSingleLine(true)
             textSize = if (television && !compactTv && !tvGuide) 17f else 14f
@@ -1020,7 +1070,7 @@ class RadioActivity : ComponentActivity() {
             compoundDrawableTintList = ColorStateList.valueOf(accent)
         }
         val toolbarHeight = dp(when {
-            touchGuide -> 44
+            carScreen -> 48
             tvGuide -> 34
             compactTv -> 38
             tightLandscape -> 40
@@ -1030,15 +1080,23 @@ class RadioActivity : ComponentActivity() {
         val stationToolbar = row().apply {
             gravity = Gravity.CENTER_VERTICAL
             addView(stationSearch, LinearLayout.LayoutParams(0, -1, 1f))
-            addView(countryButton, LinearLayout.LayoutParams(dp(if (shortLandscape || touchGuide) 84 else if (television && !compactTv) 128 else 104), -1)
+            addView(countryButton, LinearLayout.LayoutParams(dp(if (shortLandscape || carScreen) 84 else if (television && !compactTv) 128 else 104), -1)
                 .apply { marginStart = dp(6) })
-            if (!television && !touchGuide) addView(radioFilter, LinearLayout.LayoutParams(toolbarHeight, -1).apply { marginStart = dp(6) })
-            addView(categoryButton, LinearLayout.LayoutParams(dp(if (shortLandscape) 56 else 66), -1)
-                .apply { marginStart = dp(6) })
-            addView(sortButton, LinearLayout.LayoutParams(dp(if (shortLandscape) 66 else if (television && !compactTv) 92 else 76), -1)
+            if (!television && !carScreen) addView(radioFilter, LinearLayout.LayoutParams(toolbarHeight, -1).apply { marginStart = dp(6) })
+            addView(sortButton, LinearLayout.LayoutParams(dp(if (carScreen) 86 else if (shortLandscape) 66
+                else if (television && !compactTv) 92 else 76), -1)
                 .apply { marginStart = dp(6) })
         }
         addView(stationToolbar, LinearLayout.LayoutParams(-1, toolbarHeight).apply { bottomMargin = dp(if (tvGuide) 4 else 6) })
+        this@RadioActivity.stationToolbar = stationToolbar
+        chipBar = row().apply { gravity = Gravity.CENTER_VERTICAL }
+        chipScroller = HorizontalScrollView(context).apply {
+            isHorizontalScrollBarEnabled = false
+            isFillViewport = false
+            addView(chipBar, ViewGroup.LayoutParams(-2, -1))
+        }
+        addView(chipScroller, LinearLayout.LayoutParams(-1, dp(if (carScreen) 42 else if (tvGuide) 34 else 38))
+            .apply { bottomMargin = dp(if (tvGuide) 4 else 6) })
         addView(FrameLayout(context).apply {
             if (!grid || tvGuide) {
                 background = getDrawable(R.drawable.radio_catalogue)
@@ -1047,7 +1105,8 @@ class RadioActivity : ComponentActivity() {
             empty = label("", 15, muted).apply { gravity = Gravity.CENTER; setPadding(dp(10), 0, dp(10), 0) }
             val catalog = if (grid) GridView(context).apply {
                 numColumns = when {
-                    touchGuide -> if (singleColumnGuide) 1 else 2
+                    touchGuide -> 1
+                    touchMosaic -> if (resources.configuration.screenWidthDp < 700) 3 else 4
                     tvGuide -> if (resources.configuration.screenWidthDp >= 1_250) 3 else 2
                     television -> if (resources.configuration.screenWidthDp < 760) 3 else 4
                     shortLandscape -> 2
@@ -1055,7 +1114,7 @@ class RadioActivity : ComponentActivity() {
                     else -> 2
                 }
                 horizontalSpacing = dp(if (tvGuide) 4 else 10)
-                verticalSpacing = dp(if (tvGuide) 2 else 8)
+                verticalSpacing = dp(if (touchGuide) 4 else if (tvGuide) 2 else 8)
                 stretchMode = GridView.STRETCH_COLUMN_WIDTH
                 adapter = tileAdapter
             } else ListView(context).apply {
@@ -1084,7 +1143,7 @@ class RadioActivity : ComponentActivity() {
                         }
                     }
                 }
-                if (touchGuide) {
+                if (carScreen) {
                     setOnItemLongClickListener { _, _, position, _ ->
                         val station = stationAt(position) ?: return@setOnItemLongClickListener false
                         toggleFavorite(station)
@@ -1106,21 +1165,10 @@ class RadioActivity : ComponentActivity() {
     private fun activeSort(): StationSort = StationSort.options(tab)
         .firstOrNull { it.name == prefs.getString("sort_${tab.name}", null) } ?: StationSort.DEFAULT
 
-    private fun activeCategory(): MoroccoCategory = MoroccoCategory.entries
-        .firstOrNull { it.name == prefs.getString("morocco_category", null) } ?: MoroccoCategory.ALL
+    private fun activeCategory(): MoroccoCategory = MoroccoCategory.restore(prefs.getString("morocco_category", null))
 
-    private fun chooseCategory() {
-        val options = MoroccoCategory.entries
-        val dialog = AlertDialog.Builder(this).setTitle("Catégories Radio Maroc")
-            .setSingleChoiceItems(options.map { it.label }.toTypedArray(), activeCategory().ordinal) { picker, index ->
-                prefs.edit().putString("morocco_category", options[index].name).apply()
-                picker.dismiss()
-                updateDirectory(resetScroll = true)
-            }.setNegativeButton("Fermer", null).show()
-        dialog.window?.setBackgroundDrawableResource(R.drawable.radio_dialog)
-        if (television) dialog.listView.requestFocus()
-        dialog.listView.setSelection(0)
-    }
+    private fun activeQuranSection(): QuranSection? =
+        QuranSection.entries.firstOrNull { it.name == prefs.getString("quran_section", null) }
 
     private suspend fun rollNewsHeadlines() {
         combine(tvStationInfo, stationHeadlines) { info, headlines ->
@@ -1175,54 +1223,8 @@ class RadioActivity : ComponentActivity() {
         }
     }
 
-    private suspend fun refreshWeather(city: RadioCity) {
-        while (true) {
-            if (SystemClock.elapsedRealtime() >= nextWeatherFetchAt) {
-                val report = withContext(Dispatchers.IO) { runCatching { RadioLocalInfo.weather(city) }.getOrNull() }
-                weather.value = report
-                nextWeatherFetchAt = SystemClock.elapsedRealtime() + if (report == null) 300_000L else 900_000L
-            }
-            delay((nextWeatherFetchAt - SystemClock.elapsedRealtime()).coerceAtLeast(1L))
-        }
-    }
-
-    private suspend fun refreshPrayerCalendars() {
-        while (true) {
-            val today = LocalDate.now(RadioLocalInfo.moroccoTime)
-            val months = listOf(today, today.minusDays(1), today.plusDays(1)).map(YearMonth::from).toSet()
-            val calendars = prayerCalendars.value.filterKeys { it in months }.toMutableMap()
-            val missing = months - calendars.keys
-            if (missing.isNotEmpty()) {
-                calendars += withContext(Dispatchers.IO) {
-                    missing.mapNotNull { month ->
-                        runCatching { RadioLocalInfo.calendar(month) }
-                            .onFailure { Log.w("RadioLocalInfo", "Calendrier Habous indisponible pour $month", it) }
-                            .getOrNull()?.let { month to it }
-                    }
-                }
-            }
-            prayerCalendars.value = calendars.toMap()
-            delay(if (months.all { it in calendars }) 3_600_000L else 900_000L)
-        }
-    }
-
-    private fun localPrayerTimes(city: RadioCity, date: LocalDate): List<PrayerMoment> =
-        prayerCalendars.value[YearMonth.from(date)]?.prayers(city, date).orEmpty()
-
-    private fun localPrayerStatus(city: RadioCity): PrayerStatus {
-        val today = LocalDate.now(RadioLocalInfo.moroccoTime)
-        val offset = prayerCalendars.value[YearMonth.from(today)]?.offset ?: RadioLocalInfo.moroccoTime
-        val now = LocalDateTime.now(offset)
-        val date = now.toLocalDate()
-        return RadioLocalInfo.prayerStatus(
-            now, localPrayerTimes(city, date.minusDays(1)), localPrayerTimes(city, date), localPrayerTimes(city, date.plusDays(1)),
-        )
-    }
-
-    private fun untilNextMinute() = 60_000L - System.currentTimeMillis() % 60_000L
-
     private suspend fun refreshLocalTiles() {
-        combine(radioCity, weather, prayerCalendars) { _, _, _ -> Unit }.collectLatest {
+        combine(localInfo.city, localInfo.weather, localInfo.prayerCalendars) { _, _, _ -> Unit }.collectLatest {
             while (true) {
                 renderLocalTiles()
                 delay(untilNextMinute())
@@ -1231,111 +1233,23 @@ class RadioActivity : ComponentActivity() {
     }
 
     private fun renderLocalTiles() {
-        val city = radioCity.value
-        weatherTile?.bind(weather.value, city)
-        prayerTile?.bind(localPrayerStatus(city), city)
+        val city = localInfo.city.value
+        val prayers = localInfo.prayerStatus(city)
+        weatherTile?.bind(localInfo.weather.value, city)
+        prayerTile?.bind(prayers, city)
+        weatherChip?.bind(localInfo.weather.value, city)
+        prayerChip?.bind(prayers, city)
     }
 
     private fun localInfoBar(): View = row().apply {
         layoutDirection = View.LAYOUT_DIRECTION_LTR
-        weatherTile = WeatherTile().also {
+        weatherTile = WeatherTile(context, compactTv, ::showWeather).also {
             addView(it, LinearLayout.LayoutParams(0, -1, 1f).apply { marginEnd = dp(5) })
         }
-        prayerTile = PrayerTile().also {
+        prayerTile = PrayerTile(context, compactTv, ::showPrayerTimes).also {
             addView(it, LinearLayout.LayoutParams(0, -1, 1.55f))
         }
         renderLocalTiles()
-    }
-
-    private fun LinearLayout.prepareLocalTile(action: () -> Unit) {
-        orientation = LinearLayout.VERTICAL
-        gravity = Gravity.CENTER
-        setPadding(dp(4), 0, dp(4), 0)
-        background = pressable(R.drawable.radio_control)
-        isFocusable = true
-        remoteFocus()
-        setRadioClick(action)
-    }
-
-    private fun tileLine(text: String, size: Int, color: Int, bold: Boolean = false) =
-        label(text, size, color, bold).apply {
-            gravity = Gravity.CENTER
-            includeFontPadding = false
-            maxLines = 1
-            ellipsize = TextUtils.TruncateAt.END
-        }
-
-    private inner class WeatherTile : LinearLayout(this@RadioActivity) {
-        private val headingColor = getColor(R.color.radio_weather_label)
-        private val icon = WeatherIcon(context, headingColor)
-        private val temperature = tileLine("", if (compactTv) 15 else 19, textColor, bold = true)
-        private val detail = tileLine("", if (compactTv) 10 else 11, muted)
-
-        init {
-            prepareLocalTile(::showWeather)
-            setPadding(dp(2), 0, dp(2), 0)
-            addView(tileLine("Météo", if (compactTv) 10 else 11, headingColor, bold = true), LayoutParams(-1, -2))
-            addView(row().apply {
-                gravity = Gravity.CENTER
-                val size = dp(if (compactTv) 17 else 23)
-                addView(icon, LayoutParams(size, size).apply { marginEnd = dp(3) })
-                addView(temperature, LayoutParams(-2, -2))
-            }, LayoutParams(-1, -2).apply { topMargin = dp(2) })
-            addView(detail, LayoutParams(-1, -2))
-        }
-
-        fun bind(report: RadioWeather?, city: RadioCity) {
-            icon.bind(report)
-            temperature.text = report?.let { "${it.degrees}°" } ?: "—"
-            detail.text = report?.condition?.label ?: "Indisponible"
-            contentDescription = listOfNotNull("Météo", city.label, report?.let { "${it.degrees} °C" }, detail.text)
-                .joinToString(" · ")
-        }
-    }
-
-    private inner class PrayerTile : LinearLayout(this@RadioActivity) {
-        private val headingColor = getColor(R.color.radio_prayer_label)
-        private val currentName = tileLine("", if (compactTv) 10 else 12, textColor, bold = true)
-        private val nextName = tileLine("", if (compactTv) 10 else 12, textColor, bold = true)
-        private val currentTime = tileLine("", if (compactTv) 12 else 15, textColor, bold = true)
-        private val nextTime = tileLine("", if (compactTv) 12 else 15, headingColor, bold = true)
-
-        init {
-            prepareLocalTile(::showPrayerTimes)
-            addView(tileLine("Salat", if (compactTv) 10 else 11, headingColor, bold = true), LayoutParams(-1, -2))
-            addView(row().apply {
-                gravity = Gravity.CENTER_VERTICAL
-                addView(prayerColumn("Maint.", currentName, currentTime), LayoutParams(0, -2, 1f))
-                addView(View(context).apply { setBackgroundColor(getColor(R.color.radio_control_border)) },
-                    LayoutParams(dp(1), dp(if (compactTv) 28 else 34)))
-                addView(prayerColumn("Ensuite", nextName, nextTime), LayoutParams(0, -2, 1f))
-            }, LayoutParams(-1, -2).apply { topMargin = dp(2) })
-        }
-
-        private fun prayerColumn(label: String, name: TextView, time: TextView) = column().apply {
-            addView(tileLine(label, if (compactTv) 9 else 10, muted), LayoutParams(-1, -2))
-            addView(name, LayoutParams(-1, -2))
-            addView(time, LayoutParams(-1, -2))
-        }
-
-        fun bind(status: PrayerStatus, city: RadioCity) {
-            currentName.text = status.current?.prayer?.label ?: "—"
-            nextName.text = status.next?.prayer?.label ?: "—"
-            currentTime.text = status.current?.dateTime?.toLocalTime()?.toString().orEmpty()
-            nextTime.text = status.next?.dateTime?.toLocalTime()?.toString().orEmpty()
-            contentDescription = "Salat · ${city.label} · Maintenant ${prayerDescription(status.current, status.date)}" +
-                " · Ensuite ${prayerDescription(status.next, status.date)}"
-        }
-    }
-
-    private fun prayerDescription(moment: PrayerMoment?, date: LocalDate): String {
-        if (moment == null) return "—"
-        val day = when {
-            moment.dateTime.toLocalDate() < date -> " hier"
-            moment.dateTime.toLocalDate() > date -> " demain"
-            else -> ""
-        }
-        return "${moment.prayer.label} ${moment.dateTime.toLocalTime()}$day"
     }
 
     private fun newsBar(): View = row().apply {
@@ -1368,37 +1282,40 @@ class RadioActivity : ComponentActivity() {
 
     private fun showTvInfo() {
         val publisher = tvStationInfo.value?.publisher?.label ?: "RFI"
-        val options = arrayOf("Actualités · $publisher", "Météo", "Salat · مواقيت الصلاة", "Ville · ${radioCity.value.label}")
-        val actions = listOf(::showNews, ::showWeather, ::showPrayerTimes, ::chooseInfoCity)
-        val dialog = choiceDialog(infoLabel())
-            .setItems(options) { _, index -> actions[index]() }
-            .setNegativeButton("Fermer", null).show()
-        dialog.window?.setBackgroundDrawableResource(R.drawable.radio_dialog)
-        dialog.listView.requestFocus()
+        val sheet = RadioSheet(this, infoLabel(), localInfo.city.value.label)
+        val entries = listOf(
+            Triple("Actualités", publisher, ::showNews),
+            Triple("Météo", localInfo.weather.value?.let { "${it.degrees}° · ${it.condition.label}" }, ::showWeather),
+            Triple("Salat · مواقيت الصلاة", "Horaires du jour", ::showPrayerTimes),
+            Triple("Ville", localInfo.city.value.label, ::chooseInfoCity),
+        )
+        sheet.grid(if (wideSheet) 2 else 1, entries.map { (title, detail, action) ->
+            title to {
+                sheet.optionView(title, detail, chevron = true) {
+                    sheet.dismiss()
+                    action()
+                }
+            }
+        })
+        sheet.show()
     }
 
     private fun chooseInfoCity() {
         val cities = RadioCity.entries
-        val dialog = AlertDialog.Builder(this).setTitle("Ville pour la météo et la salat")
-            .setSingleChoiceItems(cities.map(RadioCity::label).toTypedArray(), radioCity.value.ordinal) { picker, index ->
-                val city = cities[index]
-                if (city != radioCity.value) {
-                    weather.value = null
-                    nextWeatherFetchAt = 0L
-                    radioCity.value = city
-                    prefs.edit().putString("tv_info_city", city.name).apply()
-                    renderLocalTiles()
-                }
-                picker.dismiss()
-            }.setNegativeButton("Fermer", null).show()
-        dialog.window?.setBackgroundDrawableResource(R.drawable.radio_dialog)
-        dialog.listView.requestFocus()
+        showChoiceSheet("Ville", cities.map(RadioCity::label), localInfo.city.value.ordinal,
+            subtitle = "Pour la météo et la salat", columns = if (wideSheet) 3 else 2) { index ->
+            val city = cities[index]
+            if (localInfo.choose(city)) {
+                prefs.edit().putString("tv_info_city", city.name).apply()
+                renderLocalTiles()
+            }
+        }
     }
 
     private fun showWeather() {
-        val dialog = infoDialog("Météo · ${radioCity.value.label}", RadioLocalInfo.WEATHER_SITE)
+        val dialog = infoDialog("Météo · ${localInfo.city.value.label}", RadioLocalInfo.WEATHER_SITE)
         val request = lifecycleScope.launch {
-            weather.collect { report ->
+            localInfo.weather.collect { report ->
                 val text = if (report == null) "Météo indisponible pour le moment." else {
                     val limits = if (report.low != null && report.high != null) {
                         "\nMin. ${report.low} °C · Max. ${report.high} °C"
@@ -1412,14 +1329,14 @@ class RadioActivity : ComponentActivity() {
     }
 
     private fun showPrayerTimes() {
-        val city = radioCity.value
+        val city = localInfo.city.value
         val dialog = infoDialog("Salat · ${city.label}", RadioLocalInfo.HABOUS_SITE)
         val dateFormat = DateTimeFormatter.ofLocalizedDate(FormatStyle.FULL).withLocale(Locale.FRENCH)
         val request = lifecycleScope.launch {
-            prayerCalendars.collectLatest {
+            localInfo.prayerCalendars.collectLatest {
                 while (true) {
-                    val status = localPrayerStatus(city)
-                    val prayers = localPrayerTimes(city, status.date)
+                    val status = localInfo.prayerStatus(city)
+                    val prayers = localInfo.prayerTimes(city, status.date)
                     val text = if (prayers.isEmpty()) "Horaires indisponibles pour cette date." else {
                         val hours = prayers.joinToString("\n") {
                             "${it.prayer.label}  ·  ${it.dateTime.toLocalTime()}  ·  ${it.prayer.arabic}"
@@ -1445,157 +1362,15 @@ class RadioActivity : ComponentActivity() {
                 window?.setBackgroundDrawableResource(R.drawable.radio_dialog)
             }
 
-    private fun showNews() {
-        val dateFormat = DateTimeFormatter.ofLocalizedDateTime(FormatStyle.SHORT)
-            .withLocale(Locale.FRENCH).withZone(RadioLocalInfo.moroccoTime)
-        val publisher = tvStationInfo.value?.publisher
-        val cache = mutableMapOf<NewsTopic, List<NewsHeadline>>()
-        var request: Job? = null
-        val status = label("", 14, muted).apply { gravity = Gravity.CENTER }
-        val headlines = object : ArrayAdapter<NewsHeadline>(this, android.R.layout.simple_list_item_1) {
-            override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
-                val article = requireNotNull(getItem(position))
-                return ((convertView as? NewsStoryRow) ?: NewsStoryRow()).apply { bind(article, dateFormat) }
-            }
-        }
-        val list = ListView(this).apply {
-            id = View.generateViewId()
-            adapter = headlines
-            setSelector(R.drawable.radio_focus)
-            setOnItemClickListener { _, _, position, _ ->
-                val article = requireNotNull(headlines.getItem(position))
-                val source = listOfNotNull(article.publisher.label, article.publishedAt?.let(dateFormat::format)).joinToString(" · ")
-                AlertDialog.Builder(this@RadioActivity).setTitle(article.title)
-                    .setMessage(listOfNotNull(source, article.summary).joinToString("\n\n"))
-                    .setPositiveButton("Retour", null)
-                    .setNeutralButton("Lire l’article") { _, _ ->
-                        runCatching { startActivity(Intent(Intent.ACTION_VIEW, article.url.toUri())) }
-                            .onFailure { Toast.makeText(this@RadioActivity, "Navigateur indisponible", Toast.LENGTH_SHORT).show() }
-                    }.show().window?.setBackgroundDrawableResource(R.drawable.radio_dialog)
-            }
-        }
-        val buttons = mutableMapOf<NewsTopic?, TextView>()
-        fun load(topic: NewsTopic?) {
-            request?.cancel()
-            buttons.forEach { (choice, control) ->
-                control.isSelected = choice == topic
-                control.setTextColor(if (choice == topic) accent else textColor)
-            }
-            list.nextFocusUpId = buttons.getValue(topic).id
-            headlines.clear()
-            list.setSelection(0)
-            if (topic == null) {
-                status.text = "Chargement des titres…"
-                request = lifecycleScope.launch {
-                    stationHeadlines.collect { current ->
-                        val articles = current.filter { it.publisher == publisher }
-                        headlines.clear()
-                        if (articles.isEmpty()) {
-                            status.text = "Titres de la station indisponibles. Choisis une rubrique RFI."
-                        } else headlines.addAll(articles)
-                    }
-                }
-                return
-            }
-            cache[topic]?.let {
-                headlines.addAll(it)
-                return
-            }
-            status.text = "Chargement des titres…"
-            request = lifecycleScope.launch {
-                val articles = withContext(Dispatchers.IO) { runCatching { RadioNews.fetch(topic) }.getOrDefault(emptyList()) }
-                if (articles.isEmpty()) {
-                    status.text = "Titres indisponibles. Sélectionne la rubrique pour réessayer."
-                } else {
-                    cache[topic] = articles
-                    headlines.addAll(articles)
-                }
-            }
-        }
-        val content = column().apply {
-            setPadding(dp(16), dp(4), dp(16), 0)
-            addView(row().apply {
-                val topics = if (publisher == null) NewsTopic.entries else listOf(null) + NewsTopic.entries
-                topics.forEach { topic ->
-                    val control = button(topic?.label ?: "Station") { load(topic) }.apply {
-                        id = View.generateViewId()
-                        textSize = if (compactTv && publisher != null) 11f else 12f
-                        maxLines = 1
-                        nextFocusDownId = list.id
-                    }
-                    buttons[topic] = control
-                    addView(control, LinearLayout.LayoutParams(0, -1, 1f).apply { marginEnd = dp(4) })
-                }
-            }, LinearLayout.LayoutParams(-1, dp(40)))
-            addView(FrameLayout(context).apply {
-                addView(list, FrameLayout.LayoutParams(-1, -1))
-                addView(status, FrameLayout.LayoutParams(-1, -1))
-                list.emptyView = status
-            }, LinearLayout.LayoutParams(-1, dp(if (compactTv) 150 else 240)).apply { topMargin = dp(6) })
-        }
-        val dialog = AlertDialog.Builder(this).setTitle("Actualités · ${publisher?.label ?: "RFI"}").setView(content)
-            .setPositiveButton("Fermer", null).show()
-        dialog.window?.setBackgroundDrawableResource(R.drawable.radio_dialog)
-        dialog.setOnDismissListener { request?.cancel() }
-        val initial = if (publisher == null) NewsTopic.WORLD else null
-        load(initial)
-        buttons.getValue(initial).requestFocus()
-    }
-
-    private inner class NewsStoryRow : LinearLayout(this@RadioActivity) {
-        private val title = label("", if (compactTv) 14 else 16, textColor, bold = true).apply {
-            maxLines = 2
-            ellipsize = TextUtils.TruncateAt.END
-        }
-        private val metadata = label("", 12, muted).apply { maxLines = 1 }
-        private val photo = ImageView(context).apply {
-            scaleType = ImageView.ScaleType.CENTER_CROP
-            background = GradientDrawable().apply {
-                cornerRadius = dp(6).toFloat()
-                setColor(getColor(R.color.radio_control))
-            }
-            clipToOutline = true
-        }
-        private var photoTask: Job? = null
-
-        init {
-            orientation = HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(10), dp(8), dp(10), dp(8))
-            minimumHeight = dp(58)
-            addView(photo, LayoutParams(dp(72), dp(46)).apply { marginEnd = dp(10) })
-            addView(column().apply {
-                addView(title, LayoutParams(-1, -2))
-                addView(metadata, LayoutParams(-1, -2))
-            }, LayoutParams(0, -2, 1f))
-        }
-
-        fun bind(article: NewsHeadline, dateFormat: DateTimeFormatter) {
-            title.text = article.title
-            metadata.text = listOfNotNull(article.publisher.label, article.publishedAt?.let(dateFormat::format)).joinToString(" · ")
-            photoTask?.cancel()
-            photo.setImageDrawable(null)
-            photo.visibility = if (article.imageUrl == null) View.GONE else View.VISIBLE
-            photoTask = article.imageUrl?.let { url ->
-                artwork.load(url, dp(92)) { bitmap ->
-                    photo.setImageBitmap(bitmap)
-                    photo.visibility = if (bitmap == null) View.GONE else View.VISIBLE
-                }
-            }
-        }
-    }
+    private fun showNews() = showNewsDialog(tvStationInfo.value?.publisher, stationHeadlines, artwork, compactTv)
 
     private fun chooseSort() {
         val options = StationSort.options(tab)
-        val selected = options.indexOf(activeSort())
-        val dialog = AlertDialog.Builder(this).setTitle("Trier les stations")
-            .setSingleChoiceItems(options.map { it.labelFor(tab) }.toTypedArray(), selected) { picker, index ->
-                prefs.edit().putString("sort_${tab.name}", options[index].name).apply()
-                picker.dismiss()
-                updateDirectory(resetScroll = true)
-            }.setNegativeButton("Fermer", null).show()
-        dialog.window?.setBackgroundDrawableResource(R.drawable.radio_dialog)
-        if (television) dialog.listView.requestFocus()
+        showChoiceSheet("Trier les stations", options.map { it.labelFor(tab) }, options.indexOf(activeSort()),
+            subtitle = tab.label, columns = if (wideSheet) 2 else 1) { index ->
+            prefs.edit().putString("sort_${tab.name}", options[index].name).apply()
+            updateDirectory(resetScroll = true)
+        }
     }
 
     private fun chooseContinent() {
@@ -1651,10 +1426,8 @@ class RadioActivity : ComponentActivity() {
                 this.adapter = adapter
                 if (television) setSelector(R.drawable.radio_focus)
                 setOnItemClickListener { _, _, position, _ ->
-                    country = shown[position]
-                    prefs.edit().putString("world_country", country).apply()
                     dialog.dismiss()
-                    if (query.isEmpty()) updateDirectory(resetScroll = true) else stationSearch.setText("")
+                    chooseWorldCountry(shown[position])
                 }
             }
             addView(countryList, LinearLayout.LayoutParams(-1, dp(200)))
@@ -1760,7 +1533,7 @@ class RadioActivity : ComponentActivity() {
                     playerCategory = this
                 }, LinearLayout.LayoutParams(-1, -2))
                 if (dashboardInfo.value && showDashboardTiles && !mini) {
-                    addView(localInfoBar(), LinearLayout.LayoutParams(-1, dp(if (compactGuide) 56 else 64)).apply {
+                    addView(localInfoBar(), LinearLayout.LayoutParams(-1, dp(if (compactTv) 56 else 64)).apply {
                         topMargin = dp(4)
                     })
                 }
@@ -1791,7 +1564,8 @@ class RadioActivity : ComponentActivity() {
                     playerTitle = label("", titleSize, textColor, bold = true).apply {
                         textAlignment = alignment
                         if (compactSidePlayer) includeFontPadding = false
-                        maxLines = if ((compactTv && !tvGuide) || mini || (full && (television || shortLandscape))) 1 else 2
+                        maxLines = if ((compactTv && !tvGuide) || mini || shortTouchGuide ||
+                            (full && (television || shortLandscape))) 1 else 2
                         ellipsize = TextUtils.TruncateAt.END
                     }
                     addView(playerTitle, LinearLayout.LayoutParams(-1, -2))
@@ -1799,7 +1573,7 @@ class RadioActivity : ComponentActivity() {
                     playerSubtitle = label("", subtitleSize, muted).apply {
                         textAlignment = alignment
                         if (compactSidePlayer) includeFontPadding = false
-                        maxLines = if (tightSidePlayer || tightListening || mini || compactTv) 1 else 2
+                        maxLines = if (tightSidePlayer || tightListening || mini || compactTv || shortTouchGuide) 1 else 2
                         ellipsize = TextUtils.TruncateAt.END
                     }
                     addView(playerSubtitle, LinearLayout.LayoutParams(-1, -2))
@@ -1822,6 +1596,87 @@ class RadioActivity : ComponentActivity() {
                 else if (!horizontalMini && (mini || full)) topMargin = dp(6)
             })
         }
+    }
+
+    /**
+     * Cockpit player for car screens: logo and station side by side, the station headlines,
+     * then large round controls a driver can reach without looking twice.
+     */
+    private fun cockpitPanel(): View = column().apply {
+        playerCategory = null
+        weatherTile = null
+        prayerTile = null
+        background = getDrawable(R.drawable.radio_player)
+        val short = shortTouchGuide
+        setPadding(dp(14), dp(if (short) 8 else 14), dp(14), dp(if (short) 8 else 12))
+        val logoSize = dp(if (short) 78 else 128)
+        val strip = dp(if (short) 14 else 18)
+        val artwork = StationArtwork(26, showCredits = true)
+        playerArtwork = artwork
+        audioMotif = PremiumRadioMotif(context, artwork, belowLogo = true)
+        val hero = row().apply {
+            playerPanel = this
+            gravity = Gravity.CENTER_VERTICAL
+            addView(FrameLayout(context).apply {
+                addView(artwork, FrameLayout.LayoutParams(logoSize, logoSize, Gravity.TOP or Gravity.CENTER_HORIZONTAL))
+                addView(audioMotif, FrameLayout.LayoutParams(-1, strip, Gravity.BOTTOM))
+            }, LinearLayout.LayoutParams(logoSize, logoSize + strip + dp(4)).apply { marginEnd = dp(14) })
+            addView(column().apply {
+                addView(label("", 12, accent, bold = true).apply {
+                    textAlignment = View.TEXT_ALIGNMENT_VIEW_START
+                    letterSpacing = .06f
+                    maxLines = 1
+                    ellipsize = TextUtils.TruncateAt.END
+                    playerCategory = this
+                }, LinearLayout.LayoutParams(-1, -2))
+                playerTitle = label("", if (short) 20 else 25, textColor, bold = true).apply {
+                    textAlignment = View.TEXT_ALIGNMENT_VIEW_START
+                    maxLines = if (short) 1 else 2
+                    ellipsize = TextUtils.TruncateAt.END
+                }
+                addView(playerTitle, LinearLayout.LayoutParams(-1, -2))
+                playerSubtitle = label("", 13, muted).apply {
+                    textAlignment = View.TEXT_ALIGNMENT_VIEW_START
+                    maxLines = if (short) 1 else 2
+                    ellipsize = TextUtils.TruncateAt.END
+                }
+                addView(playerSubtitle, LinearLayout.LayoutParams(-1, -2))
+                statusBadge = statusBadgeView(wide = false, mini = true).apply {
+                    minimumHeight = dp(28)
+                    playerStatus.gravity = Gravity.START or Gravity.CENTER_VERTICAL
+                }
+                addView(statusBadge, LinearLayout.LayoutParams(-2, -2).apply { topMargin = dp(if (short) 4 else 8) })
+            }, LinearLayout.LayoutParams(0, -2, 1f))
+        }
+        // Spare height goes mostly below the station so the controls stay anchored at the bottom.
+        addView(View(context), LinearLayout.LayoutParams(-1, 0, .35f))
+        addView(hero, LinearLayout.LayoutParams(-1, -2))
+        addView(View(context), LinearLayout.LayoutParams(-1, 0, .65f))
+        val ticker = newsBar()
+        addView(ticker, LinearLayout.LayoutParams(-1, dp(if (short) 38 else 50)).apply {
+            topMargin = dp(6)
+            bottomMargin = dp(if (short) 6 else 10)
+        })
+        val side = dp(if (short) 48 else 54)
+        val main = dp(if (short) 58 else 66)
+        addView(row().apply {
+            gravity = Gravity.CENTER
+            previous = transportButton(R.drawable.ic_radio_previous, "Station précédente") { skip(-1) }
+            playButton = transportButton(R.drawable.ic_radio_play, "Écouter", primary = true) { toggle() }
+            next = transportButton(R.drawable.ic_radio_next, "Station suivante") { skip(1) }
+            val favoriteButton = transportButton(R.drawable.ic_tab_favorites, "Favori") {
+                val current = findStation(controller?.currentMediaItem?.mediaId) ?: savedStation
+                current?.let(::toggleFavorite)
+            }
+            playerFavorite = favoriteButton
+            listOf(previous, next, favoriteButton).forEach { roundControl(it) }
+            roundControl(playButton, primary = true)
+            val gap = dp(if (short) 12 else 16)
+            addView(previous, LinearLayout.LayoutParams(side, side))
+            addView(playButton, LinearLayout.LayoutParams(main, main).apply { marginStart = gap; marginEnd = gap })
+            addView(next, LinearLayout.LayoutParams(side, side))
+            addView(favoriteButton, LinearLayout.LayoutParams(side, side).apply { marginStart = gap })
+        }, LinearLayout.LayoutParams(-1, -2))
     }
 
     private fun playerColumn(
@@ -1856,14 +1711,14 @@ class RadioActivity : ComponentActivity() {
             }
         }
 
-    private fun playbackBar(wide: Boolean, full: Boolean, mini: Boolean): View = (if (wide) column() else row()).apply {
-        gravity = Gravity.CENTER
+    /** Status line under the station name: the LIVE pill while on air, otherwise a short message. */
+    private fun statusBadgeView(wide: Boolean, mini: Boolean): LinearLayout {
         playerStatus = label("", 13, muted, bold = true).apply {
             gravity = Gravity.CENTER
             maxLines = 2
             ellipsize = TextUtils.TruncateAt.END
         }
-        statusBadge = row().apply {
+        return row().apply {
             gravity = Gravity.CENTER
             background = getDrawable(R.drawable.radio_status)
             setPadding(dp(6), dp(if (wide) 0 else 4), dp(6), dp(if (wide) 0 else 4))
@@ -1889,7 +1744,7 @@ class RadioActivity : ComponentActivity() {
                         }
                     }
                     addView(liveDot, LinearLayout.LayoutParams(dp(5), dp(5)).apply { marginEnd = dp(5) })
-                    addView(label("LIVE", 11, Color.WHITE, bold = true).apply {
+                    addView(label("LIVE", 12, Color.WHITE, bold = true).apply {
                         gravity = Gravity.CENTER
                         letterSpacing = .06f
                         importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
@@ -1906,7 +1761,14 @@ class RadioActivity : ComponentActivity() {
             addView(liveIndicator, LinearLayout.LayoutParams(-2, -2))
             addView(playerStatus, LinearLayout.LayoutParams(-2, -2))
         }
-        addView(statusBadge, if (wide) LinearLayout.LayoutParams(-1, dp(if (compactGuide) 28 else 33)).apply { bottomMargin = dp(4) }
+    }
+
+    private fun playbackBar(wide: Boolean, full: Boolean, mini: Boolean): View = (if (wide) column() else row()).apply {
+        gravity = Gravity.CENTER
+        statusBadge = statusBadgeView(wide, mini)
+        // Grow with two-line messages such as "Connexion perdue · reprise automatique" instead of clipping them.
+        if (wide) statusBadge.minimumHeight = dp(if (compactGuide) 28 else 33)
+        addView(statusBadge, if (wide) LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(4) }
             else LinearLayout.LayoutParams(0, -2, 1f).apply { marginEnd = dp(6) })
         if (wide && !television && !touchGuide && !mini && !full) {
             addView(View(context).apply {
@@ -1914,7 +1776,9 @@ class RadioActivity : ComponentActivity() {
                 importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
             }, LinearLayout.LayoutParams(-1, dp(1)).apply { marginStart = dp(8); marginEnd = dp(8) })
         }
+        val roundControls = touchMosaic && !wide
         val controlHeight = dp(when {
+            roundControls -> 50
             smallTouchGuide -> 44
             touchGuide -> 48
             shortLandscape -> 42
@@ -1927,11 +1791,16 @@ class RadioActivity : ComponentActivity() {
             previous = transportButton(R.drawable.ic_radio_previous, "Station précédente") { skip(-1) }
             playButton = transportButton(R.drawable.ic_radio_play, "Écouter", primary = true) { toggle() }
             next = transportButton(R.drawable.ic_radio_next, "Station suivante") { skip(1) }
-            fun controlParams(width: Int, weight: Float = 1f) = if (wide && (!full || !television)) {
+            if (roundControls) listOf(previous, next).forEach { roundControl(it) }
+            if (roundControls) roundControl(playButton, primary = true)
+            fun controlParams(width: Int, weight: Float = 1f) = if (roundControls) {
+                LinearLayout.LayoutParams(controlHeight, controlHeight)
+            } else if (wide && (!full || !television)) {
                 LinearLayout.LayoutParams(0, controlHeight, weight)
             } else LinearLayout.LayoutParams(width, controlHeight)
             addView(previous, controlParams(controlHeight))
-            addView(playButton, controlParams(dp(if (television && wide) 66 else 56), 1.18f).apply {
+            addView(playButton, (if (roundControls) LinearLayout.LayoutParams(controlHeight + dp(8), controlHeight + dp(8))
+                else controlParams(dp(if (television && wide) 66 else 56), 1.18f)).apply {
                 marginStart = dp(6)
                 marginEnd = dp(6)
             })
@@ -1942,9 +1811,17 @@ class RadioActivity : ComponentActivity() {
                     current?.let(::toggleFavorite)
                 }
                 playerFavorite = favoriteButton
+                if (roundControls) roundControl(favoriteButton)
                 addView(favoriteButton, controlParams(controlHeight).apply { marginStart = dp(6) })
             }
-        }, LinearLayout.LayoutParams(if (wide) -1 else -2, controlHeight))
+        }, LinearLayout.LayoutParams(if (wide) -1 else -2, if (roundControls) -2 else controlHeight))
+    }
+
+    /** Circular car control; the primary one is filled so play/pause stands out at a glance. */
+    private fun roundControl(button: ImageButton, primary: Boolean = false) {
+        button.background = RippleDrawable(ripple,
+            getDrawable(if (primary) R.drawable.radio_round_primary else R.drawable.radio_round), null)
+        if (primary) button.imageTintList = ColorStateList.valueOf(getColor(R.color.radio_on_primary))
     }
 
     private fun transportButton(icon: Int, description: String, primary: Boolean = false, action: () -> Unit) =
@@ -2027,6 +1904,7 @@ class RadioActivity : ComponentActivity() {
     private inner class StationTile : LinearLayout(this@RadioActivity) {
         private val heightDp = when {
             tvGuide -> tvGuideRowDp
+            touchMosaic -> if (shortLandscape) 92 else 108
             compactTv -> (resources.configuration.screenHeightDp * .16).toInt().coerceIn(57, 66)
             television -> (resources.configuration.screenHeightDp * .18).toInt().coerceIn(72, 134)
             shortLandscape -> 66
@@ -2036,6 +1914,8 @@ class RadioActivity : ComponentActivity() {
         private val idleBackground = pressable(if (tvGuide) R.drawable.radio_station_rule else R.drawable.radio_control)
         private val selectedBackground = pressable(R.drawable.radio_selected)
         private val name = label("", when {
+            touchGuide -> 15
+            touchMosaic -> 14
             tvGuide && !compactTv -> 14
             tvGuide || compactTv || shortLandscape -> 13
             television -> 17
@@ -2043,10 +1923,12 @@ class RadioActivity : ComponentActivity() {
         }, textColor, bold = true).apply {
             gravity = if (tvGuide) Gravity.START or Gravity.CENTER_VERTICAL else Gravity.CENTER
             includeFontPadding = false
-            maxLines = if (singleColumnGuide) 2 else 1
+            // One line in every guide: a second line pushed the subtitle out of the fixed-height row.
+            maxLines = 1
             ellipsize = TextUtils.TruncateAt.END
         }
         private val subtitle = label("", when {
+            carScreen -> 12
             tvGuide && compactTv -> 9
             tvGuide || compactTv || shortLandscape -> 10
             else -> 12
@@ -2076,14 +1958,15 @@ class RadioActivity : ComponentActivity() {
                 orientation = HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
                 setPadding(dp(7), 0, dp(7), 0)
-                val artSize = dp(heightDp - 6)
+                val artSize = dp((heightDp - 6).coerceAtMost(42))
                 addView(logo, LinearLayout.LayoutParams(artSize, artSize).apply { marginEnd = dp(8) })
                 addView(column().apply {
                     addView(name, LinearLayout.LayoutParams(-1, -2))
                     addView(subtitle, LinearLayout.LayoutParams(-1, -2))
                 }, LinearLayout.LayoutParams(0, -2, 1f))
-                favoriteMark?.let { addView(it, LinearLayout.LayoutParams(dp(14), dp(14)).apply { marginStart = dp(4) }) }
-                playingMark?.let { addView(it, LinearLayout.LayoutParams(dp(14), dp(14)).apply { marginStart = dp(4) }) }
+                val markSize = dp(if (touchGuide) 16 else 14)
+                favoriteMark?.let { addView(it, LinearLayout.LayoutParams(markSize, markSize).apply { marginStart = dp(4) }) }
+                playingMark?.let { addView(it, LinearLayout.LayoutParams(markSize, markSize).apply { marginStart = dp(4) }) }
             } else {
                 orientation = VERTICAL
                 gravity = Gravity.CENTER
@@ -2109,7 +1992,7 @@ class RadioActivity : ComponentActivity() {
             logo.bind(station)
             name.text = station.name
             name.setTextColor(if (selected) accent else textColor)
-            subtitle.text = when {
+            subtitle.text = rowNotes[station.url] ?: when {
                 tvGuide -> Stations.listDescription(station).orEmpty()
                 playing -> "En écoute"
                 else -> Stations.subtitle(station)
@@ -2199,7 +2082,7 @@ class RadioActivity : ComponentActivity() {
             badge.bind(station)
             name.text = station.name
             name.setTextColor(if (selected) accent else textColor)
-            subtitle.text = Stations.subtitle(station)
+            subtitle.text = rowNotes[station.url] ?: Stations.subtitle(station)
             subtitle.setTextColor(if (playing) accent else muted)
             star?.let {
                 bindFavorite(it, station)
@@ -2210,7 +2093,7 @@ class RadioActivity : ComponentActivity() {
 
     private inner class StationArtwork(textSize: Int, private val showCredits: Boolean = false) : FrameLayout(this@RadioActivity) {
         private val initials = label("FM", textSize, accent, bold = true).apply { gravity = Gravity.CENTER }
-        private val logo = ImageView(context).apply { scaleType = ImageView.ScaleType.FIT_CENTER; visibility = View.GONE }
+        private val logo = ImageView(context).apply { scaleType = ImageView.ScaleType.FIT_CENTER; visibility = View.INVISIBLE }
         private var logoWork: Job? = null
         private var station: RadioStation? = null
         private var artworkGeneration = -1
@@ -2218,6 +2101,8 @@ class RadioActivity : ComponentActivity() {
 
         private val targetPixels get() = (minOf(width, height) - dp(6)).coerceAtLeast(0)
 
+        // Logo and initials swap with INVISIBLE, never GONE: a cached logo can arrive during a list layout pass,
+        // when AbsListView drops layout requests, and a view coming back from GONE would then stay 0 × 0.
         init {
             importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
             if (showCredits) remoteFocus()
@@ -2240,14 +2125,14 @@ class RadioActivity : ComponentActivity() {
                 else -> station.name.split(' ').take(2).joinToString("") { it.take(1) }
             }
             initials.visibility = View.VISIBLE
-            logo.visibility = View.GONE
+            logo.visibility = View.INVISIBLE
             logo.setImageDrawable(null)
             val portrait = station?.let(ReciterPortraits::forStation)
             bindCredit(station, portrait)
             if (station == null || Stations.isReciter(station)) {
                 logo.setImageResource(if (station == null) R.drawable.ic_radio else R.drawable.ic_tab_quran)
                 logo.visibility = View.VISIBLE
-                initials.visibility = View.GONE
+                initials.visibility = View.INVISIBLE
             }
             loadArtwork()
         }
@@ -2267,7 +2152,7 @@ class RadioActivity : ComponentActivity() {
                 if (this.station == station && requestedPixels == size && bitmap != null) {
                     logo.setImageBitmap(bitmap)
                     logo.visibility = View.VISIBLE
-                    initials.visibility = View.GONE
+                    initials.visibility = View.INVISIBLE
                 }
             }
             val portrait = ReciterPortraits.forStation(station)
@@ -2322,8 +2207,7 @@ class RadioActivity : ComponentActivity() {
 
     private fun updateDirectory(resetScroll: Boolean = false) {
         val code = when {
-            tab == StationTab.MOROCCO && !radioFavoritesOnly &&
-                activeCategory() in setOf(MoroccoCategory.ALL, MoroccoCategory.DIRECTORY) -> "MA"
+            tab == StationTab.MOROCCO && !radioFavoritesOnly && activeCategory() != MoroccoCategory.REGIONAL -> "MA"
             tab == StationTab.WORLD -> country
             else -> null
         }
@@ -2334,7 +2218,32 @@ class RadioActivity : ComponentActivity() {
     private fun renderRows(resetScroll: Boolean = false) {
         val sort = activeSort()
         val category = activeCategory()
-        rows = Stations.visible(tab, favorites, query, radioFavoritesOnly, directory.stations, directoryBookmarks, sort, category)
+        val notes = mutableMapOf<String, String>()
+        val chapters = mutableMapOf<String, Int>()
+        var listed = if (tab == StationTab.FOR_YOU) forYou().onEach { suggestion ->
+            notes[suggestion.station.url] = suggestion.reason
+            suggestion.chapter?.let { chapters[suggestion.station.url] = it }
+        }.map(Suggestion::station) else Stations.visible(tab, favorites, query, radioFavoritesOnly, directory.stations,
+            directoryBookmarks, sort, category, favoriteOrder, activeQuranSection())
+        if (tab == StationTab.QURAN) HerrazRecitations.find(query)?.let { surah ->
+            // A surah name in the search starts Hicham El Herraz's recitation at that surah.
+            val herraz = Stations.herrazStation
+            notes[herraz.url] = "سورة ${surah.name} · ${surah.latin}"
+            chapters[herraz.url] = surah.number
+            listed = listOf(herraz) + listed.filter { it != herraz }
+        }
+        if (tab == StationTab.FAVORITES && sort == StationSort.DEFAULT) {
+            listed.forEachIndexed { index, station -> notes.putIfAbsent(station.url, "Présélection ${index + 1}") }
+        }
+        val unavailable = prefs.getStringSet(ListeningPrefs.UNAVAILABLE, emptySet()).orEmpty()
+        if (tab != StationTab.FAVORITES && listed.any { it.url in unavailable }) {
+            val (working, failing) = listed.partition { it.url !in unavailable }
+            failing.forEach { notes.putIfAbsent(it.url, "Indisponible récemment") }
+            listed = working + failing
+        }
+        rows = listed
+        rowNotes = notes
+        rowChapters = chapters
         PlaybackService.setVisibleStations(rows)
         listEntries = buildList {
             var previousSection: String? = null
@@ -2342,8 +2251,6 @@ class RadioActivity : ComponentActivity() {
                 val section = when {
                     tab == StationTab.QURAN -> Stations.quranSection(station)?.label
                     tab == StationTab.MOROCCO && sort == StationSort.GROUPS -> Stations.group(station).label
-                    tab == StationTab.MOROCCO && sort == StationSort.DEFAULT && category == MoroccoCategory.ARABIC ->
-                        Stations.musicCategory(station)?.label
                     tab == StationTab.MOROCCO && sort == StationSort.DEFAULT && category == MoroccoCategory.ALL -> {
                         val group = Stations.group(station)
                         if (group == StationGroup.REGIONAL) group.label
@@ -2364,23 +2271,22 @@ class RadioActivity : ComponentActivity() {
         val onRadioTab = tab == StationTab.MOROCCO
         worldRegion.visibility = if (tab == StationTab.WORLD && !tightLandscape && !tvGuide) View.VISIBLE else View.GONE
         worldRegion.text = WorldContinent.forCountry(country)?.label.orEmpty()
-        sortButton.visibility = if (tab == StationTab.QURAN) View.GONE else View.VISIBLE
+        stationToolbar.visibility = if (tab == StationTab.FOR_YOU) View.GONE else View.VISIBLE
+        renderChips()
+        sortButton.visibility = if (tab == StationTab.QURAN || tab == StationTab.FOR_YOU) View.GONE else View.VISIBLE
         sortButton.contentDescription = "Trier les stations · ${sort.labelFor(tab)}"
-        categoryButton.visibility = if (onRadioTab) View.VISIBLE else View.GONE
-        categoryButton.isSelected = category != MoroccoCategory.ALL
-        categoryButton.text = if (categoryButton.isSelected) "Genres ▾" else "Genres"
-        categoryButton.contentDescription = "Catégories Radio Maroc · ${category.label}"
+        categoryButton.visibility = View.GONE
         countryButton.visibility = if (tab == StationTab.WORLD) View.VISIBLE else View.GONE
         countryButton.text = "${StationDirectory.countryName(country)} ▾"
         countryButton.contentDescription = "Choisir un continent ou un pays · ${StationDirectory.countryName(country)}"
-        radioFilter.visibility = if (onRadioTab && !television && !touchGuide) View.VISIBLE else View.GONE
+        radioFilter.visibility = if (onRadioTab && !television && !carScreen) View.VISIBLE else View.GONE
         radioFilter.isSelected = radioFavoritesOnly
         radioFilter.contentDescription =
             if (radioFavoritesOnly) "Afficher toutes les radios marocaines" else "Afficher les radios marocaines favorites"
         radioFilter.background = pressable(if (radioFavoritesOnly) R.drawable.radio_selected else R.drawable.radio_control)
         empty.text = when {
             onRadioTab && radioFavoritesOnly && query.isBlank() -> "Aucune radio marocaine favorite"
-            tab == StationTab.FAVORITES && favorites.isEmpty() -> if (touchGuide) {
+            tab == StationTab.FAVORITES && favorites.isEmpty() -> if (carScreen) {
                 "Appuie longuement sur une station pour l’ajouter"
             } else "Utilise l’étoile pour ajouter une station"
             directory.loading -> "Chargement des radios…"
@@ -2393,7 +2299,7 @@ class RadioActivity : ComponentActivity() {
         enable(directoryAction, !directory.loading)
         for ((choice, button) in tabs) {
             button.isSelected = choice == tab
-            if (television || touchGuide) styleTvCategory(button)
+            if (television || carScreen) styleTvCategory(button)
         }
         if (television) {
             val category = tabs[tab]
@@ -2407,14 +2313,187 @@ class RadioActivity : ComponentActivity() {
         catalogueAdapter.notifyDataSetChanged()
         if (resetScroll) {
             revealCatalogueSelection = false
-            if (television) list.setSelection(0) else list.setSelectionFromTop(0, 0)
+            scrollCatalogueTo(0)
         }
         renderPlayer()
     }
 
+    private fun forYou(): List<Suggestion> {
+        val city = localInfo.city.value
+        val now = LocalDateTime.now(RadioLocalInfo.moroccoTime)
+        val presets = Stations.visible(StationTab.FAVORITES, favorites, "", bookmarks = directoryBookmarks,
+            favoriteOrder = favoriteOrder)
+        return ForYou.suggestions(
+            now = now,
+            prayers = localInfo.prayerStatus(city).takeIf { it.next != null || it.current != null },
+            todayPrayers = localInfo.prayerTimes(city, now.toLocalDate()),
+            city = city,
+            recents = ListeningPrefs.list(prefs, ListeningPrefs.RECENT_STATIONS).mapNotNull(::findStation),
+            presets = presets,
+            herrazChapter = prefs.getInt(ListeningPrefs.HERRAZ_CHAPTER, 0).takeIf { it > 0 },
+        )
+    }
+
+    /** The chip row under the search bar: themes, Quran sections, country shortcuts or preset tools. */
+    private fun renderChips() {
+        chipBar.removeAllViews()
+        when (tab) {
+            StationTab.MOROCCO -> {
+                val selected = activeCategory()
+                val counts = Stations.themeCounts(if (selected == MoroccoCategory.ALL && query.isBlank() && !radioFavoritesOnly) rows
+                    else Stations.visible(StationTab.MOROCCO, favorites, "", directory = directory.stations, bookmarks = directoryBookmarks))
+                for (theme in MoroccoCategory.entries) {
+                    val count = if (theme == MoroccoCategory.ALL) null else counts[theme] ?: 0
+                    if (count == 0 && theme != selected) continue
+                    addChip(theme.chip, count, theme == selected, "Thème · ${theme.label}") {
+                        prefs.edit().putString("morocco_category", theme.name).apply()
+                        updateDirectory(resetScroll = true)
+                    }
+                }
+            }
+            StationTab.QURAN -> {
+                val selected = activeQuranSection()
+                addChip("الكل · Tout", null, selected == null, "Toutes les récitations") { chooseQuranSection(null) }
+                for (section in QuranSection.entries) addChip(section.label, null, section == selected, section.label) {
+                    chooseQuranSection(section)
+                }
+                prefs.getInt(ListeningPrefs.HERRAZ_CHAPTER, 0).takeIf { it > 0 }?.let(HerrazRecitations::chapter)?.let { surah ->
+                    addChip("Reprendre · سورة ${surah.name}", null, false, "Reprendre la sourate ${surah.latin}") {
+                        select(Stations.herrazStation, surah.number)
+                    }
+                }
+            }
+            StationTab.WORLD -> {
+                val recent = ListeningPrefs.list(prefs, ListeningPrefs.RECENT_COUNTRIES).filter { it in StationDirectory.countries }
+                val shown = mutableSetOf<String>()
+                fun countries(caption: String?, codes: List<String>) {
+                    val fresh = codes.filter { it in StationDirectory.countries && it != "MA" && shown.add(it) }
+                    if (fresh.isEmpty()) return
+                    if (caption != null) chipBar.addView(label(caption, 11, accent, bold = true).apply {
+                        setPadding(dp(8), 0, dp(4), 0)
+                        importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+                    })
+                    for (code in fresh) addChip(StationDirectory.countryName(code), null, code == country,
+                        "Pays · ${StationDirectory.countryName(code)}") { chooseWorldCountry(code) }
+                }
+                countries(null, listOf(country) + recent)
+                countries("DIASPORA", listOf("FR", "BE", "ES", "NL", "IT", "DE", "CA", "GB", "US"))
+                countries("MONDE ARABE", listOf("DZ", "TN", "EG", "LB", "SA", "AE", "QA", "JO", "MR", "LY"))
+                addChip("Autres pays…", null, false, "Choisir un continent ou un pays") { chooseContinent() }
+            }
+            StationTab.FAVORITES -> if (favorites.size > 1) {
+                addChip("Organiser les présélections", null, false, "Changer l’ordre des présélections", ::organizePresets)
+                val wheel = prefs.getBoolean(ListeningPrefs.WHEEL_PRESETS, false)
+                addChip(if (wheel) "Volant : présélections" else "Volant : toute la liste", null, wheel,
+                    "Boutons du volant") { setWheelPresets(!wheel) }
+            }
+            StationTab.FOR_YOU -> Unit
+        }
+        chipScroller.visibility = if (chipBar.childCount == 0) View.GONE else View.VISIBLE
+    }
+
+    private fun addChip(text: String, count: Int?, selected: Boolean, description: String, action: () -> Unit) {
+        val chip = label(if (count == null) text else "$text  $count", 13, if (selected) accent else textColor, bold = true).apply {
+            gravity = Gravity.CENTER
+            maxLines = 1
+            setPadding(dp(14), 0, dp(14), 0)
+            background = pressable(R.drawable.radio_chip_state)
+            isSelected = selected
+            isFocusable = true
+            contentDescription = if (count == null) description else "$description · $count stations"
+            stateDescription = if (selected) "Sélectionné" else null
+            remoteFocus()
+            setRadioClick(action)
+        }
+        chipBar.addView(chip, LinearLayout.LayoutParams(-2, -1).apply {
+            marginEnd = dp(6)
+            topMargin = dp(2)
+            bottomMargin = dp(2)
+        })
+        if (selected) chipScroller.post { chipScroller.scrollTo((chip.left - dp(24)).coerceAtLeast(0), 0) }
+    }
+
+    private fun chooseQuranSection(section: QuranSection?) {
+        prefs.edit().putString("quran_section", section?.name).apply()
+        updateDirectory(resetScroll = true)
+    }
+
+    private fun chooseWorldCountry(code: String) {
+        country = code
+        prefs.edit().putString("world_country", code).apply()
+        ListeningPrefs.remember(prefs, ListeningPrefs.RECENT_COUNTRIES, code, 3)
+        if (query.isEmpty()) updateDirectory(resetScroll = true) else stationSearch.setText("")
+    }
+
+    private fun setWheelPresets(enabled: Boolean) {
+        prefs.edit().putBoolean(ListeningPrefs.WHEEL_PRESETS, enabled).apply()
+        if (showingCatalogue) renderChips()
+    }
+
+    private fun showWheelSettings() {
+        val enabled = prefs.getBoolean(ListeningPrefs.WHEEL_PRESETS, false)
+        showChoiceSheet("Boutons du volant", listOf("Toute la liste affichée", "Présélections seulement"),
+            if (enabled) 1 else 0, subtitle = "Suivant et Précédent du volant ou du Bluetooth",
+            details = listOf("Suit l’onglet ouvert à l’écran", "Passe d’une présélection à l’autre")) { index ->
+            setWheelPresets(index == 1)
+        }
+    }
+
+    /** Reorders the presets with large up and down buttons; the order drives the Présélections tiles. */
+    private fun organizePresets() {
+        val sheet = RadioSheet(this, "Ordre des présélections", "Le n° 1 s’affiche en premier")
+        fun render() {
+            sheet.body.removeAllViews()
+            val presets = Stations.visible(StationTab.FAVORITES, favorites, "", bookmarks = directoryBookmarks,
+                favoriteOrder = favoriteOrder)
+            presets.forEachIndexed { index, station ->
+                sheet.body.addView(row().apply {
+                    gravity = Gravity.CENTER_VERTICAL
+                    background = getDrawable(R.drawable.radio_option)
+                    setPadding(dp(12), dp(4), dp(6), dp(4))
+                    minimumHeight = dp(56)
+                    addView(label("${index + 1}", 16, accent, bold = true).apply { gravity = Gravity.CENTER },
+                        LinearLayout.LayoutParams(dp(28), -2))
+                    addView(label(station.name, 15, textColor, bold = true).apply {
+                        maxLines = 1
+                        ellipsize = TextUtils.TruncateAt.END
+                        layoutDirection = directionOf(station.name)
+                    }, LinearLayout.LayoutParams(0, -2, 1f).apply { marginStart = dp(8) })
+                    fun move(by: Int, icon: Float, description: String) = ImageButton(context).apply {
+                        setImageResource(R.drawable.ic_radio_chevron)
+                        rotation = icon
+                        imageTintList = ColorStateList.valueOf(textColor)
+                        background = pressable(R.drawable.radio_round)
+                        contentDescription = "$description · ${station.name}"
+                        remoteFocus()
+                        val target = index + by
+                        enable(this, target in presets.indices)
+                        setRadioClick {
+                            val order = presets.map(RadioStation::url).toMutableList()
+                            order.add(target, order.removeAt(index))
+                            favoriteOrder = order
+                            ListeningPrefs.put(prefs.edit(), ListeningPrefs.FAVORITE_ORDER, order).apply()
+                            render()
+                            renderRows()
+                        }
+                    }
+                    addView(move(-1, -90f, "Monter"), LinearLayout.LayoutParams(dp(48), dp(48)).apply { marginEnd = dp(6) })
+                    addView(move(1, 90f, "Descendre"), LinearLayout.LayoutParams(dp(48), dp(48)))
+                }, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(6) })
+            }
+        }
+        render()
+        sheet.show()
+    }
+
     private fun styleTvCategory(button: TextView) {
-        button.background = pressable(if (button.isSelected) R.drawable.radio_selected else R.drawable.radio_tab)
-        button.setTextColor(if (button.isSelected) accent else textColor)
+        val onActive = getColor(R.color.radio_on_primary)
+        button.background = pressable(if (button.isSelected) R.drawable.radio_segment_active else null)
+        button.setTextColor(if (button.isSelected) onActive else textColor)
+        if (button.compoundDrawablesRelative[0] != null) {
+            button.compoundDrawableTintList = if (button.isSelected) ColorStateList.valueOf(onActive)
+                else getColorStateList(R.color.radio_tab_icon)
+        }
     }
 
     private fun renderPlayer() {
@@ -2467,7 +2546,9 @@ class RadioActivity : ComponentActivity() {
                 LuxeRadio.State.PAUSED -> "En pause"
                 LuxeRadio.State.IDLE -> "Prêt à écouter"
             }
-            waitingForNetwork && !playing -> "Connexion perdue · reprise automatique"
+            waitingForNetwork && !playing ->
+                if (player.sessionExtras.getBoolean(PlaybackService.NETWORK_UNAVAILABLE)) "Connexion perdue · reprise automatique"
+                else "Flux interrompu · reprise automatique"
             player.playerError != null && station in Stations.snrt -> "Flux SNRT inaccessible · réessayer"
             player.playerError?.errorCode == PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS -> "Source inaccessible · réessayer"
             player.playerError != null -> "Flux indisponible · réessayer"
@@ -2532,39 +2613,43 @@ class RadioActivity : ComponentActivity() {
 
     private fun showCarStartup() {
         val modes = CarResume.entries
-        choiceDialog("Démarrage voiture")
-            .setSingleChoiceItems(modes.map { it.label }.toTypedArray(), carResume().ordinal) { dialog, index ->
-                prefs.edit().putString("car_resume_mode", modes[index].name).apply {
-                    if (modes[index] == CarResume.AFTER_BOOT) {
-                        val boot = carBootCount()
-                        if (boot >= 0) putInt("car_played_boot", boot)
-                    }
-                }.apply()
-                startupDeadline = 0L
-                dialog.dismiss()
+        val details = modes.map {
+            when (it) {
+                CarResume.OFF -> "La radio attend un appui sur Lecture"
+                CarResume.AFTER_BOOT -> "Relance la dernière station au démarrage"
+                CarResume.ON_OPEN -> "Relance la dernière station à l’ouverture"
             }
-            .setNegativeButton("Fermer", null)
-            .show()
+        }
+        showChoiceSheet("Démarrage voiture", modes.map { it.label }, carResume().ordinal, details = details) { index ->
+            prefs.edit().putString("car_resume_mode", modes[index].name).apply {
+                if (modes[index] == CarResume.AFTER_BOOT) {
+                    val boot = carBootCount()
+                    if (boot >= 0) putInt("car_played_boot", boot)
+                }
+            }.apply()
+            startupDeadline = 0L
+        }
     }
 
     private fun showAppearance() {
         val appearance = Appearance.restore(prefs)
         val options = Appearance.entries
-        choiceDialog("Apparence")
-            .setSingleChoiceItems(options.map { it.label }.toTypedArray(), appearance.ordinal) { dialog, index ->
-                dialog.dismiss()
-                val selected = options[index]
-                if (selected != appearance) {
-                    prefs.edit().putString(APPEARANCE, selected.name).apply()
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                        getSystemService(UiModeManager::class.java).setApplicationNightMode(selected.androidMode)
-                    } else {
-                        recreate()
-                    }
-                }
+        val details = options.map {
+            when (it) {
+                Appearance.DAY -> "Fond clair"
+                Appearance.NIGHT -> "Fond sombre, idéal la nuit"
+                Appearance.SYSTEM -> "Suit le réglage d’Android"
             }
-            .setNegativeButton("Fermer", null)
-            .show()
+        }
+        showChoiceSheet("Jour / Nuit", options.map { it.label }, appearance.ordinal, details = details) { index ->
+            val selected = options[index]
+            prefs.edit().putString(APPEARANCE, selected.name).apply()
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                getSystemService(UiModeManager::class.java).setApplicationNightMode(selected.androidMode)
+            } else {
+                recreate()
+            }
+        }
     }
 
     private fun carResume(): CarResume {
@@ -2592,32 +2677,43 @@ class RadioActivity : ComponentActivity() {
     private fun updateLiveDot(live: Boolean) {
         liveIndicator.visibility = if (live) View.VISIBLE else View.GONE
         if (!live || !ValueAnimator.areAnimatorsEnabled()) {
-            livePulse?.cancel()
-            livePulse = null
+            liveDot.removeCallbacks(livePulse)
+            livePulsing = false
             liveDot.alpha = 1f
-        } else if (livePulse == null) {
-            livePulse = ObjectAnimator.ofFloat(liveDot, View.ALPHA, 1f, .2f).apply {
-                duration = 650
-                repeatMode = ValueAnimator.REVERSE
-                repeatCount = ValueAnimator.INFINITE
-                start()
-            }
+        } else if (!livePulsing) {
+            livePulsing = true
+            liveDot.postDelayed(livePulse, 900)
         }
     }
 
-    private fun select(station: RadioStation) {
+    private fun select(station: RadioStation, chapter: Int? = rowChapters[station.url]) {
         val player = controller ?: return
         startupDeadline = 0L
         savedStation = station
         persistStations(station)
+        ListeningPrefs.remember(prefs, ListeningPrefs.RECENT_STATIONS, station.url, 8)
         if (station == Stations.luxe) {
             player.sendCustomCommand(PlaybackService.LUXE_PLAY, Bundle.EMPTY)
         } else {
-            player.setMediaItem(Stations.item(station))
+            player.setMediaItem(recitationStart(station, chapter) ?: Stations.item(station))
             player.prepare()
             player.play()
         }
         renderPlayer()
+    }
+
+    /** Herraz starts at the requested surah, otherwise where the listener stopped last time. */
+    private fun recitationStart(station: RadioStation, chapter: Int?): MediaItem? {
+        if (station != Stations.herrazStation) return null
+        val saved = prefs.getInt(ListeningPrefs.HERRAZ_CHAPTER, 0).takeIf { it > 0 }
+        val number = chapter ?: saved ?: return null
+        val position = if (number == saved) prefs.getLong(ListeningPrefs.HERRAZ_POSITION, 0L) else 0L
+        val extras = Bundle().apply {
+            putInt(ListeningPrefs.HERRAZ_CHAPTER, number)
+            putLong(ListeningPrefs.HERRAZ_POSITION, position)
+        }
+        return Stations.item(station).buildUpon()
+            .setRequestMetadata(MediaItem.RequestMetadata.Builder().setExtras(extras).build()).build()
     }
 
     private fun toggle() {
@@ -2671,6 +2767,7 @@ class RadioActivity : ComponentActivity() {
         if (savedStation?.url == id) return
         directoryBookmarks = StationDirectory.decode(prefs.getString("directory_bookmarks", null).orEmpty())
         savedStation = findStation(id) ?: savedStation
+        if (findStation(id) != null) ListeningPrefs.remember(prefs, ListeningPrefs.RECENT_STATIONS, id, 8)
     }
 
     private fun bindFavorite(button: ImageButton, station: RadioStation?) {
@@ -2687,6 +2784,9 @@ class RadioActivity : ComponentActivity() {
 
     private fun toggleFavorite(station: RadioStation) {
         favorites = if (station.url in favorites) favorites - station.url else favorites + station.url
+        favoriteOrder = if (station.url in favorites) favoriteOrder.filter { it != station.url } + station.url
+            else favoriteOrder.filter { it != station.url }
+        ListeningPrefs.put(prefs.edit(), ListeningPrefs.FAVORITE_ORDER, favoriteOrder).apply()
         persistStations(station)
         renderRows()
     }
@@ -2701,7 +2801,8 @@ class RadioActivity : ComponentActivity() {
     }
 
     private fun waitingForNetwork(player: MediaController): Boolean =
-        player.sessionExtras.getBoolean(PlaybackService.NETWORK_UNAVAILABLE) &&
+        (player.sessionExtras.getBoolean(PlaybackService.NETWORK_UNAVAILABLE) ||
+            player.sessionExtras.getBoolean(PlaybackService.RETRY_PENDING)) &&
             player.currentMediaItem != null && player.playWhenReady && player.playbackState != Player.STATE_ENDED
 
     private fun directionOf(text: String): Int =
@@ -2711,43 +2812,4 @@ class RadioActivity : ComponentActivity() {
         val current = controller?.currentMediaItem?.mediaId ?: savedStation?.url
         RadioQueue.neighbor(rows, current, direction)?.let(::select)
     }
-
-    private fun enable(view: View, enabled: Boolean) {
-        view.isEnabled = enabled
-        view.alpha = if (enabled) 1f else .45f
-    }
-
-    private fun label(value: String, size: Int, color: Int, bold: Boolean = false) = TextView(this).apply {
-        text = value
-        textSize = size.toFloat()
-        setTextColor(color)
-        textDirection = View.TEXT_DIRECTION_FIRST_STRONG
-        if (bold) setTypeface(typeface, Typeface.BOLD)
-    }
-
-    private fun button(value: String, action: () -> Unit) = label(value, 14, textColor, bold = true).apply {
-        gravity = Gravity.CENTER
-        background = pressable(R.drawable.radio_control)
-        isFocusable = true
-        remoteFocus()
-        setRadioClick(action)
-    }
-
-    private fun View.setRadioClick(action: () -> Unit) {
-        isSoundEffectsEnabled = false
-        setOnClickListener {
-            RadioSound.playClick(this@RadioActivity, prefs)
-            action()
-        }
-    }
-
-    private fun View.remoteFocus() {
-        if (television) foreground = getDrawable(R.drawable.radio_focus)
-    }
-
-    private fun row() = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-    private fun column() = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-    private fun pressable(drawable: Int? = null) = RippleDrawable(ripple, drawable?.let(::getDrawable),
-        GradientDrawable().apply { setColor(Color.WHITE); cornerRadius = dp(12).toFloat() })
-    private fun dp(value: Int) = (value * resources.displayMetrics.density + .5f).toInt()
 }

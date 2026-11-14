@@ -44,6 +44,7 @@ import com.autodrive.launcher.RadioStation
 import com.google.common.collect.ImmutableList
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
+import com.google.common.util.concurrent.MoreExecutors
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -65,6 +66,11 @@ internal class PlaybackService : MediaLibraryService() {
         const val PROGRAMME_SOURCE = "com.autodrive.radiomaroc.PROGRAMME_SOURCE"
         const val PROGRAMME_HOURS = "com.autodrive.radiomaroc.PROGRAMME_HOURS"
         const val LUXE_STATE = "com.autodrive.radiomaroc.LUXE_STATE"
+        const val RETRY_PENDING = "com.autodrive.radiomaroc.RETRY_PENDING"
+        private const val RETRY_FIRST_DELAY_MS = 2_000L
+        private const val RETRY_MAX_DELAY_MS = 30_000L
+        // About ten minutes of attempts before leaving the error on screen for the listener.
+        private const val RETRY_MAX_ATTEMPTS = 24
         val LUXE_OBSERVE = SessionCommand("com.autodrive.radiomaroc.LUXE_OBSERVE", Bundle.EMPTY)
         val LUXE_PLAY = SessionCommand("com.autodrive.radiomaroc.LUXE_PLAY", Bundle.EMPTY)
         val LUXE_PAUSE = SessionCommand("com.autodrive.radiomaroc.LUXE_PAUSE", Bundle.EMPTY)
@@ -88,7 +94,7 @@ internal class PlaybackService : MediaLibraryService() {
         when (key) {
             RadioSound.PROFILE -> applySoundProfile()
             RadioSound.DOLBY -> updateDolbySession()
-            "favorites", "directory_bookmarks" -> {
+            "favorites", "directory_bookmarks", ListeningPrefs.FAVORITE_ORDER -> {
                 session?.notifyChildrenChanged(CarRadioLibrary.FAVORITES, carFavorites().size, null)
             }
         }
@@ -113,6 +119,17 @@ internal class PlaybackService : MediaLibraryService() {
     private var validatedNetwork: Network? = null
     private var networkUnavailable = false
     private var retryAfterOutage = false
+    private val retryHandler = Handler(Looper.getMainLooper())
+    private var retryAttempt = 0
+    private var retryPending = false
+    // Whether the current station produced sound since it was selected; three failures before that mark it unavailable.
+    private var playedSinceSelection = false
+    private var failuresSinceSelection = 0
+    private val retryStream = Runnable {
+        setRetryPending(false)
+        if (session == null) return@Runnable
+        if (engine.playWhenReady && engine.playerError != null && !networkUnavailable) engine.prepare()
+    }
     private val networkCallback = object : ConnectivityManager.NetworkCallback() {
         override fun onCapabilitiesChanged(network: Network, capabilities: NetworkCapabilities) {
             val validated = capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
@@ -130,6 +147,12 @@ internal class PlaybackService : MediaLibraryService() {
     private val recoveryListener = object : Player.Listener {
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
             val changed = activeItem != null && mediaItem != null && activeItem?.mediaId != mediaItem.mediaId
+            if (activeItem?.mediaId != mediaItem?.mediaId) {
+                cancelStreamRetry(resetAttempts = true)
+                playedSinceSelection = false
+                failuresSinceSelection = 0
+            }
+            saveRecitationProgress()
             if (changed && !radioScreenActive) {
                 mediaItem?.mediaMetadata?.title?.takeIf { it.isNotBlank() }?.let(stationPopup::show)
             }
@@ -154,14 +177,27 @@ internal class PlaybackService : MediaLibraryService() {
         }
 
         override fun onPlayerError(error: PlaybackException) {
-            val id = session?.player?.currentMediaItem?.mediaId
+            val id = engine.currentMediaItem?.mediaId
             if (error.errorCode == PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS && Stations.snrt.any { it.url == id }) {
                 snrtAccess.clear()
+            }
+            handleStreamError(error)
+        }
+
+        override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+            if (!playWhenReady) {
+                cancelStreamRetry(resetAttempts = true)
+                saveRecitationProgress()
             }
         }
 
         override fun onEvents(player: Player, events: Player.Events) {
             if (events.contains(Player.EVENT_PLAYBACK_STATE_CHANGED) && player.isPlaying) retryAfterOutage = false
+            if (player.isPlaying) {
+                retryAttempt = 0
+                if (!playedSinceSelection) markAvailable(player.currentMediaItem?.mediaId)
+                playedSinceSelection = true
+            }
             recoverPlayback(player)
         }
     }
@@ -205,7 +241,11 @@ internal class PlaybackService : MediaLibraryService() {
         }
         engine = ExoPlayer.Builder(this, renderers)
             .setMediaSourceFactory(DefaultMediaSourceFactory(broadcastNetwork))
-            .setLoadControl(DefaultLoadControl.Builder().setBufferDurationsMs(3_000, 12_000, 900, 1_600).build())
+            // Keep up to 50 s of audio (under 1 MB at 128 kbit/s) so short dead zones on the road stay silent-free.
+            .setLoadControl(DefaultLoadControl.Builder()
+                .setBufferDurationsMs(15_000, 50_000, 1_500, 3_000)
+                .setPrioritizeTimeOverSizeThresholds(true)
+                .build())
             .setAudioAttributes(AudioAttributes.Builder().setUsage(C.USAGE_MEDIA)
                 .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC).build(), true)
             .setHandleAudioBecomingNoisy(true)
@@ -225,7 +265,8 @@ internal class PlaybackService : MediaLibraryService() {
                 override fun onConnect(session: MediaSession, controller: MediaSession.ControllerInfo): MediaSession.ConnectionResult {
                     if (!isOwnController(controller)) {
                         return if (controller.isTrusted || session.isMediaNotificationController(controller) ||
-                            session.isAutomotiveController(controller)) super.onConnect(session, controller)
+                            session.isAutomotiveController(controller) || session.isAutoCompanionController(controller))
+                            super.onConnect(session, controller)
                         else MediaSession.ConnectionResult.reject()
                     }
                     val commands = MediaSession.ConnectionResult.DEFAULT_SESSION_AND_LIBRARY_COMMANDS.buildUpon()
@@ -309,6 +350,21 @@ internal class PlaybackService : MediaLibraryService() {
                     return Futures.immediateFuture(resolved)
                 }
 
+                override fun onSetMediaItems(session: MediaSession, controller: MediaSession.ControllerInfo,
+                    mediaItems: List<MediaItem>, startIndex: Int, startPositionMs: Long):
+                    ListenableFuture<MediaSession.MediaItemsWithStartPosition> {
+                    // The screen asks for a Herraz surah with request extras; start the expanded playlist there.
+                    val start = mediaItems.singleOrNull()?.takeIf { it.mediaId == HerrazRecitations.SOURCE }
+                        ?.requestMetadata?.extras?.takeIf { it.containsKey(ListeningPrefs.HERRAZ_CHAPTER) }
+                    return Futures.transform(onAddMediaItems(session, controller, mediaItems), { resolved ->
+                        val index = start?.getInt(ListeningPrefs.HERRAZ_CHAPTER)?.let(HerrazRecitations::indexOf)
+                        if (index != null && index < resolved.size) {
+                            MediaSession.MediaItemsWithStartPosition(resolved, index,
+                                start?.getLong(ListeningPrefs.HERRAZ_POSITION, 0L) ?: 0L)
+                        } else MediaSession.MediaItemsWithStartPosition(resolved, startIndex, startPositionMs)
+                    }, MoreExecutors.directExecutor())
+                }
+
                 override fun onPlaybackResumption(session: MediaSession, controller: MediaSession.ControllerInfo):
                     ListenableFuture<MediaSession.MediaItemsWithStartPosition> {
                     val favorites = carFavorites()
@@ -327,6 +383,7 @@ internal class PlaybackService : MediaLibraryService() {
 
     private fun sessionExtras() = Bundle().apply {
         putBoolean(NETWORK_UNAVAILABLE, networkUnavailable)
+        putBoolean(RETRY_PENDING, retryPending)
         putString(LUXE_STATE, luxeState.name)
         putString(RadioSound.STATUS, soundStatus.name)
         if (dolbySession.activeId > 0) putInt(RadioSound.DOLBY_SESSION_ID, dolbySession.activeId)
@@ -363,10 +420,12 @@ internal class PlaybackService : MediaLibraryService() {
 
     private fun lastStationId(): String? = radioPreferences.getString("last_station", null)
 
-    private fun carFavorites() = CarRadioLibrary.favorites(
-        radioPreferences.getStringSet("favorites", emptySet()).orEmpty(),
-        StationDirectory.decode(radioPreferences.getString("directory_bookmarks", null).orEmpty()),
-    )
+    private fun carFavorites(): List<RadioStation> {
+        val ids = radioPreferences.getStringSet("favorites", emptySet()).orEmpty()
+        return CarRadioLibrary.favorites(ids,
+            StationDirectory.decode(radioPreferences.getString("directory_bookmarks", null).orEmpty()),
+            ListeningPrefs.favoriteOrder(radioPreferences, ids))
+    }
 
     private fun updateDolbySession() {
         val useDolby = radioPreferences.getBoolean(RadioSound.DOLBY, false) && engine.currentMediaItem != null &&
@@ -395,6 +454,10 @@ internal class PlaybackService : MediaLibraryService() {
 
     private fun stationQueue(): List<RadioStation> {
         val current = engine.currentMediaItem?.mediaId ?: return emptyList()
+        // Optional: steering-wheel and Bluetooth next/previous step through the presets only.
+        if (radioPreferences.getBoolean(ListeningPrefs.WHEEL_PRESETS, false)) {
+            carFavorites().takeIf { it.size > 1 }?.let { return it }
+        }
         return carQueue?.takeIf { queue -> queue.any { it.url == current } }
             ?: visibleStations.value ?: if (quranStations.any { it.url == current }) quranStations else moroccoStations
     }
@@ -433,6 +496,12 @@ internal class PlaybackService : MediaLibraryService() {
         val source = BroadcastProgrammes.source(station) ?: return
         programmeWork = scope.launch {
             while (isActive) {
+                // Only query the broadcaster's site while the listener actually wants this station playing.
+                if (!engine.playWhenReady) {
+                    delay(5_000)
+                    if (activeItem !== item) return@launch
+                    continue
+                }
                 val current = if (networkUnavailable) null else withContext(Dispatchers.IO) {
                     runCatching { BroadcastProgrammes.fetch(source) }.getOrNull()
                 }
@@ -509,21 +578,99 @@ internal class PlaybackService : MediaLibraryService() {
             return
         }
         val error = player.playerError?.errorCode
-        val networkError = error == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED ||
-            error == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT
+        // While offline, SNRT token fetches and HLS segments surface as generic IO errors, not only connection ones.
+        val networkError = error != null && isRetryable(error)
         if (networkUnavailable) {
             retryAfterOutage = error == null || networkError
         } else if (retryAfterOutage && networkError) {
             // Keep the current item's position and let the player retain its play/pause intent.
             retryAfterOutage = false
+            cancelStreamRetry(resetAttempts = false)
             player.prepare()
         }
+    }
+
+    private fun isRetryable(errorCode: Int): Boolean = when (errorCode) {
+        PlaybackException.ERROR_CODE_IO_UNSPECIFIED,
+        PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED,
+        PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT,
+        PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS,
+        PlaybackException.ERROR_CODE_IO_INVALID_HTTP_CONTENT_TYPE,
+        PlaybackException.ERROR_CODE_PARSING_CONTAINER_MALFORMED,
+        PlaybackException.ERROR_CODE_PARSING_MANIFEST_MALFORMED,
+        PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW,
+        PlaybackException.ERROR_CODE_TIMEOUT,
+        PlaybackException.ERROR_CODE_UNSPECIFIED -> true
+        else -> false
+    }
+
+    private fun handleStreamError(error: PlaybackException) {
+        if (!engine.playWhenReady || engine.currentMediaItem == null) return
+        if (!networkUnavailable && !playedSinceSelection && ++failuresSinceSelection == 3) {
+            markUnavailable(engine.currentMediaItem?.mediaId)
+        }
+        // A recitation chapter that cannot be fetched should not end the whole recitation.
+        if (engine.hasNextMediaItem() && (error.errorCode == PlaybackException.ERROR_CODE_IO_FILE_NOT_FOUND ||
+                error.errorCode == PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS || retryAttempt >= 1)) {
+            retryAttempt = 0
+            engine.seekToNextMediaItem()
+            engine.prepare()
+            return
+        }
+        if (error.errorCode == PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW) {
+            engine.seekToDefaultPosition()
+            engine.prepare()
+            return
+        }
+        // Outages are resumed by the network callback once Android reports a usable connection again.
+        if (networkUnavailable || !isRetryable(error.errorCode) || retryAttempt >= RETRY_MAX_ATTEMPTS) return
+        val delayMs = (RETRY_FIRST_DELAY_MS shl retryAttempt.coerceAtMost(4)).coerceAtMost(RETRY_MAX_DELAY_MS)
+        retryAttempt++
+        retryHandler.removeCallbacks(retryStream)
+        retryHandler.postDelayed(retryStream, delayMs)
+        setRetryPending(true)
+    }
+
+    /** Stations that failed three times in a row with a working network sink to the end of the lists. */
+    private fun markUnavailable(id: String?) {
+        if (id == null || id == HerrazRecitations.SOURCE) return
+        val marked = radioPreferences.getStringSet(ListeningPrefs.UNAVAILABLE, emptySet()).orEmpty()
+        if (id !in marked) radioPreferences.edit().putStringSet(ListeningPrefs.UNAVAILABLE, marked + id).apply()
+    }
+
+    private fun markAvailable(id: String?) {
+        val marked = radioPreferences.getStringSet(ListeningPrefs.UNAVAILABLE, emptySet()).orEmpty()
+        if (id != null && id in marked) radioPreferences.edit().putStringSet(ListeningPrefs.UNAVAILABLE, marked - id).apply()
+    }
+
+    /** Remembers the surah and position of the Herraz recitation so « Reprendre » starts where the listener stopped. */
+    private fun saveRecitationProgress() {
+        if (!::engine.isInitialized) return
+        val item = engine.currentMediaItem ?: return
+        if (item.mediaId != HerrazRecitations.SOURCE) return
+        val chapter = HerrazRecitations.chapters.getOrNull(engine.currentMediaItemIndex) ?: return
+        radioPreferences.edit().putInt(ListeningPrefs.HERRAZ_CHAPTER, chapter.number)
+            .putLong(ListeningPrefs.HERRAZ_POSITION, engine.currentPosition.coerceAtLeast(0)).apply()
+    }
+
+    private fun cancelStreamRetry(resetAttempts: Boolean) {
+        retryHandler.removeCallbacks(retryStream)
+        if (resetAttempts) retryAttempt = 0
+        setRetryPending(false)
+    }
+
+    private fun setRetryPending(pending: Boolean) {
+        if (retryPending == pending) return
+        retryPending = pending
+        session?.setSessionExtras(sessionExtras())
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibrarySession? = session
 
     override fun onDestroy() {
+        saveRecitationProgress()
         stationPopup.dismiss()
+        retryHandler.removeCallbacks(retryStream)
         connectivity.unregisterNetworkCallback(networkCallback)
         radioPreferences.unregisterOnSharedPreferenceChangeListener(preferenceListener)
         dolbySession.update(0)

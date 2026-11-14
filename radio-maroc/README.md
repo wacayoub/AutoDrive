@@ -111,6 +111,10 @@ Le flux de Radio 2M correspond au champ audio `link_ecouter` du service utilisé
 
 Les quatre pages de SNRT Live publient des flux HLS EasyBroadcast distincts. Une requête directe sans jeton reçoit HTTP 403. Avec un jeton temporaire obtenu auprès du service du lecteur officiel, les quatre manifestes, leurs variantes et des segments audio ont répondu lors des essais. L’application garde le jeton en mémoire jusqu’au renouvellement et ne transmet les paramètres qu’aux listes HLS correspondantes. [Radio Nationale](https://snrtlive.ma/fr/alidaa-alwatania) · [Radio Amazighe](https://snrtlive.ma/fr/alidaa-alamazighia) · [Chaîne Inter](https://snrtlive.ma/fr/chaine-inter) · [Mohammed VI du Saint Coran](https://snrtlive.ma/fr/idaat-mohammed-assadiss).
 
+## Vérifications de la version 2.5.35
+
+Sur l’émulateur Android 13 en 800 × 480, les vues Cockpit et Présélections ont été contrôlées à 160 et 213 dpi. L’onglet Pour vous, les thèmes de Radio Maroc, la sourate Al-Kahf lancée depuis la recherche, les raccourcis de pays, les présélections réordonnées, les boutons du volant limités aux présélections, les Réglages et la fenêtre Mises à jour ont été vérifiés. Après 70 s sans réseau, Med Radio a repris seule. Les 47 tests unitaires ont réussi. Lint a signalé 0 erreur et 73 avertissements. Le test sur l’Incarlink reste à faire.
+
 ## Vérifications de la version 1.8.1
 
 Sur l’émulateur Android 13 en 800 × 480, Radio 2M a atteint l’état « En direct » et la pause a fonctionné. Les quatre stations SNRT sont restées dans le lecteur et ont affiché « Source inaccessible · réessayer ». Med Radio a joué après ces essais. La mise à jour signée depuis 1.8.0 a conservé le favori Chaîne Inter. Les cinq URL de logos officielles ont renvoyé des images PNG. Les dix tests unitaires ont réussi et lint a signalé 0 erreur et 7 avertissements. Le test sur l’Incarlink reste à faire.
