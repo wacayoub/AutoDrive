@@ -115,6 +115,8 @@ Les quatre pages de SNRT Live publient des flux HLS EasyBroadcast distincts. Une
 
 Sur l’émulateur Android 13 en 800 × 480, les vues Cockpit et Présélections ont été contrôlées à 160 et 213 dpi. L’onglet Pour vous, les thèmes de Radio Maroc, la sourate Al-Kahf lancée depuis la recherche, les raccourcis de pays, les présélections réordonnées, les boutons du volant limités aux présélections, les Réglages et la fenêtre Mises à jour ont été vérifiés. Après 70 s sans réseau, Med Radio a repris seule. Les 47 tests unitaires ont réussi. Lint a signalé 0 erreur et 73 avertissements. Le test sur l’Incarlink reste à faire.
 
+La 2.5.35 est signée avec un nouveau certificat Radio Maroc (SHA-256 `b947b7ffbc84ea50e3b8810abaac1171bad745f6fc112da6a54f1fed1f1d1c3b`), la clé de la 2.5.34 n’étant plus disponible. Elle ne s’installe pas par-dessus la 2.5.34 : il faut désinstaller puis installer. Les versions suivantes se mettront à jour depuis la 2.5.35.
+
 ## Vérifications de la version 1.8.1
 
 Sur l’émulateur Android 13 en 800 × 480, Radio 2M a atteint l’état « En direct » et la pause a fonctionné. Les quatre stations SNRT sont restées dans le lecteur et ont affiché « Source inaccessible · réessayer ». Med Radio a joué après ces essais. La mise à jour signée depuis 1.8.0 a conservé le favori Chaîne Inter. Les cinq URL de logos officielles ont renvoyé des images PNG. Les dix tests unitaires ont réussi et lint a signalé 0 erreur et 7 avertissements. Le test sur l’Incarlink reste à faire.

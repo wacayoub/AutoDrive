@@ -30,7 +30,7 @@ def verify_radio_signer(apk, aapt):
         text=True,
     )
     fingerprints = re.findall(r"^Signer #\d+ certificate SHA-256 digest: ([a-f0-9]+)$", details, re.M)
-    assert fingerprints == ["ff69ab0e4ceed241255b1e58bf42b413985590989252479152d9f0c3aa849414"], \
+    assert fingerprints == ["b947b7ffbc84ea50e3b8810abaac1171bad745f6fc112da6a54f1fed1f1d1c3b"], \
         "Radio Maroc APK is not signed with the published radio certificate"
 
 

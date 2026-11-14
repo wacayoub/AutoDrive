@@ -1,3 +1,5 @@
+**Important — réinstallation nécessaire.** Cette version est signée avec une nouvelle clé. Elle ne peut pas s’installer par-dessus la 2.5.34 : la mise à jour automatique depuis la 2.5.34 affichera une erreur. Pour passer à la 2.5.35, désinstaller Radio Maroc & Coran, puis installer le fichier APK ci-dessous. Les favoris et les réglages de l’ancienne version sont effacés. Les versions suivantes se mettront à jour automatiquement depuis la 2.5.35.
+
 La radio reprend seule après une coupure de réseau ou de flux. Elle réessaie pendant une dizaine de minutes et repart dès que la connexion revient, y compris pour les radios SNRT après un tunnel. Jusqu’à 50 secondes d’audio sont gardées en réserve pour traverser les zones sans réseau. Les boutons du volant relancent la dernière station.
 
 L’écran voiture propose deux vues. Cockpit affiche un grand lecteur avec les actualités et de gros boutons ronds, et les stations à droite. Présélections affiche de grandes tuiles de logos avec le lecteur en bas. La météo et la prochaine prière restent visibles en haut de l’écran.
