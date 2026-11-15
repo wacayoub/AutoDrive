@@ -202,6 +202,11 @@ class RadioActivity : ComponentActivity() {
     private var prayerChip: PrayerChip? = null
     private var playerCategory: TextView? = null
     private lateinit var playerArtwork: StationArtwork
+    private var playerGlow: PlayerGlow? = null
+    private var glowMirrors = true
+    // The station on screen, so a change animates in once; skip() records which way the listener moved.
+    private var shownStationUrl: String? = null
+    private var switchDirection = 0
     private lateinit var playerStatus: TextView
     private lateinit var statusBadge: LinearLayout
     private lateinit var liveIndicator: LinearLayout
@@ -1480,7 +1485,6 @@ class RadioActivity : ComponentActivity() {
             playerCategory = null
             weatherTile = null
             prayerTile = null
-            background = getDrawable(R.drawable.radio_player)
             if (mini) gravity = Gravity.CENTER_VERTICAL
             if (full) gravity = Gravity.CENTER
             val padding = dp(if (shortLandscape) 7 else if (compactTv) 10 else if (television) 16 else 12)
@@ -1499,6 +1503,12 @@ class RadioActivity : ComponentActivity() {
             } else 0
             val artwork = StationArtwork(if (wide) 26 else 16, showCredits = true)
             playerArtwork = artwork
+            when {
+                // The docked bar keeps its controls on the right, so its light stays on the left in both directions.
+                horizontalMini -> glowBehind(this, artwork, .06f, .5f, mirrors = false)
+                stackedPresentation -> glowBehind(this, artwork, .5f, .32f)
+                else -> glowBehind(this, artwork, .14f, .5f)
+            }
             val artworkSize = dp(when {
                 full -> listeningArtwork
                 tightSidePlayer -> 26
@@ -1651,13 +1661,13 @@ class RadioActivity : ComponentActivity() {
         playerCategory = null
         weatherTile = null
         prayerTile = null
-        background = getDrawable(R.drawable.radio_player)
         val short = shortTouchGuide
         setPadding(dp(14), dp(if (short) 8 else 14), dp(14), dp(if (short) 8 else 12))
         val logoSize = dp(if (short) 78 else 128)
         val strip = dp(if (short) 14 else 18)
         val artwork = StationArtwork(26, showCredits = true)
         playerArtwork = artwork
+        glowBehind(this, artwork, .22f, .3f)
         audioMotif = PremiumRadioMotif(context, artwork, belowLogo = true)
         val hero = row().apply {
             playerPanel = this
@@ -1737,6 +1747,16 @@ class RadioActivity : ComponentActivity() {
                 marginEnd = -dp(13)
             }
         })
+    }
+
+    /** Lights the player panel in the colour of the station logo, centred where the logo sits. */
+    private fun glowBehind(panel: View, artwork: StationArtwork, centerX: Float, centerY: Float, mirrors: Boolean = true) {
+        val night = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES
+        val glow = PlayerGlow(panel, getDrawable(R.drawable.radio_player)!!, accent, if (night) 0x70 else 0x42,
+            centerX, centerY, dp(if (incarlinkStyle) 22 else 20).toFloat())
+        playerGlow = glow
+        glowMirrors = mirrors
+        artwork.onLogoColor = { color -> if (playerGlow === glow) glow.show(color) }
     }
 
     private fun playerColumn(
@@ -1891,6 +1911,7 @@ class RadioActivity : ComponentActivity() {
             imageTintList = ColorStateList.valueOf(if (primary) accent else textColor)
             scaleType = ImageView.ScaleType.CENTER
             background = pressable()
+            RadioMotion.pressScale(this, .9f)
             contentDescription = description
             isFocusable = true
             remoteFocus()
@@ -2020,6 +2041,7 @@ class RadioActivity : ComponentActivity() {
         init {
             layoutParams = AbsListView.LayoutParams(-1, dp(heightDp))
             background = idleBackground
+            if (!tvGuide) RadioMotion.pressScale(this, .95f)
             if (tvGuide) {
                 orientation = HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
@@ -2164,6 +2186,8 @@ class RadioActivity : ComponentActivity() {
         private var station: RadioStation? = null
         private var artworkGeneration = -1
         private var requestedPixels = 0
+        // The player glow follows the colour of the logo shown here.
+        var onLogoColor: ((Int?) -> Unit)? = null
 
         private val targetPixels get() = (minOf(width, height) - dp(6)).coerceAtLeast(0)
 
@@ -2199,6 +2223,7 @@ class RadioActivity : ComponentActivity() {
                 logo.setImageResource(if (station == null) R.drawable.ic_radio else R.drawable.ic_tab_quran)
                 logo.visibility = View.VISIBLE
                 initials.visibility = View.INVISIBLE
+                if (portrait == null) onLogoColor?.invoke(null)
             }
             loadArtwork()
         }
@@ -2219,6 +2244,7 @@ class RadioActivity : ComponentActivity() {
                     logo.setImageBitmap(bitmap)
                     logo.visibility = View.VISIBLE
                     initials.visibility = View.INVISIBLE
+                    onLogoColor?.let { it(RadioMotion.logoColor(bitmap)) }
                 }
             }
             val portrait = ReciterPortraits.forStation(station)
@@ -2587,12 +2613,21 @@ class RadioActivity : ComponentActivity() {
             visibility = if (text.isEmpty()) View.GONE else View.VISIBLE
         }
         playerPanel.layoutDirection = directionOf(station?.name.orEmpty())
+        playerGlow?.mirror(glowMirrors && playerPanel.layoutDirection == View.LAYOUT_DIRECTION_RTL)
         playerTitle.text = station?.name ?: "Choisir une station"
         playerSubtitle.text = if (chapter != null) "$chapter · ${HerrazRecitations.NARRATION}" else programme?.let {
             listOfNotNull(it.title, it.hours, it.source.takeIf { playerCategory == null }).joinToString(" · ")
         } ?: station?.let(Stations::subtitle).orEmpty()
         playerSubtitle.visibility = if (playerSubtitle.text.isEmpty()) View.GONE else View.VISIBLE
         playerArtwork.bind(station)
+        val shown = station?.url
+        if (shown != shownStationUrl) {
+            if (shownStationUrl != null && shown != null) {
+                RadioMotion.stationIn(playerArtwork, listOf(playerTitle, playerSubtitle), switchDirection, dp(28).toFloat())
+            }
+            shownStationUrl = shown
+            switchDirection = 0
+        }
         playerStatus.visibility = if (live) View.GONE else View.VISIBLE
         playerStatus.text = when {
             connectionFailed -> "Lecteur indisponible · réessayer"
@@ -2870,6 +2905,9 @@ class RadioActivity : ComponentActivity() {
 
     private fun skip(direction: Int) {
         val current = controller?.currentMediaItem?.mediaId ?: savedStation?.url
-        RadioQueue.neighbor(rows, current, direction)?.let(::select)
+        RadioQueue.neighbor(rows, current, direction)?.let {
+            switchDirection = direction
+            select(it)
+        }
     }
 }
