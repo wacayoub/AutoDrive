@@ -1,4 +1,5 @@
-<!-- Jour: warm ivory surfaces, ink-black controls and an emerald accent, with no blue anywhere. -->
+<!-- Jour: warm ivory surfaces, ink-black controls and an emerald accent, with no blue anywhere. Panels are
+     translucent so the drifting colour of AmbientBackdrop shows through them; dialogs stay opaque. -->
 <resources>
     <color name="radio_accent">#0B7A58</color>
     <color name="radio_text">#16171A</color>
@@ -7,8 +8,8 @@
     <color name="radio_background_top">#F8F6F2</color>
     <color name="radio_background_bottom">#EAE5DD</color>
     <color name="radio_window">#F8F6F2</color>
-    <color name="radio_control">#FFFFFF</color>
-    <color name="radio_control_border">#D6CFC5</color>
+    <color name="radio_control">#C7FFFFFF</color>
+    <color name="radio_control_border">#B8D6CFC5</color>
     <color name="radio_weather_label">#8A5A12</color>
     <color name="radio_prayer_label">#0B6B4C</color>
     <color name="radio_news_badge">#16171A</color>
@@ -17,19 +18,19 @@
     <color name="radio_dialog_border">#D6CFC5</color>
     <color name="radio_focus_fill">#1816171A</color>
     <color name="radio_focus_border">#16171A</color>
-    <color name="radio_header">#FFFFFF</color>
-    <color name="radio_catalogue">#FCFBF9</color>
-    <color name="radio_player_top">#FFFFFF</color>
-    <color name="radio_player_center">#F7F4EF</color>
-    <color name="radio_player_bottom">#EDE8E0</color>
-    <color name="radio_player_border">#DCD5CB</color>
+    <color name="radio_header">#D1FFFFFF</color>
+    <color name="radio_catalogue">#A6FCFBF9</color>
+    <color name="radio_player_top">#DBFFFFFF</color>
+    <color name="radio_player_center">#BFF8F5F0</color>
+    <color name="radio_player_bottom">#ADEFEAE2</color>
+    <color name="radio_player_border">#B3FFFFFF</color>
     <color name="radio_primary">#16171A</color>
     <color name="radio_primary_border">#000000</color>
     <color name="radio_on_primary">#FFFFFF</color>
-    <color name="radio_selected">#F3EFE8</color>
+    <color name="radio_selected">#E6F6F2EB</color>
     <color name="radio_selected_border">#16171A</color>
-    <color name="radio_category_active">#E9E4DB</color>
-    <color name="radio_list_rule">#E4DED5</color>
+    <color name="radio_category_active">#CCE9E4DB</color>
+    <color name="radio_list_rule">#99E4DED5</color>
     <color name="radio_tab_selected">#16171A</color>
     <color name="radio_tab_text_color">#57524C</color>
     <color name="radio_live_rule">#8E877D</color>

@@ -170,6 +170,77 @@ internal class PlayerGlow(
     }
 }
 
+/**
+ * The Jour backdrop: the ivory gradient with three large, soft patches of colour drifting slowly behind the
+ * translucent panels. The patches only move their shader matrices, at about 24 frames a second, and stop whenever
+ * the screen is hidden or Android animations are off.
+ */
+internal class AmbientBackdrop(private val base: Drawable, private val glows: IntArray) : Drawable() {
+    private class Glow(val paint: android.graphics.Paint, val matrix: android.graphics.Matrix)
+
+    private val patches = glows.map {
+        Glow(android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG), android.graphics.Matrix())
+    }
+    private var phase = 0f
+    private var lastFrame = 0L
+    private val drift = ValueAnimator.ofFloat(0f, (2 * Math.PI).toFloat()).apply {
+        duration = 18_000
+        repeatCount = ValueAnimator.INFINITE
+        interpolator = android.view.animation.LinearInterpolator()
+        addUpdateListener {
+            val now = android.os.SystemClock.uptimeMillis()
+            if (now - lastFrame < 40) return@addUpdateListener
+            lastFrame = now
+            phase = it.animatedValue as Float
+            invalidateSelf()
+        }
+    }
+
+    override fun onBoundsChange(bounds: android.graphics.Rect) {
+        base.bounds = bounds
+        val radius = maxOf(bounds.width(), bounds.height()) * .55f
+        patches.forEachIndexed { index, glow ->
+            val color = glows[index]
+            glow.paint.shader = android.graphics.RadialGradient(0f, 0f, radius,
+                intArrayOf(color, Color.argb(Color.alpha(color) / 3, Color.red(color), Color.green(color), Color.blue(color)),
+                    Color.TRANSPARENT),
+                floatArrayOf(0f, .45f, 1f), android.graphics.Shader.TileMode.CLAMP)
+        }
+    }
+
+    override fun draw(canvas: android.graphics.Canvas) {
+        base.draw(canvas)
+        val box = bounds
+        if (box.isEmpty) return
+        val w = box.width().toFloat()
+        val h = box.height().toFloat()
+        patches.forEachIndexed { index, glow ->
+            // Each patch circles its own home on a slow Lissajous path, out of step with the others.
+            val angle = phase + index * 2.1f
+            val homeX = floatArrayOf(.12f, .88f, .55f)[index % 3]
+            val homeY = floatArrayOf(.18f, .30f, .95f)[index % 3]
+            val x = box.left + w * (homeX + .24f * Math.cos(angle.toDouble()).toFloat())
+            val y = box.top + h * (homeY + .28f * Math.sin((angle * 2 + index).toDouble()).toFloat())
+            glow.matrix.setTranslate(x, y)
+            glow.paint.shader?.setLocalMatrix(glow.matrix)
+            canvas.drawRect(box, glow.paint)
+        }
+    }
+
+    override fun setVisible(visible: Boolean, restart: Boolean): Boolean {
+        val changed = super.setVisible(visible, restart)
+        if (visible && RadioMotion.enabled) {
+            if (!drift.isStarted) drift.start()
+        } else drift.cancel()
+        return changed
+    }
+
+    override fun setAlpha(alpha: Int) = base.setAlpha(alpha)
+    override fun setColorFilter(colorFilter: android.graphics.ColorFilter?) = base.setColorFilter(colorFilter)
+    @Deprecated("Deprecated in Java")
+    override fun getOpacity() = android.graphics.PixelFormat.OPAQUE
+}
+
 /** Three bars that bounce while a station plays, used as the « now playing » mark of the channel list. */
 internal class EqualizerBars(context: android.content.Context, color: Int) : View(context) {
     private val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { this.color = color }

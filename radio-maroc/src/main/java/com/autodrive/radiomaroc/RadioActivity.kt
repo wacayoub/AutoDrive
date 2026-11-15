@@ -513,7 +513,11 @@ class RadioActivity : ComponentActivity() {
         weatherChip = null
         prayerChip = null
         layoutDirection = View.LAYOUT_DIRECTION_LTR
-        background = getDrawable(R.drawable.radio_background)
+        background = getDrawable(R.drawable.radio_background)?.let { base ->
+            val day = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_NO
+            // Jour: emerald, amber and coral light drifting behind the translucent panels.
+            if (day && !television) AmbientBackdrop(base, intArrayOf(0x8A2BB58A.toInt(), 0x99F2B45A.toInt(), 0x80EB8A78.toInt())) else base
+        }
         isFocusableInTouchMode = !television
         val inlineCategories = showingCatalogue && (television || landscape)
         val mastheadHeight = dp(when {

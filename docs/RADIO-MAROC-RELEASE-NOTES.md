@@ -4,7 +4,7 @@ L’onglet Coran compte 33 récitateurs, classés par notoriété : Mishary Alaf
 
 Changer de station devient plus fluide. Le logo de la nouvelle station apparaît avec un léger zoom et son nom glisse depuis le côté choisi, suivant ou précédent. Une lumière douce aux couleurs du logo éclaire le lecteur et change de teinte d’une station à l’autre. Dans Présélections, chaque tuile s’éclaire elle aussi aux couleurs de son logo, avec des coins plus arrondis et des logos aux angles adoucis ; la station choisie ressort davantage. Dans la liste des chaînes, chaque station devient une carte arrondie plus aérée, teintée par la couleur de son logo, et la station en écoute est marquée par de petites barres animées. Les tuiles et les boutons s’enfoncent légèrement sous le doigt. Ces effets suivent le réglage des animations d’Android.
 
-Le mode Jour abandonne le bleu : fond ivoire en dégradé chaud, boutons, onglet actif et station choisie en noir, touches de vert émeraude. Le lecteur passe doucement du blanc au sable, éclairé par la couleur du logo.
+Le mode Jour abandonne le bleu : fond ivoire en dégradé chaud, boutons, onglet actif et station choisie en noir, touches de vert émeraude. Le lecteur passe doucement du blanc au sable, éclairé par la couleur du logo. Les panneaux deviennent légèrement transparents et laissent voir, derrière eux, des halos vert, ambre et corail qui dérivent lentement sur le fond.
 
 Changer de station après Luxe Radio arrête maintenant Luxe Radio à coup sûr, même si Android a redémarré le service de lecture entre-temps.
 
