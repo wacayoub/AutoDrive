@@ -6,6 +6,8 @@ Changer de station devient plus fluide. Le logo de la nouvelle station apparaît
 
 Le mode Jour abandonne le bleu : fond ivoire en dégradé chaud, boutons, onglet actif et station choisie en noir, touches de vert émeraude. Le lecteur passe doucement du blanc au sable, éclairé par la couleur du logo. Les panneaux deviennent légèrement transparents et laissent voir, derrière eux, des halos vert, ambre et corail qui dérivent lentement sur le fond. La barre d’actualités se fond elle aussi dans le lecteur.
 
+Dans l’onglet Maroc, la rangée Toutes, Infos & débats, Sport, Hits… disparaît : toutes les stations s’affichent directement, avec plus de place pour la liste.
+
 Changer de station après Luxe Radio arrête maintenant Luxe Radio à coup sûr, même si Android a redémarré le service de lecture entre-temps.
 
 Cette version se met à jour automatiquement depuis la 2.5.35 et les versions suivantes.

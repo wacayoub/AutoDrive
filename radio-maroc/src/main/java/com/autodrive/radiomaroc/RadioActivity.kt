@@ -1199,7 +1199,9 @@ class RadioActivity : ComponentActivity() {
     private fun activeSort(): StationSort = StationSort.options(tab)
         .firstOrNull { it.name == prefs.getString("sort_${tab.name}", null) } ?: StationSort.DEFAULT
 
-    private fun activeCategory(): MoroccoCategory = MoroccoCategory.restore(prefs.getString("morocco_category", null))
+    // The theme chips (Infos, Sport, Hits…) were removed at the owner's request, so the Maroc list always shows every
+    // station; a theme saved by an older version must not keep hiding stations with no way back.
+    private fun activeCategory(): MoroccoCategory = MoroccoCategory.ALL
 
     private fun activeQuranSection(): QuranSection? =
         QuranSection.entries.firstOrNull { it.name == prefs.getString("quran_section", null) }
@@ -2553,19 +2555,7 @@ class RadioActivity : ComponentActivity() {
     private fun renderChips() {
         chipBar.removeAllViews()
         when (tab) {
-            StationTab.MOROCCO -> {
-                val selected = activeCategory()
-                val counts = Stations.themeCounts(if (selected == MoroccoCategory.ALL && query.isBlank() && !radioFavoritesOnly) rows
-                    else Stations.visible(StationTab.MOROCCO, favorites, "", directory = directory.stations, bookmarks = directoryBookmarks))
-                for (theme in MoroccoCategory.entries) {
-                    val count = if (theme == MoroccoCategory.ALL) null else counts[theme] ?: 0
-                    if (count == 0 && theme != selected) continue
-                    addChip(theme.chip, count, theme == selected, "Thème · ${theme.label}") {
-                        prefs.edit().putString("morocco_category", theme.name).apply()
-                        updateDirectory(resetScroll = true)
-                    }
-                }
-            }
+            StationTab.MOROCCO -> Unit
             StationTab.QURAN -> {
                 val selected = activeQuranSection()
                 addChip("الكل · Tout", null, selected == null, "Toutes les récitations") { chooseQuranSection(null) }
