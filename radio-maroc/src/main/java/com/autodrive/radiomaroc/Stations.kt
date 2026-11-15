@@ -483,9 +483,15 @@ internal object Stations {
         station.countryCode != null -> StationDirectory.countryName(station.countryCode)
         station in haramStations -> "${station.tags.single()} · المسجد الحرام · ${station.url.removeSuffix(".mp3").takeLast(10)}"
         station == herraz -> HerrazRecitations.NARRATION
-        station in tajwid -> "المصحف المجوّد · MP3Quran"
-        station == badr -> "حفص عن عاصم · MP3Quran"
-        else -> station.tags.firstOrNull() ?: "القرآن الكريم · MP3Quran"
+        station in tajwid -> "المصحف المجوّد · بث مباشر · MP3Quran"
+        station == badr -> "حفص عن عاصم · بث مباشر · MP3Quran"
+        else -> station.tags.firstOrNull() ?: "ترتيل · بث مباشر · MP3Quran"
+    }
+
+    /** A one or two word kind for notes such as « Présélection 1 · Débats »: the last part of the description. */
+    fun shortKind(station: RadioStation): String? = when {
+        isReciter(station) -> "القرآن الكريم"
+        else -> (listDescription(station) ?: subtitle(station)).split(" · ").last().takeIf { it.isNotBlank() }
     }
 
     fun listDescription(station: RadioStation): String? = when {

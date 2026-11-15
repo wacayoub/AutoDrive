@@ -8,6 +8,8 @@ Le mode Jour abandonne le bleu : fond ivoire en dégradé chaud, boutons, onglet
 
 Dans l’onglet Maroc, la rangée Toutes, Infos & débats, Sport, Hits… disparaît : toutes les stations s’affichent directement, avec plus de place pour la liste.
 
+Dans le Coran, les récitateurs sans photo ont maintenant une tuile verte à l’initiale de leur nom, et le sous-titre indique « ترتيل · بث مباشر ». Pour vous et Favoris précisent le genre de chaque station, par exemple « Présélection 1 · Débats ». Le bouton « Organiser » des Favoris n’est plus coupé.
+
 Changer de station après Luxe Radio arrête maintenant Luxe Radio à coup sûr, même si Android a redémarré le service de lecture entre-temps.
 
 Cette version se met à jour automatiquement depuis la 2.5.35 et les versions suivantes.

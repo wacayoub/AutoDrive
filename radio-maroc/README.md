@@ -125,6 +125,8 @@ Les quatre pages de SNRT Live publient des flux HLS EasyBroadcast distincts. Une
 
 **Onglet Maroc.** La rangée de thèmes (Toutes, Infos & débats, Sport, Hits…) sous la recherche est retirée à la demande du propriétaire ; la liste gagne sa hauteur. `activeCategory()` renvoie toujours `MoroccoCategory.ALL`, si bien qu’un thème enregistré par une ancienne version ne masque plus de stations. Les rangées du Coran, du Monde et des Favoris restent.
 
+**Pour vous, Coran, Favoris.** Un récitateur sans portrait n’a plus l’icône de livre : `StationArtwork` affiche la première lettre de son nom en blanc sur une tuile émeraude, et la lueur du lecteur prend ce vert. Le sous-titre par défaut des radios MP3Quran devient « ترتيل · بث مباشر · MP3Quran » (et « بث مباشر » pour le tajwid et Badr). Dans Pour vous et Favoris, les notes « Écoutée récemment » et « Présélection N » reçoivent le genre de la station (`Stations.shortKind`), par exemple « Présélection 1 · Débats ». La puce « Organiser les présélections » devient « Organiser », et la rangée de puces ne défile plus que si la puce choisie sort de l’écran, du strict nécessaire, si bien que la première n’est plus coupée. Vérifié en Jour sur l’émulateur.
+
 Sur l’émulateur Android 13 en 800 × 480, sans Luxe Radio, l’ordre de l’onglet Coran, le direct de Herraz et le passage à Med Radio ont été vérifiés. Les tests unitaires ont réussi et lint a signalé 0 erreur. Le passage de Luxe Radio à une autre station reste à vérifier sur l’Incarlink.
 
 ## Vérifications de la version 2.5.40

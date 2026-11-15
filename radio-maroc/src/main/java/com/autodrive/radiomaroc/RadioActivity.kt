@@ -134,6 +134,7 @@ class RadioActivity : ComponentActivity() {
     private var restoringActivity = false
     private var playbackQuery: String? = null
     private val accent by lazy { getColor(R.color.radio_accent) }
+    private val reciterGreen = 0xFF1DB386.toInt()
     private val textColor by lazy { getColor(R.color.radio_text) }
     private val muted by lazy { getColor(R.color.radio_muted) }
     private val amber by lazy { getColor(R.color.radio_favorite) }
@@ -2335,23 +2336,33 @@ class RadioActivity : ComponentActivity() {
             artworkGeneration = artwork.generation
             logoWork?.cancel()
             requestedPixels = 0
+            val reciter = station != null && Stations.isReciter(station)
             initials.text = when {
                 station == null -> "FM"
-                Stations.isReciter(station) -> "ق"
+                // A reciter without portrait gets the first letter of his name on an emerald tile.
+                reciter -> Stations.reciterName(station!!).trim().take(1).ifEmpty { "ق" }
                 else -> station.name.split(' ').take(2).joinToString("") { it.take(1) }
             }
+            initials.background = if (reciter) reciterTile() else null
+            initials.setTextColor(if (reciter) Color.WHITE else accent)
             initials.visibility = View.VISIBLE
             logo.visibility = View.INVISIBLE
             logo.setImageDrawable(null)
             val portrait = station?.let(ReciterPortraits::forStation)
             bindCredit(station, portrait)
-            if (station == null || Stations.isReciter(station)) {
-                logo.setImageResource(if (station == null) R.drawable.ic_radio else R.drawable.ic_tab_quran)
+            if (station == null) {
+                logo.setImageResource(R.drawable.ic_radio)
                 logo.visibility = View.VISIBLE
                 initials.visibility = View.INVISIBLE
-                if (portrait == null) onLogoColor?.invoke(null)
-            }
+                onLogoColor?.invoke(null)
+            } else if (reciter && portrait == null) onLogoColor?.invoke(reciterGreen)
+            if (reciter && portrait == null) return
             loadArtwork()
+        }
+
+        private fun reciterTile() = GradientDrawable(GradientDrawable.Orientation.TL_BR,
+            intArrayOf(0xFF1DB386.toInt(), 0xFF0B5E47.toInt())).apply {
+            cornerRadius = minOf(width, height).takeIf { it > 0 }?.let { it * .2f } ?: dp(10).toFloat()
         }
 
         override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
@@ -2374,6 +2385,7 @@ class RadioActivity : ComponentActivity() {
                 }
             }
             val portrait = ReciterPortraits.forStation(station)
+            if (portrait == null && Stations.isReciter(station)) return
             logoWork = if (portrait != null) artwork.loadPortrait(portrait.image, size, show)
                 else artwork.load(station.logoUrl, size, show)
         }
@@ -2452,6 +2464,13 @@ class RadioActivity : ComponentActivity() {
         }
         if (tab == StationTab.FAVORITES && sort == StationSort.DEFAULT) {
             listed.forEachIndexed { index, station -> notes.putIfAbsent(station.url, "Présélection ${index + 1}") }
+        }
+        if (tab == StationTab.FOR_YOU || tab == StationTab.FAVORITES) listed.forEach { station ->
+            // « Écoutée récemment » or « Présélection 2 » alone repeat down the list; add what the station plays.
+            val note = notes[station.url] ?: return@forEach
+            if (note.startsWith("Écoutée") || note.startsWith("Présélection")) Stations.shortKind(station)?.let {
+                notes[station.url] = "$note · $it"
+            }
         }
         val unavailable = prefs.getStringSet(ListeningPrefs.UNAVAILABLE, emptySet()).orEmpty()
         if (tab != StationTab.FAVORITES && listed.any { it.url in unavailable }) {
@@ -2582,7 +2601,7 @@ class RadioActivity : ComponentActivity() {
                 addChip("Autres pays…", null, false, "Choisir un continent ou un pays") { chooseContinent() }
             }
             StationTab.FAVORITES -> if (favorites.size > 1) {
-                addChip("Organiser les présélections", null, false, "Changer l’ordre des présélections", ::organizePresets)
+                addChip("Organiser", null, false, "Changer l’ordre des présélections", ::organizePresets)
                 val wheel = prefs.getBoolean(ListeningPrefs.WHEEL_PRESETS, false)
                 addChip(if (wheel) "Volant : présélections" else "Volant : toute la liste", null, wheel,
                     "Boutons du volant") { setWheelPresets(!wheel) }
@@ -2610,7 +2629,14 @@ class RadioActivity : ComponentActivity() {
             topMargin = dp(2)
             bottomMargin = dp(2)
         })
-        if (selected) chipScroller.post { chipScroller.scrollTo((chip.left - dp(24)).coerceAtLeast(0), 0) }
+        // Scroll only when the selected chip is out of sight, so the first chips are never cut at the edge.
+        if (selected) chipScroller.post {
+            val visible = chipScroller.scrollX..(chipScroller.scrollX + chipScroller.width)
+            when {
+                chip.left !in visible -> chipScroller.scrollTo((chip.left - dp(8)).coerceAtLeast(0), 0)
+                chip.right !in visible -> chipScroller.scrollTo(chip.right - chipScroller.width + dp(8), 0)
+            }
+        }
     }
 
     private fun chooseQuranSection(section: QuranSection?) {
