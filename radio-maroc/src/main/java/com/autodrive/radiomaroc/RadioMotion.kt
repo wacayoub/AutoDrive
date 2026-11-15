@@ -169,3 +169,68 @@ internal class PlayerGlow(
         light.colors = intArrayOf(Color.argb(strength, Color.red(value), Color.green(value), Color.blue(value)), Color.TRANSPARENT)
     }
 }
+
+/** Three bars that bounce while a station plays, used as the « now playing » mark of the channel list. */
+internal class EqualizerBars(context: android.content.Context, color: Int) : View(context) {
+    private val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { this.color = color }
+    private val bar = android.graphics.RectF()
+    private var phase = 0f
+    private val motion = ValueAnimator.ofFloat(0f, (2 * Math.PI).toFloat()).apply {
+        duration = 1100
+        repeatCount = ValueAnimator.INFINITE
+        interpolator = android.view.animation.LinearInterpolator()
+        addUpdateListener {
+            phase = it.animatedValue as Float
+            invalidate()
+        }
+    }
+
+    var playing = false
+        set(value) {
+            if (field == value) return
+            field = value
+            update()
+        }
+
+    init {
+        importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
+    }
+
+    private fun update() {
+        if (playing && isAttachedToWindow && visibility == VISIBLE && RadioMotion.enabled) {
+            if (!motion.isStarted) motion.start()
+        } else {
+            motion.cancel()
+            phase = 0f
+            invalidate()
+        }
+    }
+
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        update()
+    }
+
+    override fun onDetachedFromWindow() {
+        motion.cancel()
+        super.onDetachedFromWindow()
+    }
+
+    override fun onVisibilityChanged(changedView: View, visibility: Int) {
+        super.onVisibilityChanged(changedView, visibility)
+        update()
+    }
+
+    override fun onDraw(canvas: android.graphics.Canvas) {
+        val gap = width / 7f
+        val barWidth = (width - gap * 2) / 3f
+        for (index in 0 until 3) {
+            // Each bar follows the same wave a third of a turn apart; at rest they settle at staggered heights.
+            val level = if (motion.isRunning) .35f + .65f * ((Math.sin((phase + index * 2.1f).toDouble()) + 1) / 2).toFloat()
+                else floatArrayOf(.55f, 1f, .7f)[index]
+            val left = index * (barWidth + gap)
+            bar.set(left, height * (1 - level), left + barWidth, height.toFloat())
+            canvas.drawRoundRect(bar, barWidth / 2, barWidth / 2, paint)
+        }
+    }
+}

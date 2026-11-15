@@ -259,6 +259,8 @@ class RadioActivity : ComponentActivity() {
     private val showingCatalogue get() = profile.showingCatalogue
     private val tvGuide get() = profile.tvGuide
     private val tvGuideRowDp get() = profile.tvGuideRowDp
+    // Touch channel lists draw rows as spaced cards, so they get a little more height than TV guide rows.
+    private val channelRowDp get() = tvGuideRowDp + if (television) 0 else 8
     private val shortTouchGuide get() = profile.shortTouchGuide
     private val catalogueInGrid get() = profile.catalogueInGrid
     private val catalogueAdapter get() = if (catalogueInGrid) tileAdapter else stationAdapter
@@ -1988,7 +1990,7 @@ class RadioActivity : ComponentActivity() {
         (recycled as? TextView ?: label("", 13, accent, bold = true).apply {
             gravity = Gravity.CENTER
             setPadding(dp(6), 0, dp(6), 0)
-            layoutParams = AbsListView.LayoutParams(-1, dp(if (tvGuide) tvGuideRowDp else 48))
+            layoutParams = AbsListView.LayoutParams(-1, dp(if (tvGuide) channelRowDp else 48))
             background = pressable(R.drawable.radio_control)
         }).apply {
             text = directoryPageLabel
@@ -1997,7 +1999,7 @@ class RadioActivity : ComponentActivity() {
 
     private inner class StationTile : LinearLayout(this@RadioActivity) {
         private val heightDp = when {
-            tvGuide -> tvGuideRowDp
+            tvGuide -> channelRowDp
             touchMosaic -> if (shortLandscape) 92 else 108
             compactTv -> (resources.configuration.screenHeightDp * .16).toInt().coerceIn(57, 66)
             television -> (resources.configuration.screenHeightDp * .18).toInt().coerceIn(72, 134)
@@ -2075,7 +2077,9 @@ class RadioActivity : ComponentActivity() {
             maxLines = 1
             ellipsize = TextUtils.TruncateAt.END
         }
-        private val playingMark = if (tvGuide) ImageView(context).apply {
+        // The channel list marks the playing station with moving bars; TV guides keep the play icon.
+        private val playingBars = if (rowStyle) EqualizerBars(context, accent).apply { visibility = View.INVISIBLE } else null
+        private val playingMark = if (tvGuide && !rowStyle) ImageView(context).apply {
             setImageResource(R.drawable.ic_radio_play)
             imageTintList = ColorStateList.valueOf(accent)
             importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
@@ -2106,13 +2110,14 @@ class RadioActivity : ComponentActivity() {
             if (tvGuide) {
                 orientation = HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
-                setPadding(dp(7), 0, dp(7), 0)
-                val artSize = dp((heightDp - 6).coerceAtMost(42))
-                addView(logo, LinearLayout.LayoutParams(artSize, artSize).apply { marginEnd = dp(8) })
+                setPadding(dp(if (rowStyle) 11 else 7), 0, dp(if (rowStyle) 11 else 7), 0)
+                val artSize = dp(if (rowStyle) (heightDp - 14).coerceAtMost(44) else (heightDp - 6).coerceAtMost(42))
+                addView(logo, LinearLayout.LayoutParams(artSize, artSize).apply { marginEnd = dp(if (rowStyle) 12 else 8) })
                 addView(column().apply {
                     addView(name, LinearLayout.LayoutParams(-1, -2))
-                    addView(subtitle, LinearLayout.LayoutParams(-1, -2))
+                    addView(subtitle, LinearLayout.LayoutParams(-1, -2).apply { if (rowStyle) topMargin = dp(3) })
                 }, LinearLayout.LayoutParams(0, -2, 1f))
+                playingBars?.let { addView(it, LinearLayout.LayoutParams(dp(16), dp(14)).apply { marginStart = dp(8) }) }
                 val markSize = dp(if (touchGuide) 16 else 14)
                 favoriteMark?.let { addView(it, LinearLayout.LayoutParams(markSize, markSize).apply { marginStart = dp(4) }) }
                 playingMark?.let { addView(it, LinearLayout.LayoutParams(markSize, markSize).apply { marginStart = dp(4) }) }
@@ -2135,7 +2140,15 @@ class RadioActivity : ComponentActivity() {
             val selected = station.url == highlighted?.first
             val playing = selected && highlighted?.second == true
             val tileBackground = if (selected) selectedBackground else idleBackground
-            if (background !== tileBackground) background = tileBackground
+            if (background !== tileBackground) {
+                // Inset card backgrounds report their insets as padding; keep the tile's own padding instead.
+                val start = paddingStart
+                val top = paddingTop
+                val end = paddingEnd
+                val bottom = paddingBottom
+                background = tileBackground
+                setPaddingRelative(start, top, end, bottom)
+            }
             contentDescription = "Écouter ${station.name}"
             val favorite = touchGuide && station.url in favorites
             val playbackState = if (playing) "En écoute" else if (selected) "Sélectionnée" else null
@@ -2153,6 +2166,10 @@ class RadioActivity : ComponentActivity() {
             }
             subtitle.visibility = if (subtitle.text.isEmpty()) View.GONE else View.VISIBLE
             playingMark?.visibility = if (playing) View.VISIBLE else View.INVISIBLE
+            playingBars?.let {
+                it.visibility = if (playing) View.VISIBLE else View.GONE
+                it.playing = playing
+            }
         }
     }
 
