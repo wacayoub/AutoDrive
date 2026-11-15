@@ -1292,7 +1292,7 @@ class RadioActivity : ComponentActivity() {
         visibility = if (tickerBulletin == null) View.GONE else View.VISIBLE
         layoutDirection = View.LAYOUT_DIRECTION_LTR
         gravity = Gravity.CENTER_VERTICAL
-        background = pressable(R.drawable.radio_control)
+        background = pressable(R.drawable.radio_news_bar)
         isFocusable = true
         contentDescription = "${infoLabel()} · Actualités, météo et salat"
         remoteFocus()

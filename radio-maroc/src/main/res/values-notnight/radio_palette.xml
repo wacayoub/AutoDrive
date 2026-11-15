@@ -13,7 +13,7 @@
     <color name="radio_weather_label">#8A5A12</color>
     <color name="radio_prayer_label">#0B6B4C</color>
     <color name="radio_news_badge">#16171A</color>
-    <color name="radio_news_badge_background">#ECE7DF</color>
+    <color name="radio_news_badge_background">#1416171A</color>
     <color name="radio_dialog">#FFFFFF</color>
     <color name="radio_dialog_border">#D6CFC5</color>
     <color name="radio_focus_fill">#1816171A</color>

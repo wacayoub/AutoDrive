@@ -1,0 +1,4 @@
+<!-- The news bar under the player looks like the other controls; Jour replaces it with a glass strip. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@drawable/radio_control" />
+</layer-list>
