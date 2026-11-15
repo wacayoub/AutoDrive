@@ -16,8 +16,8 @@ class StationsTest {
         val tajwid = quran.filter { Stations.quranSection(it) == QuranSection.TAJWID }
         assertEquals(61, morocco.size)
         assertTrue(morocco.mapNotNull { it.logoUrl }.all { RadioStation.validUrl(it) != null })
-        // 33 live reciters, 2 adhkar radios, 37 whole Qurans, 4 tajwid radios and 6 Haram prayers.
-        assertEquals(82, quran.size)
+        // 33 live reciters, 2 adhkar radios and 10 adhkar recordings, 37 whole Qurans, 4 tajwid radios and 6 Haram prayers.
+        assertEquals(92, quran.size)
         assertEquals(33, quran.count { Stations.quranSection(it) == QuranSection.MURATTAL })
         assertEquals(4, tajwid.size)
         assertEquals(Stations.all.size, Stations.all.map { it.url }.toSet().size)
@@ -337,7 +337,8 @@ class StationsTest {
         val endOfMurattal = quran.last { Stations.quranSection(it) == QuranSection.MURATTAL }
         val firstAdhkar = quran.first { Stations.quranSection(it) == QuranSection.ADHKAR }
         assertEquals(firstAdhkar, RadioQueue.neighbor(quran, endOfMurattal.url, 1))
-        assertEquals(listOf("فارس عباد", "فارس عباد · حفص"),
+        // His live radio, his adhkar and his whole Quran.
+        assertEquals(listOf("فارس عباد", "فارس عباد · أذكار طرفي النهار", "فارس عباد · حفص"),
             Stations.visible(StationTab.QURAN, emptySet(), "Fares Abbad").map { it.name })
         assertEquals(StationTab.QURAN, StationTab.restore("TAJWID"))
         assertEquals(StationTab.QURAN, StationTab.restore("HARAM"))
@@ -429,8 +430,15 @@ class StationsTest {
         assertEquals(0, Mushaf.startIndex(hazza, 2))
         assertEquals(18, HerrazRecitations.findNumber("Al-Kahf"))
         assertEquals(33, HerrazRecitations.findNumber("الأحزاب"))
-        assertEquals(listOf("أذكار الصباح", "أذكار المساء"),
-            quran.filter { Stations.quranSection(it) == QuranSection.ADHKAR }.map { it.name })
-        assertTrue(Adhkar.stations.none(Stations::isRecording))
+        val adhkar = quran.filter { Stations.quranSection(it) == QuranSection.ADHKAR }
+        assertEquals(listOf("أذكار الصباح", "أذكار المساء"), adhkar.take(2).map { it.name })
+        assertTrue(adhkar.take(2).none(Stations::isRecording))
+        // Recordings by named readers from Islamweb's file server, over HTTPS.
+        val readings = adhkar.drop(2)
+        assertEquals(10, readings.size)
+        assertTrue(readings.all { Stations.isRecording(it) && it.url.startsWith("https://dl2.islamweb.net/Audio3/Do3a/") })
+        assertEquals(8, readings.map(Stations::reciterName).distinct().size)
+        assertEquals("مشاري راشد العفاسي · أذكار الصباح والمساء", readings.first().name)
+        assertEquals(ReciterPortraits.forStation(murattal.first()), ReciterPortraits.forStation(readings.first()))
     }
 }

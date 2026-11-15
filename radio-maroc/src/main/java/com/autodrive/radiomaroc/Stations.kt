@@ -323,7 +323,8 @@ internal object Stations {
     fun reciterName(station: RadioStation): String = station.name.substringBefore(" ·")
     // Haram excerpts are single recordings. Herraz plays round the clock like a radio, so it is not one.
     // A reciter's whole Quran is a recording too: no LIVE badge, it ends after its last surah.
-    fun isRecording(station: RadioStation): Boolean = station.url in haram || Mushaf.of(station) != null
+    fun isRecording(station: RadioStation): Boolean =
+        station.url in haram || Mushaf.of(station) != null || station in Adhkar.recordings
     fun isReciter(station: RadioStation): Boolean = quranSection(station) != null
     fun quranSection(station: RadioStation): QuranSection? = when {
         station in quran -> QuranSection.MURATTAL

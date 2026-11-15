@@ -80,11 +80,32 @@ internal object Mushaf {
     fun url(recitation: Recitation, number: Int) = HerrazRecitations.chapterUrl(recitation.station.url, number)
 }
 
-/** Live MP3Quran radios of the morning and evening remembrances. */
+/**
+ * The morning and evening remembrances: MP3Quran's two live radios, then recordings by named readers published by
+ * Islamweb (Qatar's Ministry of Awqaf) on its file server dl2.islamweb.net. The files come from the « أدعية و أذكار »
+ * page of audio.islamweb.net; each answered with audio over HTTPS on 15 November 2026. The site's own pages often
+ * fail, the file server did not.
+ */
 internal object Adhkar {
     val sabah = RadioStation("أذكار الصباح", "https://backup.qurango.net/radio/athkar_sabah",
         tags = setOf("أذكار · بث مباشر · MP3Quran"))
     val masa = RadioStation("أذكار المساء", "https://backup.qurango.net/radio/athkar_masa",
         tags = setOf("أذكار · بث مباشر · MP3Quran"))
-    val stations = listOf(sabah, masa)
+
+    private fun recording(reader: String, title: String, file: Int) = RadioStation("$reader · $title",
+        "https://dl2.islamweb.net/Audio3/Do3a/$file.mp3", tags = setOf("$title · Islamweb"))
+
+    val recordings = listOf(
+        recording("مشاري راشد العفاسي", "أذكار الصباح والمساء", 29966),
+        recording("سعد الغامدي", "الأذكار", 433170),
+        recording("فارس عباد", "أذكار طرفي النهار", 35435),
+        recording("كمال المروش", "أذكار الصباح والمساء", 451691),
+        recording("هاني محمد نصر", "أذكار الصباح", 284853),
+        recording("صلاح الألفي", "أذكار الصباح", 665895),
+        recording("محمد شعبان أبو قرن", "أذكار الصباح", 670861),
+        recording("محمد شعبان أبو قرن", "أذكار المساء", 670862),
+        recording("محمود داود دسوقي خطابي", "أذكار الصباح", 530197),
+        recording("محمود داود دسوقي خطابي", "أذكار المساء", 530200),
+    )
+    val stations = listOf(sabah, masa) + recordings
 }
