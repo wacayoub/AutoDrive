@@ -2,7 +2,7 @@ La liste Radio Maroc est remise en ordre. Elle suit les audiences publiées par 
 
 MFM Radio et Atlantic Radio arrivent, avec leur flux officiel et leur logo. Les stations en double disparaissent, comme Radio Sawt Alamal et les chaînes répétées de Radio Adwaa, ainsi que deux entrées qui ne sont pas des radios marocaines : Kabana Rooftop et Fayrouz. Fayrouz reste dans les favoris de ceux qui l’avaient ajoutée.
 
-Sur l’Incarlink, deux boutons à côté de l’étoile du lecteur ouvrent Maps et YouTube. La radio continue de jouer dans un mini-lecteur flottant, avec le logo, le nom de la station et les boutons précédent, lecture et suivant ; un appui le remet en plein écran. Le mini-lecteur s’ouvre aussi quand on quitte la radio pendant l’écoute. Il se désactive dans Réglages › Mini-lecteur. Le téléphone garde son fonctionnement habituel.
+Sur l’Incarlink, deux boutons à côté de l’étoile du lecteur ouvrent Maps et YouTube. La radio continue de jouer dans un mini-lecteur flottant : le logo éclairé de sa couleur, le nom de la station, l’émission en cours, le badge LIVE avec ses barres animées, et les boutons précédent, lecture et suivant. Un appui le remet en plein écran. Le mini-lecteur s’ouvre aussi quand on quitte la radio pendant l’écoute. Il se désactive dans Réglages › Mini-lecteur. Le téléphone garde son fonctionnement habituel.
 
 Cette version se met à jour automatiquement depuis la 2.5.35 et les versions suivantes.
 

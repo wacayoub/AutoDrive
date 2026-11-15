@@ -786,6 +786,10 @@ class RadioActivity : ComponentActivity() {
     private var miniPlaying: Boolean? = null
     private var miniArtwork: StationArtwork? = null
     private var miniName: TextView? = null
+    private var miniDetail: TextView? = null
+    private var miniLive: View? = null
+    private var miniBars: EqualizerBars? = null
+    private var miniGlow: GradientDrawable? = null
 
     /**
      * The mini player: Android's picture-in-picture window, a small floating copy of the radio over Maps, YouTube or
@@ -799,23 +803,39 @@ class RadioActivity : ComponentActivity() {
                 PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT),
         )
         return PictureInPictureParams.Builder()
-            .setAspectRatio(Rational(4, 3))
+            .setAspectRatio(Rational(16, 9))
             .setActions(listOf(
                 action(MiniAction.PREVIOUS, R.drawable.ic_radio_previous, "Station précédente"),
                 if (playing) action(MiniAction.TOGGLE, R.drawable.ic_radio_pause, "Pause")
                 else action(MiniAction.TOGGLE, R.drawable.ic_radio_play, "Écouter"),
                 action(MiniAction.NEXT, R.drawable.ic_radio_next, "Station suivante"),
             ))
-            .apply { if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) setAutoEnterEnabled(playing && miniPlayerEnabled) }
+            .apply {
+                // The window grows out of the player panel, so the transition starts where the listener was looking.
+                if (::playerPanel.isInitialized && playerPanel.isAttachedToWindow) {
+                    val bounds = android.graphics.Rect()
+                    if (playerPanel.getGlobalVisibleRect(bounds)) setSourceRectHint(bounds)
+                }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) setAutoEnterEnabled(playing && miniPlayerEnabled)
+            }
             .build()
     }
 
-    private fun updateMiniPlayer(station: RadioStation?, playing: Boolean) {
+    /** Keeps the floating window in step with the player: station, programme or status, LIVE and the bars. */
+    private fun updateMiniPlayer(station: RadioStation?, requesting: Boolean, live: Boolean, detail: CharSequence) {
         miniArtwork?.bind(station)
         miniName?.text = station?.name ?: getString(R.string.app_name)
-        if (!miniPlayerSupported || miniPlaying == playing) return
-        miniPlaying = playing
-        runCatching { setPictureInPictureParams(miniPlayerParams(playing)) }
+        miniName?.textDirection = if (directionOf(station?.name.orEmpty()) == View.LAYOUT_DIRECTION_RTL)
+            View.TEXT_DIRECTION_RTL else View.TEXT_DIRECTION_LTR
+        miniDetail?.apply {
+            text = detail
+            visibility = if (detail.isEmpty()) View.GONE else View.VISIBLE
+        }
+        miniLive?.visibility = if (live) View.VISIBLE else View.GONE
+        miniBars?.playing = live
+        if (!miniPlayerSupported || miniPlaying == requesting) return
+        miniPlaying = requesting
+        runCatching { setPictureInPictureParams(miniPlayerParams(requesting)) }
     }
 
     /** Before Android 12 the window cannot open by itself: it opens here when the listener presses Home. */
@@ -826,29 +846,57 @@ class RadioActivity : ComponentActivity() {
         }
     }
 
-    /** In the floating window only the logo and the station name show; the full screen stays built underneath. */
+    /**
+     * In the floating window: the logo on the left, lit in its colour, then the name, the programme and a LIVE badge
+     * with the bouncing bars. The full screen stays built underneath, hidden, so nothing has to reconnect.
+     */
     private fun withMiniPlayer(content: View): View {
         miniArtwork = null
         miniName = null
+        miniDetail = null
+        miniLive = null
+        miniBars = null
+        miniGlow = null
         if (!isInPictureInPictureMode) return content
         content.visibility = View.GONE
+        val glow = RadioMotion.tileLight(0f, centerY = .5f).apply { setGradientCenter(.18f, .5f) }
+        miniGlow = glow
         return FrameLayout(this).apply {
-            background = getDrawable(R.drawable.radio_background)
+            background = LayerDrawable(arrayOf(getDrawable(R.drawable.radio_background)!!, glow))
+            addOnLayoutChangeListener { _, left, _, right, _, _, _, _, _ -> glow.gradientRadius = (right - left) * .7f }
             addView(content)
-            addView(column().apply {
-                gravity = Gravity.CENTER
-                setPadding(dp(6), dp(6), dp(6), dp(6))
-                miniArtwork = StationArtwork(14).also { addView(it, LinearLayout.LayoutParams(-2, 0, 1f).apply {
-                    gravity = Gravity.CENTER_HORIZONTAL
-                }) }
-                miniName = label("", 12, textColor, bold = true).apply {
-                    gravity = Gravity.CENTER
-                    maxLines = 1
-                    ellipsize = TextUtils.TruncateAt.END
-                }.also { addView(it, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(4) }) }
+            addView(row().apply {
+                gravity = Gravity.CENTER_VERTICAL
+                layoutDirection = View.LAYOUT_DIRECTION_LTR
+                setPadding(dp(8), dp(8), dp(10), dp(8))
+                miniArtwork = StationArtwork(16).apply {
+                    onLogoColor = { color -> RadioMotion.paintLight(glow, color ?: accent, 120) }
+                }.also { addView(it, LinearLayout.LayoutParams(0, -1).apply { marginEnd = dp(10) }) }
+                addView(column().apply {
+                    gravity = Gravity.CENTER_VERTICAL
+                    miniName = label("", 15, textColor, bold = true).apply {
+                        maxLines = 2
+                        ellipsize = TextUtils.TruncateAt.END
+                        includeFontPadding = false
+                    }.also { addView(it) }
+                    miniDetail = label("", 11, muted).apply {
+                        maxLines = 1
+                        ellipsize = TextUtils.TruncateAt.END
+                    }.also { addView(it, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(2) }) }
+                    addView(row().apply {
+                        gravity = Gravity.CENTER_VERTICAL
+                        miniLive = label("● LIVE", 9, Color.WHITE, bold = true).apply {
+                            background = getDrawable(R.drawable.radio_live)
+                            setPadding(dp(6), dp(1), dp(6), dp(1))
+                        }.also { addView(it) }
+                        miniBars = EqualizerBars(context, accent).also {
+                            addView(it, LinearLayout.LayoutParams(dp(16), dp(12)).apply { marginStart = dp(7) })
+                        }
+                    }, LinearLayout.LayoutParams(-2, -2).apply { topMargin = dp(5) })
+                }, LinearLayout.LayoutParams(0, -2, 1f))
             }, FrameLayout.LayoutParams(-1, -1))
             miniArtwork?.addOnLayoutChangeListener { view, _, top, _, bottom, _, _, _, _ ->
-                // Keep the logo square inside the small window.
+                // Keep the logo square: as wide as the window is high.
                 val side = bottom - top
                 if (side > 0 && view.layoutParams.width != side) view.post { view.layoutParams = view.layoutParams.apply { width = side } }
             }
@@ -3076,7 +3124,6 @@ class RadioActivity : ComponentActivity() {
         val requesting = if (luxe != null) luxe == LuxeRadio.State.PLAYING || luxe == LuxeRadio.State.CONNECTING
             else player?.playWhenReady == true && (player.playerError == null || waitingForNetwork) && !ended
         val playing = if (luxe != null) luxe == LuxeRadio.State.PLAYING else player?.isPlaying == true
-        updateMiniPlayer(station, requesting)
         audioMotif.playing = luxe == null && playing
         val live = playing && !recording
         val streamInfo = player?.sessionExtras?.takeIf { it.getString(PlaybackService.STREAM_STATION) == active }
@@ -3137,6 +3184,8 @@ class RadioActivity : ComponentActivity() {
             active != null -> "En pause"
             else -> "Prêt à écouter"
         }
+        updateMiniPlayer(station, requesting, live,
+            playerStatus.text.takeUnless { live || it.isEmpty() } ?: playerSubtitle.text)
         playerStatus.setTextColor(when {
             waitingForNetwork && !playing -> amber
             playing -> accent
