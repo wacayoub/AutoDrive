@@ -862,7 +862,10 @@ class RadioActivity : ComponentActivity() {
         val glow = RadioMotion.tileLight(0f, centerY = .5f).apply { setGradientCenter(.18f, .5f) }
         miniGlow = glow
         return FrameLayout(this).apply {
-            background = LayerDrawable(arrayOf(getDrawable(R.drawable.radio_background)!!, glow))
+            // Android draws the picture-in-picture window opaque (a transparent one shows grey and stale frames),
+            // so the window imitates frosted glass instead: the page background, a light sheen and a soft glow.
+            val sheen = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(0x33FFFFFF, 0x00FFFFFF))
+            background = LayerDrawable(arrayOf(getDrawable(R.drawable.radio_background)!!, glow, sheen))
             addOnLayoutChangeListener { _, left, _, right, _, _, _, _, _ -> glow.gradientRadius = (right - left) * .7f }
             addView(content)
             addView(row().apply {
@@ -870,7 +873,7 @@ class RadioActivity : ComponentActivity() {
                 layoutDirection = View.LAYOUT_DIRECTION_LTR
                 setPadding(dp(8), dp(8), dp(10), dp(8))
                 miniArtwork = StationArtwork(16).apply {
-                    onLogoColor = { color -> RadioMotion.paintLight(glow, color ?: accent, 120) }
+                    onLogoColor = { color -> RadioMotion.paintLight(glow, color ?: accent, 70) }
                 }.also { addView(it, LinearLayout.LayoutParams(0, -1).apply { marginEnd = dp(10) }) }
                 addView(column().apply {
                     gravity = Gravity.CENTER_VERTICAL
