@@ -14,8 +14,24 @@ Vérification pour Radio Maroc & Coran 2.5.16, le 11 novembre 2026. Les sondes o
 - **Fayrouz · فيروزيات** garde son flux Zeno et son identifiant de favori. La réponse ICY contenait « Fairouz - فيروزيات المساء ». La radio figure parmi les webradios indépendantes, sans attribution à un diffuseur marocain vérifié.
 - **Aziz Mustaphi** est retiré des radios. L’adresse de l’annuaire sert un MP3 de taille fixe sans métadonnées de station.
 - **Radio Plus** garde l’identifiant des favoris et lit le flux HTTPS qui s’identifie comme `RADIO PLUS`. Le flux régional d’Agadir reste à confirmer. La HACA répertorie plusieurs antennes locales du groupe. [HACA](https://www.haca.ma/fr/radio-plus-agadir)
-- **MFM Radio, Atlantic Radio et Yabiladi** ont des adresses d’annuaire dont les certificats ont échoué. Ces adresses sont filtrées, y compris dans les anciens favoris et le cache. Aucun flux HTTPS de remplacement n’a été confirmé pour ces stations pendant ce contrôle. [MFM Radio](https://mfmradio.ma/), [Yabiladi](https://www.yabiladi.com/radio/)
+- **MFM Radio, Atlantic Radio et Yabiladi** avaient des adresses d’annuaire dont les certificats échouaient (MFM et Atlantic sont revenues le 15 novembre 2026, voir plus haut). Ces adresses étaient filtrées, y compris dans les anciens favoris et le cache. Aucun flux HTTPS de remplacement n’a été confirmé pour ces stations pendant ce contrôle. [MFM Radio](https://mfmradio.ma/), [Yabiladi](https://www.yabiladi.com/radio/)
 - **Luxe Radio** conserve son intégration existante. Son accès via le service du diffuseur est hors de cette sonde HTTP.
+
+## Contrôle du 15 novembre 2026 (2.5.43)
+
+| Source contrôlée | Résultat |
+| --- | --- |
+| MFM Radio | Le lecteur officiel de [mfmradio.ma](https://mfmradio.ma/) lit `https://a5.asurahosting.com:7980/radio.mp3`. Le certificat (Let’s Encrypt, valable jusqu’au 4 février 2027) est valide et le flux renvoie `audio/mpeg`. Sur l’émulateur Android 13, la lecture en direct a démarré. |
+| Atlantic Radio | Le flux `https://atlantic-sonic.nindohost.net:9300/stream` s’annonce `icy-name: Atlantic Radio` et `icy-url: http://www.atlanticradio.ma`. Certificat valide jusqu’au 21 janvier 2027, réponse `audio/mpeg`, lecture en direct sur l’émulateur. Logo publié par [atlanticradio.ma](https://www.atlanticradio.ma/). |
+| Annuaire communautaire (Maroc) | Doublons d’un même flux ou d’un même nom : Radio Sawt Alamal (trois entrées), Radio Adwaa (cinq entrées pour quatre chaînes). Hors sujet : Kabana Rooftop Marrakech, playlist d’un établissement, et « Fayroz », webradio hommage à la chanteuse libanaise. |
+
+### Changements
+
+- **MFM Radio** et **Atlantic Radio** rejoignent le catalogue avec leur flux officiel et ne sont plus filtrés. MFM occupe sa 4ᵉ place de la vague 53 de Radiométrie.
+- **Classement « Popularité »** : après les stations mesurées par Radiométrie viennent les réseaux FM autorisés qu’elle ne publie pas (Luxe Radio, U Radio, Atlantic Radio, Radio Plus, Radio Tanger Med, Marrakech Plus), puis les autres stations du catalogue, et enfin les webradios indépendantes de l’annuaire, quel que soit leur nombre de clics. Avant, Luxe Radio et U Radio passaient derrière des webradios de l’annuaire.
+- **Doublons** : une seule entrée par flux (http/https et paramètres ignorés) et par nom. Radio Adwaa garde sa chaîne principale (FM 2).
+- **Retirés de l’onglet Maroc** : Kabana Rooftop Marrakech et Fayrouz. Fayrouz reste lisible depuis les favoris existants.
+- Un logo blanc sur fond transparent (Atlantic Radio) reçoit une tuile sombre pour rester lisible en Jour.
 
 ## Contrôle du 14 novembre 2026 (après 2.5.35)
 

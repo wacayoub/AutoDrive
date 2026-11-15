@@ -84,6 +84,24 @@ internal object RadioMotion {
             else intArrayOf(Color.argb(alpha, Color.red(color), Color.green(color), Color.blue(color)), Color.TRANSPARENT)
     }
 
+    /** A white logo on a transparent background, which would vanish on the light Jour panels. */
+    fun isLightOnClear(bitmap: Bitmap): Boolean = runCatching {
+        val source = if (bitmap.config == Bitmap.Config.HARDWARE) bitmap.copy(Bitmap.Config.ARGB_8888, false) else bitmap
+        val sample = Bitmap.createScaledBitmap(source, 24, 24, true)
+        var clear = 0
+        var light = 0
+        var opaque = 0
+        for (x in 0 until sample.width) for (y in 0 until sample.height) {
+            val pixel = sample.getPixel(x, y)
+            if (Color.alpha(pixel) < 40) { clear++; continue }
+            opaque++
+            if (Color.red(pixel) > 215 && Color.green(pixel) > 215 && Color.blue(pixel) > 215) light++
+        }
+        if (sample !== source) sample.recycle()
+        if (source !== bitmap) source.recycle()
+        clear > 24 * 24 / 4 && opaque > 0 && light > opaque * .7f
+    }.getOrDefault(false)
+
     /** The most vivid colour of a logo, brightened enough to glow on the dark player; null for grey logos. */
     fun logoColor(bitmap: Bitmap): Int? = runCatching {
         val source = if (bitmap.config == Bitmap.Config.HARDWARE) bitmap.copy(Bitmap.Config.ARGB_8888, false) else bitmap

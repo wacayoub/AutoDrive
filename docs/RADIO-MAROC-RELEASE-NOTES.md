@@ -1,9 +1,7 @@
-Le réglage Système de Jour / Nuit suit maintenant le téléphone sur tous les appareils. Quand Android passe en mode sombre, à la main ou à l’heure programmée, la radio passe en Nuit, puis revient en Jour le matin.
+La liste Radio Maroc est remise en ordre. Elle suit les audiences publiées par Radiométrie Maroc : Mohammed VI du Saint Coran, Med Radio, Hit Radio, MFM, Medi 1, Radio Nationale, puis Aswat, Chada, Mars, Radio 2M et les autres stations mesurées. Viennent ensuite les radios FM comme Luxe Radio, U Radio, Atlantic Radio et Radio Plus, puis les webradios des grands groupes, et enfin les webradios indépendantes.
 
-Sur certains téléphones, la radio restait en Jour alors que le téléphone était déjà sombre. Elle lit désormais elle-même le réglage du mode sombre d’Android : toujours actif, désactivé, horaire personnalisé ou du coucher au lever du soleil. Elle vérifie à chaque retour à l’écran et chaque minute.
-
-En mode Jour sur grand écran, comme l’Incarlink, l’entête devient transparent comme sur téléphone : les onglets, l’heure, la météo, la salat et le menu laissent voir le fond animé.
+MFM Radio et Atlantic Radio arrivent, avec leur flux officiel et leur logo. Les stations en double disparaissent, comme Radio Sawt Alamal et les chaînes répétées de Radio Adwaa, ainsi que deux entrées qui ne sont pas des radios marocaines : Kabana Rooftop et Fayrouz. Fayrouz reste dans les favoris de ceux qui l’avaient ajoutée.
 
 Cette version se met à jour automatiquement depuis la 2.5.35 et les versions suivantes.
 
-Ces changements ont été vérifiés sur un émulateur Android 13 en 800 × 480, en passant le système de clair à sombre puis à clair. Le téléphone où le défaut a été constaté reste à vérifier.
+Ces changements ont été vérifiés sur un émulateur Android 13 en 800 × 480 : MFM Radio et Atlantic Radio ont joué en direct.

@@ -2400,6 +2400,11 @@ class RadioActivity : ComponentActivity() {
             if (size == 0) return
             val show: (Bitmap?) -> Unit = { bitmap ->
                 if (this.station == station && requestedPixels == size && bitmap != null) {
+                    // White logos on a clear background (Atlantic Radio) get a dark tile so they stay readable.
+                    logo.background = if (RadioMotion.isLightOnClear(bitmap)) GradientDrawable().apply {
+                        setColor(0xFF1E2023.toInt())
+                        cornerRadius = minOf(logo.width, logo.height).takeIf { it > 0 }?.let { it * .2f } ?: dp(8).toFloat()
+                    } else null
                     logo.setImageBitmap(bitmap)
                     logo.visibility = View.VISIBLE
                     initials.visibility = View.INVISIBLE

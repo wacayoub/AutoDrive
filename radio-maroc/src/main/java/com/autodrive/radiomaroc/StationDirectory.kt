@@ -69,11 +69,9 @@ internal class StationDirectory(context: Context) {
         // Entries checked against the broadcast identity, media response and HTTPS availability.
         private val rejectedMoroccoUrls = setOf(
             "https://d3ctxlq1ktw2nl.cloudfront.net/production/2022-0-3/240607172-44100-2-afb2485b0c30e.mp3",
-            "https://a5.asurahosting.com:7980/radio.mp3",
             "https://stream.radio.co/s8cc7a5da4/listen",
             "https://a2.asurahosting.com:6100/radio.mp3",
             "https://asmaki.ma:8000/radio.mp3",
-            "https://atlantic-sonic.nindohost.net:9300/stream",
             "https://stream.bodkas.com/playlist?id=chadafmradio",
             "https://vdo.ninja/?view=9rhx6u2",
             "https://broadcast.ice.infomaniak.ch/aswat-high.mp3",
@@ -82,6 +80,10 @@ internal class StationDirectory(context: Context) {
             "Aziz Mustaphi", "Rap Lbeldi Maroc - Hip Hop Music from Morocco FR AR",
             "Radio Plus Agadir FM 92.4", "Radio Atbir", "radio yan plus", "ACHKID FM",
             "MA:-Hit Radio Maroc", "MRC:-Hip Hop Soul Radio Radio Music",
+            // A bar's music playlist, not a radio station; a tribute webradio to the Lebanese singer Fayrouz.
+            "Kabana Rooftop Marrakech", "Fayroz",
+            // Extra channels of the Radio Adwaa webradio; its main channel (FM 2) stays.
+            "Radio Adwaa FM 6", "Radio Adwaa Music 3", "Radio Adwaa ATFAL 4", "Adwaafm",
         ).map { RadioCatalogue.searchKey(RadioCatalogue.cleanName(it)) }.toSet()
 
         fun isEligible(station: RadioStation): Boolean = station.countryCode != "MA" ||

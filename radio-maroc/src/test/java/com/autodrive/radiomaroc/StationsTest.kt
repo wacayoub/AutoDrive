@@ -1,5 +1,6 @@
 package com.autodrive.radiomaroc
 
+import com.autodrive.launcher.RadioCatalogue
 import com.autodrive.launcher.RadioQueue
 import com.autodrive.launcher.RadioStation
 import org.junit.Assert.assertEquals
@@ -13,7 +14,7 @@ class StationsTest {
         val morocco = Stations.visible(StationTab.MOROCCO, emptySet(), "")
         val quran = Stations.visible(StationTab.QURAN, emptySet(), "")
         val tajwid = quran.filter { Stations.quranSection(it) == QuranSection.TAJWID }
-        assertEquals(60, morocco.size)
+        assertEquals(61, morocco.size)
         assertTrue(morocco.mapNotNull { it.logoUrl }.all { RadioStation.validUrl(it) != null })
         assertEquals(43, quran.size)
         assertEquals(33, quran.count { Stations.quranSection(it) == QuranSection.MURATTAL })
@@ -60,7 +61,9 @@ class StationsTest {
         val directory = listOf(pinned.copy(countryCode = "MA"), moroccan, french, mfm)
         val allMoroccan = Stations.visible(StationTab.MOROCCO, emptySet(), "", directory = directory)
         assertEquals(1, allMoroccan.count { it.url == pinned.url })
-        assertEquals(mfm, allMoroccan[3])
+        // MFM is in the catalogue now: a directory row of the same name gives way to the official stream.
+        assertEquals("MFM Radio", allMoroccan[3].name)
+        assertTrue(mfm !in allMoroccan)
         assertEquals(moroccan, allMoroccan.last { Stations.region(it) == null })
         assertTrue(french !in allMoroccan)
         val bookmarks = listOf(moroccan, french)
@@ -72,9 +75,10 @@ class StationsTest {
     @Test fun favoritesSearchAndStationControlsUseTheVisibleList() {
         val morocco = Stations.visible(StationTab.MOROCCO, emptySet(), "")
         assertEquals(
-            listOf("محمد السادس للقرآن الكريم", "Med Radio", "HIT RADIO", "Medi 1 Radio", "Radio Nationale",
-                "Radio Aswat", "Chada FM", "Radio Mars", "Radio 2M", "Radio Amazighe", "Medina FM", "Chaîne Inter"),
-            morocco.take(12).map { it.name },
+            listOf("محمد السادس للقرآن الكريم", "Med Radio", "HIT RADIO", "MFM Radio", "Medi 1 Radio", "Radio Nationale",
+                "Radio Aswat", "Chada FM", "Radio Mars", "Radio 2M", "Radio Amazighe", "Medina FM", "Chaîne Inter",
+                "Luxe Radio", "U Radio", "Atlantic Radio"),
+            morocco.take(16).map { it.name },
         )
         assertEquals("Med Radio", RadioQueue.neighbor(morocco, morocco.first().url, 1)?.name)
         assertEquals(morocco.last(), RadioQueue.neighbor(morocco, morocco.first().url, -1))
@@ -92,13 +96,18 @@ class StationsTest {
         val stations = Stations.visible(StationTab.MOROCCO, emptySet(), "", directory = listOf(low, high, dance, mfm))
         val curatedDance = stations.single { it.name == dance.name }
         assertEquals("محمد السادس للقرآن الكريم", stations.first().name)
-        // Radiométrie wave 53: MFM is fourth in daily reach, even when it only comes from the community directory.
-        assertEquals(mfm, stations[3])
+        // Radiométrie wave 53: MFM is fourth in daily reach, played from its official stream.
+        assertEquals("https://a5.asurahosting.com:7980/radio.mp3", stations[3].url)
         assertEquals(listOf("محمد السادس للقرآن الكريم", "Med Radio", "HIT RADIO", "MFM Radio", "Medi 1 Radio", "Radio Nationale"),
             stations.take(6).map { it.name })
         assertTrue(stations.indexOf(high) > stations.indexOfFirst { it.name == "Chaîne Inter" })
-        assertTrue(stations.indexOf(high) < stations.indexOf(curatedDance))
-        assertTrue(stations.indexOf(curatedDance) < stations.indexOf(low))
+        // Every station of the catalogue comes before the independent webradios of the directory, whatever their clicks.
+        assertTrue(stations.indexOf(curatedDance) < stations.indexOf(high))
+        assertTrue(stations.indexOf(high) < stations.indexOf(low))
+        // The licensed FM networks follow the stations Radiométrie publishes.
+        val national = stations.filter { Stations.region(it) == null }.map { it.name }
+        assertEquals(listOf("Luxe Radio", "U Radio", "Atlantic Radio", "Radio Plus"),
+            national.subList(national.indexOf("Chaîne Inter") + 1, national.indexOf("Chaîne Inter") + 5))
         assertEquals("https://udance.ice.infomaniak.ch/udance-128.aac", curatedDance.url)
     }
 
@@ -162,7 +171,7 @@ class StationsTest {
 
     @Test fun themesGroupStationsAndOldGenresMapOntoMergedThemes() {
         fun names(theme: MoroccoCategory) = Stations.visible(StationTab.MOROCCO, emptySet(), "", category = theme).map { it.name }.toSet()
-        assertEquals(setOf("Fayrouz · فيروزيات", "Medina FM Tarab", "Medi 1 · Tarab", "Tarab Radio"), names(MoroccoCategory.TARAB))
+        assertEquals(setOf("Medina FM Tarab", "Medi 1 · Tarab", "Tarab Radio"), names(MoroccoCategory.TARAB))
         assertEquals(setOf("HIT RADIO · 100% Way Way", "HIT RADIO · 100% M’Gharba", "Medi 1 · Nayda", "Medina FM Nostalgie"),
             names(MoroccoCategory.MOROCCAN))
         assertEquals(setOf("Medina FM Andalou", "Medi 1 · Andalouse", "Medi 1 · Soufi"), names(MoroccoCategory.ANDALOU))
@@ -176,9 +185,10 @@ class StationsTest {
         assertEquals(MoroccoCategory.MOROCCAN, MoroccoCategory.restore("CHAABI"))
         assertEquals(MoroccoCategory.ALL, MoroccoCategory.restore("DIRECTORY"))
         assertEquals(MoroccoCategory.ALL, MoroccoCategory.restore("ARABIC"))
-        val fayrouz = Stations.visible(StationTab.MOROCCO, emptySet(), "Fayroz").single()
+        // Fayrouz is a Lebanese singer's tribute webradio: not on the Maroc tab, still playable from older favourites.
+        assertTrue(Stations.visible(StationTab.MOROCCO, emptySet(), "Fayroz").isEmpty())
+        val fayrouz = Stations.visible(StationTab.FAVORITES, setOf("https://stream.zeno.fm/zv3e5wykprhvv.mp3"), "").single()
         assertEquals("Fayrouz · فيروزيات", fayrouz.name)
-        assertEquals(fayrouz, Stations.visible(StationTab.FAVORITES, setOf(fayrouz.url), "").single())
         val sportFromDirectory = RadioStation("Radio Foot MA", "https://audio.example/foot", countryCode = "MA",
             tags = setOf("sport", "football"))
         assertTrue(sportFromDirectory in Stations.visible(StationTab.MOROCCO, emptySet(), "",
@@ -364,5 +374,28 @@ class StationsTest {
             customOrder = listOf(last.url)).first())
         assertTrue(StationSort.CUSTOM in StationSort.options(StationTab.QURAN))
         assertFalse(StationSort.CUSTOM in StationSort.options(StationTab.FAVORITES))
+    }
+
+    @Test fun directoryDuplicatesAndNonStationsLeaveTheMarocTab() {
+        // Names as the directory parser cleans them.
+        fun row(name: String, url: String, clicks: Int) =
+            RadioStation(RadioCatalogue.cleanName(name), url, countryCode = "MA", directoryClicks = clicks)
+        val directory = listOf(
+            row("Radio Sawt Alamal", "https://stream.zeno.fm/qgw73bqh5qruv", 21),
+            row("MA:-Radio Sawt Alamal", "https://stream.zeno.fm/d4u7zbqh5qruv", 12),
+            row("MRC:-Sawt Al Amal", "http://stream.zeno.fm/qgw73bqh5qruv", 12),
+            row("Radio Adwaa FM 2", "https://stream.zeno.fm/5bxh2nh0x1zuv", 11),
+            row("Adwaafm", "http://stream.zeno.fm/5bxh2nh0x1zuv?1681882617017", 54),
+            row("Radio Adwaa FM 6", "https://stream.zeno.fm/tvxvud2kpm0uv", 19),
+            row("MRC:-Radio Adwaa ATFAL 4", "https://stream.zeno.fm/8wrs2bh0x1zuv", 13),
+            row("Kabana Rooftop Marrakech", "https://stream.vibe-stream.com/kabana-rooftop-marrakech.mp3", 14),
+            row("Fayroz", "https://stream.zeno.fm/zv3e5wykprhvv.mp3", 28),
+            row("Atlantic Radio", "https://atlantic-sonic.nindohost.net:9300/stream", 18),
+        ).filter(StationDirectory::isEligible)
+        val names = Stations.visible(StationTab.MOROCCO, emptySet(), "", directory = directory).map { it.name }
+        assertEquals(1, names.count { "Sawt" in it })
+        assertEquals(listOf("Radio Adwaa FM 2"), names.filter { "Adwaa" in it })
+        assertTrue(names.none { "Kabana" in it || "Fay" in it })
+        assertEquals(1, names.count { it == "Atlantic Radio" })
     }
 }

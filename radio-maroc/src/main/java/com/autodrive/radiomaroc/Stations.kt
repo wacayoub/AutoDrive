@@ -81,6 +81,13 @@ internal object Stations {
             logoUrl = "https://medradio.ma/wp-content/uploads/2023/08/cropped-med-fav-jpg.jpg", tags = setOf("Débats")),
         RadioStation("HIT RADIO", "https://hitradio-maroc.ice.infomaniak.ch/hitradio-maroc-128.mp3",
             logoUrl = StationFamilies.HIT_LOGO, tags = setOf("Musique")),
+        // Stream played by the official mfmradio.ma player; its certificate validated on 15 November 2026.
+        RadioStation("MFM Radio", "https://a5.asurahosting.com:7980/radio.mp3",
+            logoUrl = "https://mfmradio.ma/wp-content/uploads/2025/07/cropped-LogoMFMRadio-768x386-2-192x192.webp",
+            tags = setOf("Musique")),
+        // The stream names itself Atlantic Radio and points to atlanticradio.ma; certificate valid on 15 November 2026.
+        RadioStation("Atlantic Radio", "https://atlantic-sonic.nindohost.net:9300/stream",
+            logoUrl = "https://www.atlanticradio.ma/img/radio-atlantic.png", tags = setOf("Infos et sport")),
         RadioStation("Radio Aswat", "https://aswat.ice.infomaniak.ch/aswat-high.mp3",
             logoUrl = "https://radioaswat.ma/wp-content/themes/aswata108/images/logo@2x.png", tags = setOf("Débats")),
         RadioStation("Chada FM", "https://chadafm.ice.infomaniak.ch/chadafm-128.aac",
@@ -112,7 +119,6 @@ internal object Stations {
             tags = setOf("Éducation et culture", "راديو منارات")),
         RadioStation("Ness Radio", "https://radio.nessradio.net:8212/nessradio-hd",
             logoUrl = "https://nessradio.com/wp-content/uploads/2026/09/ness_logo_outline_723px_2026.png", tags = setOf("Musique")),
-        fayrouz,
         // Logo published for this stream in the Radio Browser directory (checked 15 November 2026).
         RadioStation("Tarab Radio", "https://stream.zeno.fm/fy8achbq97zuv",
             logoUrl = "https://non-stop-radio.blr1.cdn.digitaloceanspaces.com/new_images/radio/64429.png",
@@ -189,18 +195,24 @@ internal object Stations {
     private val mediGroupNames = StationFamilies.medi.map(StationFamilies::directoryKey).toSet()
     /**
      * Most listened first. The top six follow Radiométrie Maroc wave 53 (April–June 2025, weekday daily reach:
-     * Mohammed VI 17.8 %, Med Radio 12.45 %, Hit Radio 12.25 %, MFM 10.55 %, Medi1 10.32 %, Al Idaâ Al Wataniya 10.10 %).
-     * The others keep the order of the previous published audience shares, which ranked them below these six.
+     * Mohammed VI 17.8 %, Med Radio 12.45 %, Hit Radio 12.25 %, MFM 10.55 %, Medi1 10.32 %, Al Idaâ Al Wataniya 10.10 %),
+     * then the other stations of the previous published audience shares. The licensed FM networks that Radiométrie
+     * does not publish come next; every other station of the catalogue follows, and the
+     * independent webradios of the directory always come last.
      */
     private val popularityOrder = listOf(
         "محمد السادس للقرآن الكريم", "Med Radio", "HIT RADIO", "MFM Radio", "Medi 1 Radio", "Radio Nationale",
         "Radio Aswat", "Chada FM", "Radio Mars", "Radio 2M", "Radio Amazighe", "Medina FM", "Cap Radio", "Chaîne Inter",
+        "Luxe Radio", "U Radio", "Atlantic Radio", "Radio Plus", "Radio Tanger Med", "Marrakech Plus",
     ).map(RadioCatalogue::searchKey)
     private val popularityRank = popularityOrder.withIndex().associate { (index, key) -> key to popularityOrder.size - index }
 
     /** Higher is more listened; null when the station is not in the published audience figures. */
     private fun audienceShare(station: RadioStation): Int? = popularityRank[RadioCatalogue.searchKey(station.name)]
         ?: popularityRank[StationFamilies.directoryKey(station)]
+
+    /** The same stream behind http and https, query strings or a trailing slash. */
+    private fun streamKey(url: String) = url.substringAfter("://").substringBefore('?').trimEnd('/', ';').lowercase()
 
     private fun quranStation(name: String, path: String) = RadioStation(name, "https://backup.qurango.net/radio/$path")
 
@@ -302,7 +314,9 @@ internal object Stations {
         "عبد الله الجهني" to listOf("Abdullah Al Juhany", "عبدالله الجهني"),
     )
     private val quranLibrary = quran + tajwid + haramStations
-    val all = localRadios + quranLibrary
+    // Fayrouz is a tribute webradio to the Lebanese singer, not a Moroccan station: it left the Maroc tab but stays
+    // here so favourites saved by earlier versions keep playing.
+    val all = localRadios + fayrouz + quranLibrary
 
     fun reciterName(station: RadioStation): String = station.name.substringBefore(" ·")
     // Haram excerpts are single recordings. Herraz plays round the clock like a radio, so it is not one.
@@ -424,9 +438,13 @@ internal object Stations {
                     .distinctBy { it.url }
                 val clicksByName = listed.groupBy(StationFamilies::directoryKey)
                     .mapValues { (_, entries) -> entries.maxOf { it.directoryClicks ?: -1 } }
+                // The directory lists some webradios several times, under other names or mounts: keep the most
+                // listened entry of each stream and of each name.
                 val community = listed.filter {
                     StationFamilies.directoryKey(it) !in localRadioNames || (radioFavoritesOnly && it.url in favorites)
-                }
+                }.sortedByDescending { it.directoryClicks ?: -1 }
+                    .distinctBy { streamKey(it.url) }
+                    .distinctBy(StationFamilies::directoryKey)
                 val pool = when (category) {
                     MoroccoCategory.ALL -> localRadios + community
                     MoroccoCategory.REGIONAL -> localRadios.filter { region(it) != null }
@@ -439,6 +457,7 @@ internal object Stations {
                 val share = kept.associate { it.url to (audienceShare(it) ?: -1) }
                 val clicks = kept.associate { it.url to (clicksByName[StationFamilies.directoryKey(it)] ?: -1) }
                 kept.sortedWith(compareByDescending<RadioStation> { share.getValue(it.url) }
+                    .thenByDescending { it.url in localRadioUrls }
                     .thenByDescending { clicks.getValue(it.url) })
             }
             StationTab.WORLD -> directory
