@@ -19,6 +19,8 @@ internal class LuxeRadio(private val context: Context, private val onState: (Sta
         private const val RADIO_FOLDER = "radioTab"
         private const val LIVE_ID = "radioTab_live-streaming"
         private const val CERTIFICATE = "270e78e9fc529de6ee0c1946b84887278d6e7dad8d35571d42c709bb9bd85b10"
+        private val ACTIVE_STATES = setOf(PlaybackState.STATE_PLAYING, PlaybackState.STATE_BUFFERING,
+            PlaybackState.STATE_CONNECTING)
     }
 
     private val handler = Handler(Looper.getMainLooper())
@@ -29,6 +31,8 @@ internal class LuxeRadio(private val context: Context, private val onState: (Sta
     private var confirmedLive = false
     private var pendingPlay = false
     private var awaitingPlayback = false
+    // The current browser connection only exists to pause Luxe Radio (see stop()).
+    private var stopConnection = false
     private var state = State.IDLE
     private var programme: String? = null
     private val timeout = Runnable {
@@ -43,10 +47,12 @@ internal class LuxeRadio(private val context: Context, private val onState: (Sta
     }
 
     fun observe() {
+        if (stopConnection) close()
         if (browser == null) connect()
     }
 
     fun play() {
+        if (stopConnection) close()
         pendingPlay = true
         if (browser == null) connect() else requestPlayback()
     }
@@ -59,10 +65,22 @@ internal class LuxeRadio(private val context: Context, private val onState: (Sta
         setState(State.PAUSED)
     }
 
-    fun leave() {
-        pause()
+    /**
+     * Stops Luxe Radio's own player before another station starts. Its audio keeps playing in the Luxe app after
+     * this service lost its connection (process restart), so reconnect just long enough to send the pause.
+     */
+    fun stop() {
+        pendingPlay = false
+        val current = controller
+        if (current != null) {
+            if (awaitingPlayback || current.playbackState?.state in ACTIVE_STATES) current.transportControls.pause()
+            close()
+            setState(State.IDLE)
+            return
+        }
         close()
         setState(State.IDLE)
+        if (verified()) connect(stopOnly = true)
     }
 
     fun close() {
@@ -77,19 +95,29 @@ internal class LuxeRadio(private val context: Context, private val onState: (Sta
         confirmedLive = false
         pendingPlay = false
         awaitingPlayback = false
+        stopConnection = false
     }
 
-    private fun connect() {
-        val pm = context.packageManager
-        try {
-            @Suppress("DEPRECATION")
-            pm.getApplicationInfo(PACKAGE, 0)
-        } catch (_: PackageManager.NameNotFoundException) {
+    private fun installed(): Boolean = try {
+        @Suppress("DEPRECATION")
+        context.packageManager.getApplicationInfo(PACKAGE, 0)
+        true
+    } catch (_: PackageManager.NameNotFoundException) {
+        false
+    }
+
+    private fun verified(): Boolean {
+        if (!installed()) return false
+        val certificate = CERTIFICATE.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+        return context.packageManager.hasSigningCertificate(PACKAGE, certificate, PackageManager.CERT_INPUT_SHA256)
+    }
+
+    private fun connect(stopOnly: Boolean = false) {
+        if (!installed()) {
             fail(State.MISSING)
             return
         }
-        val certificate = CERTIFICATE.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
-        if (!pm.hasSigningCertificate(PACKAGE, certificate, PackageManager.CERT_INPUT_SHA256)) {
+        if (!verified()) {
             fail(State.UNAVAILABLE)
             return
         }
@@ -98,20 +126,26 @@ internal class LuxeRadio(private val context: Context, private val onState: (Sta
         connection = MediaBrowser(context, ComponentName(PACKAGE, SERVICE), object : MediaBrowser.ConnectionCallback() {
             override fun onConnected() {
                 if (browser !== connection) return
-                controller = MediaController(context, connection.sessionToken).also {
-                    it.registerCallback(sessionCallback, handler)
+                val session = MediaController(context, connection.sessionToken)
+                if (stopOnly) {
+                    if (session.playbackState?.state in ACTIVE_STATES) session.transportControls.pause()
+                    close()
+                    return
                 }
+                controller = session.also { it.registerCallback(sessionCallback, handler) }
                 subscribe(connection, connection.root)
             }
 
             override fun onConnectionFailed() {
-                if (browser === connection) fail(State.UNAVAILABLE)
+                if (browser !== connection) return
+                if (stopOnly) close() else fail(State.UNAVAILABLE)
             }
 
             override fun onConnectionSuspended() = onConnectionFailed()
         }, null)
         browser = connection
-        waitForConnection()
+        stopConnection = stopOnly
+        if (!stopOnly) waitForConnection()
         connection.connect()
     }
 

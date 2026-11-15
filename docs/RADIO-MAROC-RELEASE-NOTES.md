@@ -1,5 +1,5 @@
-Dans la vue Présélections, l’état du lecteur du bas (« Connexion au flux… », « LIVE », « Connexion perdue · reprise automatique ») s’affiche maintenant en entier sous le nom de la station. Il était coupé en plein mot à côté des boutons. La correction vaut pour tous les styles : Jour, Nuit, Système et Incarlink.
+Changer de station après Luxe Radio arrête maintenant Luxe Radio à coup sûr. Luxe Radio joue dans sa propre application. Quand Android redémarrait le service de Radio Maroc & Coran pendant l’écoute, la station choisie ensuite ne coupait plus Luxe Radio, qui continuait à jouer. L’application retient désormais que Luxe Radio a été lancée et lui demande de s’arrêter avant toute autre station, y compris avec les boutons suivant et précédent.
 
 Cette version se met à jour automatiquement depuis la 2.5.35 et les versions suivantes.
 
-Ces changements ont été vérifiés sur un émulateur Android 13 en 800 × 480. L’Incarlink reste à vérifier sur le véhicule.
+Le changement de station a été vérifié sur un émulateur Android 13 en 800 × 480, sans Luxe Radio installée. Le passage de Luxe Radio à une autre station reste à vérifier sur l’Incarlink.

@@ -66,6 +66,7 @@ internal class PlaybackService : MediaLibraryService() {
         const val PROGRAMME_SOURCE = "com.autodrive.radiomaroc.PROGRAMME_SOURCE"
         const val PROGRAMME_HOURS = "com.autodrive.radiomaroc.PROGRAMME_HOURS"
         const val LUXE_STATE = "com.autodrive.radiomaroc.LUXE_STATE"
+        private const val LUXE_STARTED = "luxe_started"
         const val RETRY_PENDING = "com.autodrive.radiomaroc.RETRY_PENDING"
         private const val RETRY_FIRST_DELAY_MS = 2_000L
         private const val RETRY_MAX_DELAY_MS = 30_000L
@@ -317,6 +318,7 @@ internal class PlaybackService : MediaLibraryService() {
                             session.player.pause()
                             session.player.stop()
                             session.player.clearMediaItems()
+                            radioPreferences.edit().putBoolean(LUXE_STARTED, true).apply()
                             luxe.play()
                         }
                         LUXE_PAUSE -> luxe.pause()
@@ -347,7 +349,7 @@ internal class PlaybackService : MediaLibraryService() {
                     }
                     if (resolved.isNotEmpty()) {
                         carQueue = if (own) null else selectedQueue
-                        if (luxeState != LuxeRadio.State.IDLE) luxe.leave()
+                        stopLuxe()
                     }
                     return Futures.immediateFuture(resolved)
                 }
@@ -420,6 +422,16 @@ internal class PlaybackService : MediaLibraryService() {
     private fun isOwnController(controller: MediaSession.ControllerInfo): Boolean =
         controller.uid == applicationInfo.uid && controller.packageName == packageName
 
+    /**
+     * Luxe Radio plays in its own app. Stop it before another station starts, also when this service was
+     * restarted since and no longer tracks it, so the two never play over each other.
+     */
+    private fun stopLuxe() {
+        if (luxeState == LuxeRadio.State.IDLE && !radioPreferences.getBoolean(LUXE_STARTED, false)) return
+        radioPreferences.edit().putBoolean(LUXE_STARTED, false).apply()
+        luxe.stop()
+    }
+
     private fun lastStationId(): String? = radioPreferences.getString("last_station", null)
 
     private fun carFavorites(): List<RadioStation> {
@@ -467,6 +479,7 @@ internal class PlaybackService : MediaLibraryService() {
     private fun changeStation(direction: Int) {
         val station = RadioQueue.neighbor(stationQueue(), engine.currentMediaItem?.mediaId, direction) ?: return
         RadioSound.playClick(this, radioPreferences)
+        stopLuxe()
         if (station.countryCode != null) {
             val prefs = radioPreferences
             val favorites = prefs.getStringSet("favorites", emptySet()).orEmpty()

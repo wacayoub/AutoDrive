@@ -111,6 +111,10 @@ Le flux de Radio 2M correspond au champ audio `link_ecouter` du service utilisé
 
 Les quatre pages de SNRT Live publient des flux HLS EasyBroadcast distincts. Une requête directe sans jeton reçoit HTTP 403. Avec un jeton temporaire obtenu auprès du service du lecteur officiel, les quatre manifestes, leurs variantes et des segments audio ont répondu lors des essais. L’application garde le jeton en mémoire jusqu’au renouvellement et ne transmet les paramètres qu’aux listes HLS correspondantes. [Radio Nationale](https://snrtlive.ma/fr/alidaa-alwatania) · [Radio Amazighe](https://snrtlive.ma/fr/alidaa-alamazighia) · [Chaîne Inter](https://snrtlive.ma/fr/chaine-inter) · [Mohammed VI du Saint Coran](https://snrtlive.ma/fr/idaat-mohammed-assadiss).
 
+## Vérifications de la version 2.5.41
+
+Luxe Radio joue dans sa propre application. Si Android redémarrait le service de lecture pendant son écoute, `PlaybackService` ne la suivait plus et la station choisie ensuite ne l’arrêtait pas. Le service garde maintenant `luxe_started` dans les préférences ; avant toute autre station, y compris via suivant et précédent, `LuxeRadio.stop()` met Luxe Radio en pause, en se reconnectant brièvement à son service média si besoin. Sur l’émulateur Android 13 en 800 × 480, sans Luxe Radio, le passage à Med Radio a été vérifié. Les tests unitaires ont réussi et lint a signalé 0 erreur. Le passage de Luxe Radio à une autre station reste à vérifier sur l’Incarlink.
+
 ## Vérifications de la version 2.5.40
 
 Dans **Présélections**, le badge d’état du lecteur ancré en bas passe sous le nom de la station, sur une ligne. À côté des boutons ronds, « Connexion au flux… » se coupait en plein mot. Sur l’émulateur Android 13 en 800 × 480, « Connexion au lecteur… » puis le badge LIVE ont été vérifiés en Incarlink et en Nuit. Les tests unitaires ont réussi et lint a signalé 0 erreur. Le test sur l’Incarlink reste à faire.
