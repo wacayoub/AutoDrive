@@ -28,7 +28,9 @@ internal enum class QuranSection(val label: String) {
 }
 
 internal enum class StationSort(val label: String) {
-    DEFAULT("Popularité"), NAME_ASC("Nom A–Z"), GROUPS("Par groupe"), FAVORITES_FIRST("Favoris en premier");
+    DEFAULT("Popularité"), NAME_ASC("Nom A–Z"), GROUPS("Par groupe"), FAVORITES_FIRST("Favoris en premier"),
+    // The listener's own order, arranged by dragging stations in « Mon ordre ». Favourites use DEFAULT for theirs.
+    CUSTOM("Mon ordre");
 
     fun labelFor(tab: StationTab) = if (this == DEFAULT && tab == StationTab.FAVORITES) "Mon ordre" else label
 
@@ -37,6 +39,7 @@ internal enum class StationSort(val label: String) {
             when (it) {
                 GROUPS -> tab == StationTab.MOROCCO
                 FAVORITES_FIRST -> tab == StationTab.MOROCCO || tab == StationTab.WORLD
+                CUSTOM -> tab == StationTab.MOROCCO || tab == StationTab.QURAN
                 else -> true
             }
         }
@@ -409,6 +412,7 @@ internal object Stations {
         directory: List<RadioStation> = emptyList(), bookmarks: List<RadioStation> = emptyList(),
         sort: StationSort = StationSort.DEFAULT, category: MoroccoCategory = MoroccoCategory.ALL,
         favoriteOrder: List<String> = emptyList(), quranSection: QuranSection? = null,
+        customOrder: List<String> = emptyList(),
     ): List<RadioStation> {
         val candidates = when (tab) {
             StationTab.FOR_YOU -> emptyList()
@@ -425,11 +429,14 @@ internal object Stations {
                     MoroccoCategory.REGIONAL -> localRadios.filter { region(it) != null }
                     else -> (localRadios + community.filter { it.url !in localRadioUrls }).filter { category in themes(it) }
                 }
-                pool
+                val kept = pool
                     .distinctBy { it.url }
                     .filter { !radioFavoritesOnly || it.url in favorites }
-                    .sortedWith(compareByDescending<RadioStation> { audienceShare(it) ?: -1 }
-                        .thenByDescending { clicksByName[StationFamilies.directoryKey(it)] ?: -1 })
+                // Measured once per station rather than on every comparison of the sort.
+                val share = kept.associate { it.url to (audienceShare(it) ?: -1) }
+                val clicks = kept.associate { it.url to (clicksByName[StationFamilies.directoryKey(it)] ?: -1) }
+                kept.sortedWith(compareByDescending<RadioStation> { share.getValue(it.url) }
+                    .thenByDescending { clicks.getValue(it.url) })
             }
             StationTab.WORLD -> directory
             StationTab.QURAN -> if (quranSection == null) quranLibrary else quranLibrary.filter { quranSection(it) == quranSection }
@@ -441,16 +448,18 @@ internal object Stations {
             Collator.getInstance(Locale.FRENCH).apply { strength = Collator.PRIMARY }, RadioStation::name,
         ).thenBy { it.url }
         val ordered = when (sort) {
-            StationSort.DEFAULT -> candidates
+            StationSort.DEFAULT, StationSort.CUSTOM -> candidates
             StationSort.NAME_ASC -> candidates.sortedWith(nameOrder)
             StationSort.GROUPS -> candidates.sortedWith(compareBy<RadioStation>(::group)
                 .thenBy { region(it).orEmpty() }.then(nameOrder))
             StationSort.FAVORITES_FIRST -> candidates.sortedByDescending { it.url in favorites }
         }
-        val displayed = if (tab == StationTab.MOROCCO && category == MoroccoCategory.ALL && sort == StationSort.DEFAULT) {
+        val grouped = if (tab == StationTab.MOROCCO && category == MoroccoCategory.ALL &&
+            (sort == StationSort.DEFAULT || sort == StationSort.CUSTOM)) {
             val (local, national) = ordered.partition { region(it) != null }
             national + local
         } else ordered
+        val displayed = if (sort == StationSort.CUSTOM) inFavoriteOrder(grouped, customOrder) else grouped
         if (query.isBlank()) return displayed
         val key = RadioCatalogue.searchKey(query)
         if (key.isEmpty()) return displayed

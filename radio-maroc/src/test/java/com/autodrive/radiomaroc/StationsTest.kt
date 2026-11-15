@@ -349,4 +349,20 @@ class StationsTest {
         assertTrue(CarRadioLibrary.search("... ", favorites).isEmpty())
         assertNull(CarRadioLibrary.stationForQuery(" ", Stations.luxe.url)?.takeIf { it == Stations.luxe })
     }
+
+    @Test fun customOrderPlacesStationsWhereTheListenerPutThem() {
+        val default = Stations.visible(StationTab.MOROCCO, emptySet(), "")
+        val moved = listOf(default[4].url, default[0].url)
+        val custom = Stations.visible(StationTab.MOROCCO, emptySet(), "", sort = StationSort.CUSTOM, customOrder = moved)
+        assertEquals(listOf(default[4], default[0]), custom.take(2))
+        assertEquals(default.size, custom.size)
+        assertEquals(default.filter { it.url !in moved }, custom.drop(2))
+
+        val quran = Stations.visible(StationTab.QURAN, emptySet(), "")
+        val last = quran.last()
+        assertEquals(last, Stations.visible(StationTab.QURAN, emptySet(), "", sort = StationSort.CUSTOM,
+            customOrder = listOf(last.url)).first())
+        assertTrue(StationSort.CUSTOM in StationSort.options(StationTab.QURAN))
+        assertFalse(StationSort.CUSTOM in StationSort.options(StationTab.FAVORITES))
+    }
 }

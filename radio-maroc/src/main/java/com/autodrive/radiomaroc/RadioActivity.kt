@@ -48,6 +48,7 @@ import android.view.ViewOutlineProvider
 import android.view.WindowInsets
 import android.view.inputmethod.EditorInfo
 import android.widget.AbsListView
+import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import android.widget.BaseAdapter
 import android.widget.CheckBox
@@ -61,6 +62,7 @@ import android.widget.LinearLayout
 import android.widget.ListView
 import android.widget.RadioButton
 import android.widget.RadioGroup
+import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -1405,9 +1407,11 @@ class RadioActivity : ComponentActivity() {
     private fun chooseSort() {
         val options = StationSort.options(tab)
         showChoiceSheet("Trier les stations", options.map { it.labelFor(tab) }, options.indexOf(activeSort()),
-            subtitle = tab.label, columns = if (wideSheet) 2 else 1) { index ->
+            subtitle = tab.label, columns = if (wideSheet) 2 else 1,
+            repeatable = { options[it] == StationSort.CUSTOM }) { index ->
             prefs.edit().putString("sort_${tab.name}", options[index].name).apply()
             updateDirectory(resetScroll = true)
+            if (options[index] == StationSort.CUSTOM) organizeTab()
         }
     }
 
@@ -2455,7 +2459,8 @@ class RadioActivity : ComponentActivity() {
             notes[suggestion.station.url] = suggestion.reason
             suggestion.chapter?.let { chapters[suggestion.station.url] = it }
         }.map(Suggestion::station) else Stations.visible(tab, favorites, query, radioFavoritesOnly, directory.stations,
-            directoryBookmarks, sort, category, favoriteOrder, activeQuranSection())
+            directoryBookmarks, sort, category, favoriteOrder, activeQuranSection(),
+            customOrder = if (sort == StationSort.CUSTOM) ListeningPrefs.list(prefs, customOrderKey(tab)) else emptyList())
         if (tab == StationTab.QURAN) HerrazRecitations.find(query)?.let { surah ->
             // A surah name in the search starts Hicham El Herraz's recitation at that surah.
             val herraz = Stations.herrazStation
@@ -2487,6 +2492,7 @@ class RadioActivity : ComponentActivity() {
             var previousSection: String? = null
             rows.forEachIndexed { index, station ->
                 val section = when {
+                    sort == StationSort.CUSTOM -> null
                     tab == StationTab.QURAN -> Stations.quranSection(station)?.label
                     tab == StationTab.MOROCCO && sort == StationSort.GROUPS -> Stations.group(station).label
                     tab == StationTab.MOROCCO && sort == StationSort.DEFAULT && category == MoroccoCategory.ALL -> {
@@ -2511,7 +2517,7 @@ class RadioActivity : ComponentActivity() {
         worldRegion.text = WorldContinent.forCountry(country)?.label.orEmpty()
         stationToolbar.visibility = if (tab == StationTab.FOR_YOU) View.GONE else View.VISIBLE
         renderChips()
-        sortButton.visibility = if (tab == StationTab.QURAN || tab == StationTab.FOR_YOU) View.GONE else View.VISIBLE
+        sortButton.visibility = if (tab == StationTab.FOR_YOU) View.GONE else View.VISIBLE
         sortButton.contentDescription = "Trier les stations · ${sort.labelFor(tab)}"
         categoryButton.visibility = View.GONE
         countryButton.visibility = if (tab == StationTab.WORLD) View.VISIBLE else View.GONE
@@ -2575,8 +2581,9 @@ class RadioActivity : ComponentActivity() {
     private fun renderChips() {
         chipBar.removeAllViews()
         when (tab) {
-            StationTab.MOROCCO -> Unit
+            StationTab.MOROCCO -> addPlaceChip()
             StationTab.QURAN -> {
+                addPlaceChip()
                 val selected = activeQuranSection()
                 addChip("الكل · Tout", null, selected == null, "Toutes les récitations") { chooseQuranSection(null) }
                 for (section in QuranSection.entries) addChip(section.label, null, section == selected, section.label) {
@@ -2610,6 +2617,12 @@ class RadioActivity : ComponentActivity() {
             StationTab.FOR_YOU -> Unit
         }
         chipScroller.visibility = if (chipBar.childCount == 0) View.GONE else View.VISIBLE
+    }
+
+    /** With « Mon ordre » active, a chip opens the editor where stations are dragged into place. */
+    private fun addPlaceChip() {
+        if (activeSort() == StationSort.CUSTOM) addChip("≡  Placer les stations", null, false,
+            "Placer les stations dans mon ordre", ::organizeTab)
     }
 
     private fun addChip(text: String, count: Int?, selected: Boolean, description: String, action: () -> Unit) {
@@ -2666,114 +2679,199 @@ class RadioActivity : ComponentActivity() {
         }
     }
 
-    /**
-     * Reorders the presets: hold the ≡ handle and drag a station to its place, or use the up and down buttons (remote,
-     * steering wheel, TalkBack). The order drives the Présélections tiles and the steering wheel presets.
-     */
-    @SuppressLint("ClickableViewAccessibility")
-    private fun organizePresets() {
-        val sheet = RadioSheet(this, "Ordre des présélections", "Glisse ≡ pour placer une station · le n° 1 en premier")
-        fun save(order: List<String>) {
-            favoriteOrder = order
-            ListeningPrefs.put(prefs.edit(), ListeningPrefs.FAVORITE_ORDER, order).apply()
+    /** Reorders the presets; the order drives the Présélections tiles and the steering wheel presets. */
+    private fun organizePresets() = organizeStations("Ordre des présélections",
+        { Stations.visible(StationTab.FAVORITES, favorites, "", bookmarks = directoryBookmarks, favoriteOrder = favoriteOrder) },
+    ) { order ->
+        favoriteOrder = order
+        ListeningPrefs.put(prefs.edit(), ListeningPrefs.FAVORITE_ORDER, order).apply()
+        renderRows()
+    }
+
+    private fun customOrderKey(tab: StationTab) = "order_${tab.name}"
+
+    /** « Mon ordre » of the Maroc or Coran tab: every station of the tab, placed by the listener. */
+    private fun organizeTab() {
+        val owner = tab
+        fun stations() = Stations.visible(owner, favorites, "", directory = directory.stations, bookmarks = directoryBookmarks,
+            sort = StationSort.CUSTOM, customOrder = ListeningPrefs.list(prefs, customOrderKey(owner)))
+        organizeStations("Mon ordre · ${owner.label}", ::stations, reset = {
+            prefs.edit().remove(customOrderKey(owner)).apply()
+            renderRows()
+        }) { order ->
+            ListeningPrefs.put(prefs.edit(), customOrderKey(owner), order).apply()
             renderRows()
         }
-        fun render() {
-            sheet.body.removeAllViews()
-            val presets = Stations.visible(StationTab.FAVORITES, favorites, "", bookmarks = directoryBookmarks,
-                favoriteOrder = favoriteOrder)
-            val rows = mutableListOf<View>()
-            val gap = dp(6)
-            presets.forEachIndexed { index, station ->
-                val line = row().apply {
-                    gravity = Gravity.CENTER_VERTICAL
-                    background = getDrawable(R.drawable.radio_option)
-                    setPadding(dp(4), dp(4), dp(6), dp(4))
-                    minimumHeight = dp(56)
-                }
-                rows += line
-                if (!television) line.addView(ImageView(this).apply {
-                    setImageResource(R.drawable.ic_radio_drag)
-                    imageTintList = ColorStateList.valueOf(muted)
-                    scaleType = ImageView.ScaleType.CENTER
-                    contentDescription = null
-                    importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
-                    var startY = 0f
-                    var target = index
-                    setOnTouchListener { _, event ->
-                        val step = (line.height + gap).toFloat()
-                        when (event.actionMasked) {
-                            MotionEvent.ACTION_DOWN -> {
-                                startY = event.rawY
-                                target = index
-                                line.parent?.requestDisallowInterceptTouchEvent(true)
-                                line.elevation = dp(8).toFloat()
-                                line.animate().scaleX(1.03f).scaleY(1.03f).setDuration(120).start()
-                            }
-                            MotionEvent.ACTION_MOVE -> {
-                                val moved = event.rawY - startY
-                                line.translationY = moved
-                                target = (index + Math.round(moved / step)).coerceIn(0, presets.lastIndex)
-                                // The other stations slide aside to show where the dragged one will land.
-                                rows.forEachIndexed { other, view ->
-                                    if (view === line) return@forEachIndexed
-                                    val shift = when {
-                                        other in (index + 1)..target -> -step
-                                        other in target until index -> step
-                                        else -> 0f
-                                    }
-                                    if (view.translationY != shift) view.animate().translationY(shift).setDuration(140).start()
-                                }
-                            }
-                            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                                line.parent?.requestDisallowInterceptTouchEvent(false)
-                                if (target != index && event.actionMasked == MotionEvent.ACTION_UP) {
-                                    val order = presets.map(RadioStation::url).toMutableList()
-                                    order.add(target, order.removeAt(index))
-                                    save(order)
-                                    sheet.body.post { render() }
-                                } else {
-                                    line.elevation = 0f
-                                    line.animate().scaleX(1f).scaleY(1f).translationY(0f).setDuration(160).start()
-                                    rows.forEach { if (it !== line) it.animate().translationY(0f).setDuration(160).start() }
-                                }
-                            }
-                        }
-                        true
+    }
+
+    /**
+     * A sheet to place stations: hold the ≡ handle and drag a station to its place (the list follows the finger and
+     * scrolls near its edges), or use the up and down buttons (remote, steering wheel, TalkBack). The list builds only
+     * the visible rows, so a tab with hundreds of stations opens at once.
+     */
+    @SuppressLint("ClickableViewAccessibility")
+    private fun organizeStations(
+        title: String, stations: () -> List<RadioStation>, reset: (() -> Unit)? = null, save: (List<String>) -> Unit,
+    ) {
+        val sheet = RadioSheet(this, title, "Glisse ≡ pour placer une station · le n° 1 en premier")
+        val order = stations().toMutableList()
+        var dragged = -1
+        lateinit var list: ListView
+        lateinit var adapter: BaseAdapter
+        fun store() = save(order.map(RadioStation::url))
+        fun moveTo(from: Int, to: Int) {
+            if (from == to || from !in order.indices || to !in order.indices) return
+            order.add(to, order.removeAt(from))
+            adapter.notifyDataSetChanged()
+        }
+        fun rowView(): View = row().apply {
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(4), dp(4), dp(6), dp(4))
+            minimumHeight = dp(56)
+            descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
+            if (!television) addView(ImageView(context).apply {
+                tag = "handle"
+                setImageResource(R.drawable.ic_radio_drag)
+                imageTintList = ColorStateList.valueOf(muted)
+                scaleType = ImageView.ScaleType.CENTER
+                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+                setOnTouchListener { view, event ->
+                    if (event.actionMasked == MotionEvent.ACTION_DOWN) {
+                        dragged = (view.parent as View).getTag(R.id.radio_row_position) as Int
+                        list.parent?.requestDisallowInterceptTouchEvent(true)
+                        adapter.notifyDataSetChanged()
                     }
-                }, LinearLayout.LayoutParams(dp(40), dp(48)))
-                line.addView(label("${index + 1}", 16, accent, bold = true).apply { gravity = Gravity.CENTER },
-                    LinearLayout.LayoutParams(dp(26), -2))
-                line.addView(StationArtwork(12).apply { bind(station) },
-                    LinearLayout.LayoutParams(dp(40), dp(40)).apply { marginStart = dp(4) })
-                line.addView(label(station.name, 15, textColor, bold = true).apply {
-                    maxLines = 1
-                    ellipsize = TextUtils.TruncateAt.END
+                    true
+                }
+            }, LinearLayout.LayoutParams(dp(40), dp(48)))
+            addView(label("", 16, accent, bold = true).apply { tag = "number"; gravity = Gravity.CENTER },
+                LinearLayout.LayoutParams(dp(34), -2))
+            addView(StationArtwork(12).apply { tag = "art" }, LinearLayout.LayoutParams(dp(40), dp(40)).apply { marginStart = dp(2) })
+            addView(label("", 15, textColor, bold = true).apply {
+                tag = "name"
+                maxLines = 1
+                ellipsize = TextUtils.TruncateAt.END
+            }, LinearLayout.LayoutParams(0, -2, 1f).apply { marginStart = dp(10) })
+            fun arrow(by: Int, icon: Float, word: String) = ImageButton(context).apply {
+                tag = if (by < 0) "up" else "down"
+                setImageResource(R.drawable.ic_radio_chevron)
+                rotation = icon
+                imageTintList = ColorStateList.valueOf(textColor)
+                background = pressable(R.drawable.radio_round)
+                contentDescription = word
+                remoteFocus()
+                setRadioClick {
+                    val at = (parent as View).getTag(R.id.radio_row_position) as Int
+                    moveTo(at, at + by)
+                    store()
+                    list.post { list.smoothScrollToPosition(at + by) }
+                }
+            }
+            addView(arrow(-1, -90f, "Monter"), LinearLayout.LayoutParams(dp(44), dp(44)).apply { marginEnd = dp(6) })
+            addView(arrow(1, 90f, "Descendre"), LinearLayout.LayoutParams(dp(44), dp(44)))
+        }
+        adapter = object : BaseAdapter() {
+            override fun getCount() = order.size
+            override fun getItem(position: Int) = order[position]
+            override fun getItemId(position: Int) = order[position].url.hashCode().toLong()
+            override fun hasStableIds() = true
+            override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
+                val line = (convertView ?: rowView()) as LinearLayout
+                val station = order[position]
+                line.setTag(R.id.radio_row_position, position)
+                line.background = getDrawable(if (position == dragged) R.drawable.radio_selected else R.drawable.radio_option)
+                line.elevation = if (position == dragged) dp(6).toFloat() else 0f
+                line.findViewWithTag<TextView>("number").text = "${position + 1}"
+                line.findViewWithTag<StationArtwork>("art").bind(station)
+                line.findViewWithTag<TextView>("name").apply {
+                    text = station.name
                     layoutDirection = directionOf(station.name)
-                }, LinearLayout.LayoutParams(0, -2, 1f).apply { marginStart = dp(10) })
-                fun move(by: Int, icon: Float, description: String) = ImageButton(this).apply {
-                    setImageResource(R.drawable.ic_radio_chevron)
-                    rotation = icon
-                    imageTintList = ColorStateList.valueOf(textColor)
-                    background = pressable(R.drawable.radio_round)
-                    contentDescription = "$description · ${station.name}"
-                    remoteFocus()
-                    val target = index + by
-                    enable(this, target in presets.indices)
-                    setRadioClick {
-                        val order = presets.map(RadioStation::url).toMutableList()
-                        order.add(target, order.removeAt(index))
-                        save(order)
-                        render()
-                    }
                 }
-                line.addView(move(-1, -90f, "Monter"), LinearLayout.LayoutParams(dp(44), dp(44)).apply { marginEnd = dp(6) })
-                line.addView(move(1, 90f, "Descendre"), LinearLayout.LayoutParams(dp(44), dp(44)))
-                sheet.body.addView(line, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = gap })
+                line.findViewWithTag<View>("up").apply {
+                    enable(this, position > 0)
+                    contentDescription = "Monter · ${station.name}"
+                }
+                line.findViewWithTag<View>("down").apply {
+                    enable(this, position < order.lastIndex)
+                    contentDescription = "Descendre · ${station.name}"
+                }
+                return line
             }
         }
-        render()
+        var lastY = 0f
+        // While a station is held, the finger position decides where it goes; near an edge the list keeps scrolling.
+        val edgeScroll = object : Runnable {
+            override fun run() {
+                if (dragged < 0) return
+                val edge = dp(56)
+                val speed = when {
+                    lastY < edge -> -dp(9)
+                    lastY > list.height - edge -> dp(9)
+                    else -> 0
+                }
+                if (speed != 0 && list.canScrollList(speed)) {
+                    list.scrollListBy(speed)
+                    follow(list, lastY, dragged)?.let { target ->
+                        moveTo(dragged, target)
+                        dragged = target
+                    }
+                }
+                list.postOnAnimation(this)
+            }
+        }
+        list = object : ListView(this) {
+            override fun dispatchTouchEvent(event: MotionEvent): Boolean {
+                if (event.actionMasked == MotionEvent.ACTION_DOWN) {
+                    val handled = super.dispatchTouchEvent(event)
+                    if (dragged >= 0) {
+                        lastY = event.y
+                        postOnAnimation(edgeScroll)
+                    }
+                    return handled
+                }
+                if (dragged < 0) return super.dispatchTouchEvent(event)
+                when (event.actionMasked) {
+                    MotionEvent.ACTION_MOVE -> {
+                        lastY = event.y
+                        follow(this, event.y, dragged)?.let { target ->
+                            moveTo(dragged, target)
+                            dragged = target
+                        }
+                    }
+                    MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                        removeCallbacks(edgeScroll)
+                        dragged = -1
+                        parent?.requestDisallowInterceptTouchEvent(false)
+                        adapter.notifyDataSetChanged()
+                        store()
+                    }
+                }
+                return true
+            }
+        }.apply {
+            this.adapter = adapter
+            divider = null
+            dividerHeight = dp(6)
+            itemsCanFocus = true
+            selector = ColorDrawable(Color.TRANSPARENT)
+            isVerticalScrollBarEnabled = true
+        }
+        val listHeight = (resources.displayMetrics.heightPixels - dp(if (reset != null) 236 else 176)).coerceAtLeast(dp(160))
+        sheet.body.addView(list, LinearLayout.LayoutParams(-1, minOf(listHeight, order.size * dp(62))))
+        if (reset != null) sheet.body.addView(button("Rétablir l’ordre par popularité") {
+            reset()
+            order.clear()
+            order.addAll(stations())
+            adapter.notifyDataSetChanged()
+            list.setSelection(0)
+        }, LinearLayout.LayoutParams(-1, dp(46)).apply { topMargin = dp(6) })
         sheet.show()
+    }
+
+    /** The row under the finger while dragging, or null when the finger is over the station already. */
+    private fun follow(list: ListView, y: Float, dragged: Int): Int? {
+        val at = list.pointToPosition(list.width / 2, y.toInt().coerceIn(0, list.height - 1))
+        return at.takeIf { it != AdapterView.INVALID_POSITION && it != dragged }
     }
 
     private fun styleTvCategory(button: TextView) {

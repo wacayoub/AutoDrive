@@ -37,7 +37,8 @@ internal class StationDirectory(context: Context) {
         val path = "stations/search?countrycode=${query.country}&name=$name&hidebroken=true" +
             "&order=$order&limit=$PAGE_SIZE&offset=$offset"
         val page = RadioBrowser.read(path, userAgent) { parsePage(it, query.country, offset) }
-        if (offset == 0 && query.name.isBlank() && query.sort == StationSort.DEFAULT && page.stations.isNotEmpty()) {
+        if (offset == 0 && query.name.isBlank() && query.sort.let { it == StationSort.DEFAULT || it == StationSort.CUSTOM } &&
+            page.stations.isNotEmpty()) {
             synchronized(cacheLock) {
                 runCatching {
                     val file = cache(query.country)

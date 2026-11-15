@@ -66,17 +66,24 @@ internal object RadioCatalogue {
         val extra = entry(station)?.let { "${it.aliases} ${if (it.category == RadioCategory.QURAN) "Coran Quran قرآن القراء المقرئين" else ""}" }.orEmpty()
         return searchKey("${station.name} ${station.tags.joinToString(" ")} $extra").contains(searchKey(query))
     }
+    // Compiled once: searchKey runs for every station on each sort and search, and compiling per call was costly.
+    private val combiningMarks = Regex("\\p{M}")
+    private val controlChars = Regex("[\\p{Cc}\\p{Cf}]")
+    private val countryPrefix = Regex("(?i)^\\s*(?:(?:MA|MRC)\\s*[:|–-]+\\s*|\\[MA\\]\\s*)")
+    private val bitrateSuffix = Regex("(?i)\\s*[\\[(]?\\s*\\d{2,3}\\s*k(?:b(?:it)?/?s|bps)?\\s*[\\])]?")
+    private val spaces = Regex("\\s+")
+
     fun searchKey(text: String): String = Normalizer.normalize(text.lowercase(Locale.ROOT), Normalizer.Form.NFD)
-        .replace(Regex("\\p{M}"), "").replace('ى', 'ي').filter { it.isLetterOrDigit() && it != 'ـ' }
+        .replace(combiningMarks, "").replace('ى', 'ي').filter { it.isLetterOrDigit() && it != 'ـ' }
 
     /** Keep meaningful station/genre/city names; remove directory boilerplate and bitrate debris. */
     fun cleanName(raw: String): String {
         val cleaned = Normalizer.normalize(raw, Normalizer.Form.NFKC)
-        .replace(Regex("[\\p{Cc}\\p{Cf}]"), " ")
+        .replace(controlChars, " ")
         .replace('_', ' ')
-        .replace(Regex("(?i)^\\s*(?:(?:MA|MRC)\\s*[:|–-]+\\s*|\\[MA\\]\\s*)"), "")
-        .replace(Regex("(?i)\\s*[\\[(]?\\s*\\d{2,3}\\s*k(?:b(?:it)?/?s|bps)?\\s*[\\])]?"), " ")
-        .replace(Regex("\\s+"), " ").trim(' ', '-', '|', '·')
+        .replace(countryPrefix, "")
+        .replace(bitrateSuffix, " ")
+        .replace(spaces, " ").trim(' ', '-', '|', '·')
         val readable = when (searchKey(cleaned)) {
             "hitradiomorocco", "hitradiomaroc", "hitradio" -> "HIT RADIO"
             "radioplusagadirfm924" -> "Radio Plus Agadir"

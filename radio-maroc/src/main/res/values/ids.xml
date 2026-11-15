@@ -1,0 +1,4 @@
+<resources>
+    <!-- Position of a row in the station placing list, read by its handle and arrows. -->
+    <item name="radio_row_position" type="id" />
+</resources>

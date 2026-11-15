@@ -181,12 +181,14 @@ internal fun Activity.showChoiceSheet(
     subtitle: String? = null,
     details: List<String?> = emptyList(),
     columns: Int = 1,
+    // Options that act again when chosen while already selected, such as « Mon ordre », which reopens its editor.
+    repeatable: (Int) -> Boolean = { false },
     pick: (Int) -> Unit,
 ): RadioSheet {
     val sheet = RadioSheet(this, title, subtitle)
     fun make(index: Int) = sheet.optionView(options[index], details.getOrNull(index), selected = index == selected) {
         sheet.dismiss()
-        if (index != selected) pick(index)
+        if (index != selected || repeatable(index)) pick(index)
     }
     if (columns <= 1) {
         options.indices.forEach { index ->

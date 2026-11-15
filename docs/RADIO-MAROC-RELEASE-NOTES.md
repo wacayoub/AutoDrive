@@ -10,7 +10,7 @@ Dans l’onglet Maroc, la rangée Toutes, Infos & débats, Sport, Hits… dispar
 
 Dans le Coran, les récitateurs sans photo ont maintenant une tuile verte à l’initiale de leur nom, et le sous-titre indique « ترتيل · بث مباشر ». Pour vous et Favoris précisent le genre de chaque station, par exemple « Présélection 1 · Débats ». Le bouton « Organiser » des Favoris n’est plus coupé.
 
-Placer ses stations devient facile : dans Favoris › Organiser, tiens la poignée ≡ d’une station et fais-la glisser à la place voulue. Les logos aident à s’y retrouver, et les flèches restent disponibles.
+Placer ses stations devient facile, pas seulement les favoris. Dans Favoris › Organiser, et dans Maroc ou Coran avec Trier › Mon ordre, tiens la poignée ≡ d’une station et fais-la glisser à sa place ; la liste défile toute seule près des bords. Le bouton « ≡ Placer les stations » rouvre cette fenêtre, et « Rétablir l’ordre par popularité » revient à l’ordre d’origine. L’onglet Maroc s’ouvre aussi plus vite.
 
 Changer de station après Luxe Radio arrête maintenant Luxe Radio à coup sûr, même si Android a redémarré le service de lecture entre-temps.
 
