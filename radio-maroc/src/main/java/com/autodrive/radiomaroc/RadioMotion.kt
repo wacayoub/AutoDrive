@@ -54,6 +54,19 @@ internal object RadioMotion {
         }
     }
 
+    /** A radial light for a tile, painted later in its logo's colour with [paintLight]. */
+    fun tileLight(corner: Float, centerY: Float = .38f) = GradientDrawable().apply {
+        gradientType = GradientDrawable.RADIAL_GRADIENT
+        setGradientCenter(.5f, centerY)
+        cornerRadius = corner
+        colors = intArrayOf(Color.TRANSPARENT, Color.TRANSPARENT)
+    }
+
+    fun paintLight(light: GradientDrawable, color: Int?, alpha: Int) {
+        light.colors = if (color == null || color == Color.TRANSPARENT) intArrayOf(Color.TRANSPARENT, Color.TRANSPARENT)
+            else intArrayOf(Color.argb(alpha, Color.red(color), Color.green(color), Color.blue(color)), Color.TRANSPARENT)
+    }
+
     /** The most vivid colour of a logo, brightened enough to glow on the dark player; null for grey logos. */
     fun logoColor(bitmap: Bitmap): Int? = runCatching {
         val source = if (bitmap.config == Bitmap.Config.HARDWARE) bitmap.copy(Bitmap.Config.ARGB_8888, false) else bitmap

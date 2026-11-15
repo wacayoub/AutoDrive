@@ -16,9 +16,11 @@ import android.content.res.ColorStateList
 import android.content.res.Configuration
 import android.graphics.Color
 import android.graphics.Bitmap
+import android.graphics.Outline
 import android.graphics.Typeface
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.LayerDrawable
 import android.graphics.drawable.RippleDrawable
 import android.os.Bundle
 import android.os.Build
@@ -39,6 +41,7 @@ import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
+import android.view.ViewOutlineProvider
 import android.view.WindowInsets
 import android.view.inputmethod.EditorInfo
 import android.widget.AbsListView
@@ -203,6 +206,8 @@ class RadioActivity : ComponentActivity() {
     private var playerCategory: TextView? = null
     private lateinit var playerArtwork: StationArtwork
     private var playerGlow: PlayerGlow? = null
+    // Logo colours already measured, so recycled preset tiles light up at once while scrolling.
+    private val logoColors = HashMap<String, Int>()
     private var glowMirrors = true
     // The station on screen, so a change animates in once; skip() records which way the listener moved.
     private var shownStationUrl: String? = null
@@ -1994,12 +1999,26 @@ class RadioActivity : ComponentActivity() {
         private val logo = StationArtwork(18)
         // Incarlink presets copy its home-screen tiles: logo on the dark face, name on the lighter bottom band.
         private val bandTile = touchMosaic && incarlinkStyle
-        private val idleBackground = pressable(when {
+        // Preset tiles carry a soft light in their logo's colour, stronger on the selected station.
+        private val night = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES
+        private val idleLight = if (touchMosaic) RadioMotion.tileLight(dp(18).toFloat()) else null
+        private val selectedLight = if (touchMosaic) RadioMotion.tileLight(dp(18).toFloat()) else null
+        private var boundUrl: String? = null
+        private val idleBackground = if (idleLight != null) litTile(R.drawable.radio_tile, idleLight) else pressable(when {
             tvGuide -> R.drawable.radio_station_rule
-            touchMosaic -> R.drawable.radio_tile
             else -> R.drawable.radio_control
         })
-        private val selectedBackground = pressable(if (touchMosaic) R.drawable.radio_tile_selected else R.drawable.radio_selected)
+        private val selectedBackground = if (selectedLight != null) litTile(R.drawable.radio_tile_selected, selectedLight)
+            else pressable(R.drawable.radio_selected)
+
+        private fun litTile(face: Int, light: GradientDrawable) = RippleDrawable(ripple,
+            LayerDrawable(arrayOf(getDrawable(face)!!, light)),
+            GradientDrawable().apply { setColor(Color.WHITE); cornerRadius = dp(18).toFloat() })
+
+        private fun paintLights(color: Int?) {
+            idleLight?.let { RadioMotion.paintLight(it, color, if (night) 0x55 else 0x30) }
+            selectedLight?.let { RadioMotion.paintLight(it, color, if (night) 0x8C else 0x50) }
+        }
         private val name = label("", when {
             touchGuide -> 15
             touchMosaic -> 14
@@ -2042,6 +2061,17 @@ class RadioActivity : ComponentActivity() {
             layoutParams = AbsListView.LayoutParams(-1, dp(heightDp))
             background = idleBackground
             if (!tvGuide) RadioMotion.pressScale(this, .95f)
+            if (idleLight != null) {
+                addOnLayoutChangeListener { _, left, _, right, _, _, _, _, _ ->
+                    val radius = (right - left) * .62f
+                    idleLight.gradientRadius = radius
+                    selectedLight?.gradientRadius = radius
+                }
+                logo.onLogoColor = { color ->
+                    boundUrl?.let { logoColors[it] = color ?: Color.TRANSPARENT }
+                    paintLights(color)
+                }
+            }
             if (tvGuide) {
                 orientation = HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
@@ -2067,6 +2097,10 @@ class RadioActivity : ComponentActivity() {
         }
 
         fun bind(station: RadioStation) {
+            if (idleLight != null && boundUrl != station.url) {
+                boundUrl = station.url
+                paintLights(logoColors[station.url])
+            }
             val selected = station.url == highlighted?.first
             val playing = selected && highlighted?.second == true
             val tileBackground = if (selected) selectedBackground else idleBackground
@@ -2181,7 +2215,17 @@ class RadioActivity : ComponentActivity() {
 
     private inner class StationArtwork(textSize: Int, private val showCredits: Boolean = false) : FrameLayout(this@RadioActivity) {
         private val initials = label("FM", textSize, accent, bold = true).apply { gravity = Gravity.CENTER }
-        private val logo = ImageView(context).apply { scaleType = ImageView.ScaleType.FIT_CENTER; visibility = View.INVISIBLE }
+        private val logo = ImageView(context).apply {
+            scaleType = ImageView.ScaleType.FIT_CENTER
+            visibility = View.INVISIBLE
+            // Rounded corners on square logos and portraits, in proportion to their size.
+            outlineProvider = object : ViewOutlineProvider() {
+                override fun getOutline(view: View, outline: Outline) {
+                    outline.setRoundRect(0, 0, view.width, view.height, minOf(view.width, view.height) * .2f)
+                }
+            }
+            clipToOutline = true
+        }
         private var logoWork: Job? = null
         private var station: RadioStation? = null
         private var artworkGeneration = -1
