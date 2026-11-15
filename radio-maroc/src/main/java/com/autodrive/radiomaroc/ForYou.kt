@@ -31,7 +31,6 @@ internal object ForYou {
         city: RadioCity,
         recents: List<RadioStation>,
         presets: List<RadioStation>,
-        herrazChapter: Int?,
     ): List<Suggestion> {
         val out = mutableListOf<Suggestion>()
         fun add(station: RadioStation?, reason: String, chapter: Int? = null) {
@@ -56,8 +55,7 @@ internal object ForYou {
         if (isRamadan(now)) {
             val iftar = todayPrayers.firstOrNull { it.prayer == Prayer.MAGHRIB }?.dateTime
             add(quran, if (iftar != null && iftar.isAfter(now)) "Ramadan · iftar à ${clock.format(iftar)}" else "Ramadan Moubarak")
-            add(herraz, "Ramadan · " + (herrazChapter?.let(HerrazRecitations::chapter)
-                ?.let { "reprendre سورة ${it.name}" } ?: "lecture du Coran"), herrazChapter)
+            add(herraz, "Ramadan · Coran en direct")
         }
 
         if (now.dayOfWeek == DayOfWeek.FRIDAY && hour in 5..16) add(herraz, "Vendredi · سورة الكهف", AL_KAHF)
@@ -85,7 +83,6 @@ internal object ForYou {
             }
         }
 
-        herrazChapter?.let(HerrazRecitations::chapter)?.let { add(herraz, "Reprendre · سورة ${it.name}", it.number) }
         recents.take(4).forEach { add(it, "Écoutée récemment") }
         Stations.nearby(city).take(3).forEach { add(it, "Près de vous · ${city.label}") }
         presets.take(4).forEachIndexed { index, station -> add(station, "Présélection ${index + 1}") }

@@ -11,6 +11,7 @@ import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import androidx.annotation.OptIn
 import androidx.core.graphics.drawable.toBitmap
 import androidx.media3.common.AudioAttributes
@@ -67,6 +68,8 @@ internal class PlaybackService : MediaLibraryService() {
         const val PROGRAMME_HOURS = "com.autodrive.radiomaroc.PROGRAMME_HOURS"
         const val LUXE_STATE = "com.autodrive.radiomaroc.LUXE_STATE"
         private const val LUXE_STARTED = "luxe_started"
+        // A Herraz pause longer than this rejoins the live position on play, like tuning back into a radio.
+        private const val HERRAZ_REJOIN_MS = 30_000L
         const val RETRY_PENDING = "com.autodrive.radiomaroc.RETRY_PENDING"
         private const val RETRY_FIRST_DELAY_MS = 2_000L
         private const val RETRY_MAX_DELAY_MS = 30_000L
@@ -117,6 +120,7 @@ internal class PlaybackService : MediaLibraryService() {
     private lateinit var luxe: LuxeRadio
     private var luxeState = LuxeRadio.State.IDLE
     private var luxeProgramme: String? = null
+    private var herrazPausedAt = 0L
     private val snrtAccess = SnrtAccess()
     private lateinit var connectivity: ConnectivityManager
     private var validatedNetwork: Network? = null
@@ -155,7 +159,6 @@ internal class PlaybackService : MediaLibraryService() {
                 playedSinceSelection = false
                 failuresSinceSelection = 0
             }
-            saveRecitationProgress()
             if (changed && !radioScreenActive) {
                 mediaItem?.mediaMetadata?.title?.takeIf { it.isNotBlank() }?.let(stationPopup::show)
             }
@@ -190,8 +193,14 @@ internal class PlaybackService : MediaLibraryService() {
         override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
             if (!playWhenReady) {
                 cancelStreamRetry(resetAttempts = true)
-                saveRecitationProgress()
+                herrazPausedAt = SystemClock.elapsedRealtime()
+            } else if (engine.currentMediaItem?.mediaId == HerrazRecitations.SOURCE && herrazPausedAt > 0 &&
+                SystemClock.elapsedRealtime() - herrazPausedAt > HERRAZ_REJOIN_MS) {
+                // Like a radio, Herraz resumes where the broadcast is now rather than where it was paused.
+                val (index, position) = HerrazRecitations.live(System.currentTimeMillis())
+                engine.seekTo(index, position)
             }
+            if (playWhenReady) herrazPausedAt = 0L
         }
 
         override fun onEvents(player: Player, events: Player.Events) {
@@ -357,15 +366,17 @@ internal class PlaybackService : MediaLibraryService() {
                 override fun onSetMediaItems(session: MediaSession, controller: MediaSession.ControllerInfo,
                     mediaItems: List<MediaItem>, startIndex: Int, startPositionMs: Long):
                     ListenableFuture<MediaSession.MediaItemsWithStartPosition> {
-                    // The screen asks for a Herraz surah with request extras; start the expanded playlist there.
-                    val start = mediaItems.singleOrNull()?.takeIf { it.mediaId == HerrazRecitations.SOURCE }
-                        ?.requestMetadata?.extras?.takeIf { it.containsKey(ListeningPrefs.HERRAZ_CHAPTER) }
+                    // Herraz plays like a live radio; a surah asked for by name (search, Friday Al-Kahf) starts there.
+                    val herraz = mediaItems.singleOrNull()?.takeIf { it.mediaId == HerrazRecitations.SOURCE }
+                    val surah = herraz?.requestMetadata?.extras?.getInt(ListeningPrefs.HERRAZ_CHAPTER, 0)
+                        ?.takeIf { it > 0 }?.let(HerrazRecitations::indexOf)
                     return Futures.transform(onAddMediaItems(session, controller, mediaItems), { resolved ->
-                        val index = start?.getInt(ListeningPrefs.HERRAZ_CHAPTER)?.let(HerrazRecitations::indexOf)
-                        if (index != null && index < resolved.size) {
-                            MediaSession.MediaItemsWithStartPosition(resolved, index,
-                                start?.getLong(ListeningPrefs.HERRAZ_POSITION, 0L) ?: 0L)
-                        } else MediaSession.MediaItemsWithStartPosition(resolved, startIndex, startPositionMs)
+                        val (index, position) = when {
+                            herraz == null || resolved.size != HerrazRecitations.chapters.size -> startIndex to startPositionMs
+                            surah != null -> surah to 0L
+                            else -> HerrazRecitations.live(System.currentTimeMillis())
+                        }
+                        MediaSession.MediaItemsWithStartPosition(resolved, index, position)
                     }, MoreExecutors.directExecutor())
                 }
 
@@ -376,8 +387,11 @@ internal class PlaybackService : MediaLibraryService() {
                     if (!isOwnController(controller)) {
                         carQueue = station?.let { CarRadioLibrary.selection(it.url, favorites)?.queue }
                     }
+                    val (index, position) = if (station == Stations.herrazStation) {
+                        HerrazRecitations.live(System.currentTimeMillis())
+                    } else 0 to C.TIME_UNSET
                     return Futures.immediateFuture(MediaSession.MediaItemsWithStartPosition(
-                        station?.let(Stations::playbackItems).orEmpty(), 0, C.TIME_UNSET,
+                        station?.let(Stations::playbackItems).orEmpty(), index, position,
                     ))
                 }
             }).setSessionActivity(reopen).setSessionExtras(sessionExtras()).build()
@@ -488,12 +502,18 @@ internal class PlaybackService : MediaLibraryService() {
             prefs.edit().putString("last_station", station.url)
                 .putString("directory_bookmarks", StationDirectory.encode(listOf(station) + retained)).apply()
         }
-        engine.setMediaItems(Stations.playbackItems(station))
+        if (station == Stations.herrazStation) {
+            val (index, position) = HerrazRecitations.live(System.currentTimeMillis())
+            engine.setMediaItems(Stations.playbackItems(station), index, position)
+        } else engine.setMediaItems(Stations.playbackItems(station))
         engine.prepare()
         engine.play()
     }
 
     private fun watchStation(item: MediaItem?) {
+        // Herraz loops round the clock like a radio; every other station is a single item.
+        val loop = if (item?.mediaId == HerrazRecitations.SOURCE) Player.REPEAT_MODE_ALL else Player.REPEAT_MODE_OFF
+        if (engine.repeatMode != loop) engine.repeatMode = loop
         logoWork?.cancel()
         programmeWork?.cancel()
         activeItem = item
@@ -665,16 +685,6 @@ internal class PlaybackService : MediaLibraryService() {
         if (id != null && id in marked) radioPreferences.edit().putStringSet(ListeningPrefs.UNAVAILABLE, marked - id).apply()
     }
 
-    /** Remembers the surah and position of the Herraz recitation so « Reprendre » starts where the listener stopped. */
-    private fun saveRecitationProgress() {
-        if (!::engine.isInitialized) return
-        val item = engine.currentMediaItem ?: return
-        if (item.mediaId != HerrazRecitations.SOURCE) return
-        val chapter = HerrazRecitations.chapters.getOrNull(engine.currentMediaItemIndex) ?: return
-        radioPreferences.edit().putInt(ListeningPrefs.HERRAZ_CHAPTER, chapter.number)
-            .putLong(ListeningPrefs.HERRAZ_POSITION, engine.currentPosition.coerceAtLeast(0)).apply()
-    }
-
     private fun cancelStreamRetry(resetAttempts: Boolean) {
         retryHandler.removeCallbacks(retryStream)
         if (resetAttempts) retryAttempt = 0
@@ -690,7 +700,6 @@ internal class PlaybackService : MediaLibraryService() {
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibrarySession? = session
 
     override fun onDestroy() {
-        saveRecitationProgress()
         stationPopup.dismiss()
         retryHandler.removeCallbacks(retryStream)
         connectivity.unregisterNetworkCallback(networkCallback)

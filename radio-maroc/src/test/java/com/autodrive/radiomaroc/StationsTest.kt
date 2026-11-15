@@ -15,8 +15,8 @@ class StationsTest {
         val tajwid = quran.filter { Stations.quranSection(it) == QuranSection.TAJWID }
         assertEquals(60, morocco.size)
         assertTrue(morocco.mapNotNull { it.logoUrl }.all { RadioStation.validUrl(it) != null })
-        assertEquals(32, quran.size)
-        assertEquals(22, quran.count { Stations.quranSection(it) == QuranSection.MURATTAL })
+        assertEquals(43, quran.size)
+        assertEquals(33, quran.count { Stations.quranSection(it) == QuranSection.MURATTAL })
         assertEquals(4, tajwid.size)
         assertEquals(Stations.all.size, Stations.all.map { it.url }.toSet().size)
         assertTrue(Stations.all.all { RadioStation.validUrl(it.url) == it.url })
@@ -45,7 +45,9 @@ class StationsTest {
         val savedStations = Stations.snrt + twoM + luxe
         assertEquals(savedStations.toSet(),
             Stations.visible(StationTab.FAVORITES, savedStations.map { it.url }.toSet(), "").toSet())
-        assertEquals("العيون الكوشي", quran.first().name)
+        assertEquals(listOf("مشاري راشد العفاسي", "عبد الباسط عبد الصمد", "عبد الرحمن السديس", "ماهر المعيقلي", "ياسر الدوسري"),
+            quran.take(5).map { it.name })
+        assertTrue(quran.any { it.url == "https://backup.qurango.net/radio/hazza" })
         assertTrue(tajwid.all { it.url.endsWith("_mojawwad") })
         assertEquals("عبد الباسط عبد الصمد", tajwid.first().name)
     }
@@ -205,6 +207,17 @@ class StationsTest {
         assertEquals(null, HerrazRecitations.indexOf(33))
     }
 
+    @Test fun herrazPlaysLikeALiveRadio() {
+        assertEquals(HerrazRecitations.chapters.size, HerrazRecitations.measuredChapters)
+        assertFalse(Stations.isRecording(Stations.herrazStation))
+        assertEquals(0 to 0L, HerrazRecitations.live(0))
+        // Al-Fatiha lasts 41 s, so 50 s into the cycle is 9 s into Al-Baqara.
+        assertEquals(1 to 9_000L, HerrazRecitations.live(50_000))
+        val (index, position) = HerrazRecitations.live(1_763_200_000_000)
+        assertTrue(index in HerrazRecitations.chapters.indices)
+        assertTrue(position >= 0)
+    }
+
     @Test fun removedDirectoryEntriesDoNotReappearInFavoritesOrRecentPlayback() {
         val aziz = RadioStation("Aziz Mustaphi", "https://audio.example/static.mp3", countryCode = "MA")
         val azrou = RadioStation("Radio Azrou", "https://audio.example/azrou", countryCode = "MA")
@@ -247,7 +260,8 @@ class StationsTest {
         assertEquals(3, results.size)
         assertEquals(results, Stations.visible(StationTab.QURAN, emptySet(), "بَدْر التُّرْكِي"))
         val abdelbasetResults = Stations.visible(StationTab.QURAN, emptySet(), "Abdelbaset")
-        assertEquals(listOf(QuranSection.MURATTAL, QuranSection.TAJWID),
+        // Murattal in Hafs and in Warsh, then the mojawwad recitation.
+        assertEquals(listOf(QuranSection.MURATTAL, QuranSection.MURATTAL, QuranSection.TAJWID),
             abdelbasetResults.mapNotNull(Stations::quranSection))
         val abdelbaset = abdelbasetResults.single { Stations.quranSection(it) == QuranSection.TAJWID }
         assertTrue(abdelbaset.url.endsWith("abdulbasit_abdulsamad_mojawwad"))
@@ -289,7 +303,7 @@ class StationsTest {
         assertEquals(herraz, Stations.visible(StationTab.QURAN, emptySet(), "هشام لحراز").single())
         assertEquals(herraz, CarRadioLibrary.stationForQuery("Hicham Hezzaz", null))
         assertEquals(QuranSection.MURATTAL, Stations.quranSection(herraz))
-        assertTrue(Stations.isRecording(herraz))
+        assertFalse(Stations.isRecording(herraz))
         assertTrue(Stations.subtitle(herraz).contains("ورش عن نافع"))
         val chapters = HerrazRecitations.chapters
         assertEquals((1..114).filterNot { it == 33 }, chapters.map { it.number })

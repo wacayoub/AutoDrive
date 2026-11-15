@@ -113,7 +113,13 @@ Les quatre pages de SNRT Live publient des flux HLS EasyBroadcast distincts. Une
 
 ## Vérifications de la version 2.5.41
 
-Luxe Radio joue dans sa propre application. Si Android redémarrait le service de lecture pendant son écoute, `PlaybackService` ne la suivait plus et la station choisie ensuite ne l’arrêtait pas. Le service garde maintenant `luxe_started` dans les préférences ; avant toute autre station, y compris via suivant et précédent, `LuxeRadio.stop()` met Luxe Radio en pause, en se reconnectant brièvement à son service média si besoin. Sur l’émulateur Android 13 en 800 × 480, sans Luxe Radio, le passage à Med Radio a été vérifié. Les tests unitaires ont réussi et lint a signalé 0 erreur. Le passage de Luxe Radio à une autre station reste à vérifier sur l’Incarlink.
+**Herraz en direct.** La récitation de Hicham El Herraz tourne comme une radio. Les durées des 113 fichiers MP3Quran (128 kbit/s, 25 h 35 min au total) sont mesurées dans `HerrazRecitations` ; `live()` calcule la sourate et la position du moment, la liste boucle et une reprise après plus de 30 s de pause rejoint le direct. Une sourate cherchée par son nom démarre toujours à son début. Le point de reprise et ses boutons « Reprendre » sont retirés. Sur l’émulateur, Herraz a démarré à la sourate As-Saff, la position calculée pour l’heure de l’essai, avec le badge LIVE.
+
+**Récitateurs.** L’onglet Coran propose 33 radios MP3Quran en tartil, classées par notoriété (`quranPopularity` dans `Stations`) : Alafasy, Abdul Basit, Al-Soudais, Al-Mueaqly et Yasser Al-Dosari en tête, puis les récitateurs marocains. Alafasy, Al-Soudais et Al-Dosari, exclus sans raison consignée, reviennent. Sept récitateurs et Abdul Basit en Warsh sont ajoutés. Chaque flux a répondu en `audio/mpeg` le 15 novembre 2026 ; le serveur refuse les requêtes trop nombreuses en parallèle, elles ont donc été contrôlées une à une. Idrees Abkar, en erreur 500, n’est pas ajouté.
+
+**Luxe Radio.** Luxe Radio joue dans sa propre application. Si Android redémarrait le service de lecture pendant son écoute, `PlaybackService` ne la suivait plus et la station choisie ensuite ne l’arrêtait pas. Le service garde maintenant `luxe_started` dans les préférences ; avant toute autre station, y compris via suivant et précédent, `LuxeRadio.stop()` met Luxe Radio en pause, en se reconnectant brièvement à son service média si besoin.
+
+Sur l’émulateur Android 13 en 800 × 480, sans Luxe Radio, l’ordre de l’onglet Coran, le direct de Herraz et le passage à Med Radio ont été vérifiés. Les tests unitaires ont réussi et lint a signalé 0 erreur. Le passage de Luxe Radio à une autre station reste à vérifier sur l’Incarlink.
 
 ## Vérifications de la version 2.5.40
 

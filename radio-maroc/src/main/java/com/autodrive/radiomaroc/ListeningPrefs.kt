@@ -9,8 +9,8 @@ internal object ListeningPrefs {
     const val RECENT_COUNTRIES = "recent_countries"
     const val UNAVAILABLE = "unavailable_streams"
     const val WHEEL_PRESETS = "wheel_presets"
+    // Request extra naming the surah Herraz should start at (search, Friday Al-Kahf); also the key of the old resume point.
     const val HERRAZ_CHAPTER = "herraz_chapter"
-    const val HERRAZ_POSITION = "herraz_position"
 
     fun list(prefs: SharedPreferences, key: String): List<String> =
         prefs.getString(key, null)?.split('\n')?.filter(String::isNotBlank).orEmpty()

@@ -198,15 +198,36 @@ internal object Stations {
 
     private fun quranStation(name: String, path: String) = RadioStation(name, "https://backup.qurango.net/radio/$path")
 
+    /**
+     * Reciters from the best known down, with the Moroccan favourites placed high. No audience figures are published
+     * for these radios: this is an editorial order by notoriety, kept in one place so it is easy to revise.
+     */
+    private val quranPopularity = listOf(
+        "mishary_alafasi", "abdulbasit_abdulsamad", "abdulrahman_alsudaes", "maher", "yasser_aldosari",
+        "omar_alqazabri", "hsh-m-lhr-z", "aloyoon_alkoshi", "mohammed_siddiq_alminshawi", "mahmoud_khalil_alhussary",
+        "saad_alghamdi", "saud_alshuraim", "ahmad_alajmy", "hazza", "bader", "nasser_alqatami", "fares_abbad",
+        "mohammed_ayyub", "abdulbasit_abdulsamad_warsh", "mahmoud_khalil_alhussary_warsh", "ali_jaber",
+        "khalid_aljileel", "mohammed_jibreel", "abdullah_basfer", "salah_albudair", "ali_alhuthaifi",
+        "abdullah_aljohany", "mustafa_ismail", "mohammad_altablaway", "ahmad_nauina", "ibrahim_aldosari",
+        "abdulrasheed_soufi_khalaf", "abdulmohsen_alqasim",
+    )
+    private fun quranRank(path: String) = quranPopularity.indexOf(path).let { if (it < 0) quranPopularity.size else it }
+
     private val badr = quranStation("بدر التركي", "bader")
     private val herraz = RadioStation(HerrazRecitations.RECITER, HerrazRecitations.SOURCE)
-    private val excludedQuranPaths = setOf("mishary_alafasi", "abdulrahman_alsudaes", "yasser_aldosari")
     private val quran = (RadioCatalogue.featured.filter {
-        RadioCatalogue.matches(it, RadioCategory.QURAN) && RadioCatalogue.officialPlayer(it) == null &&
-            it.url.substringAfterLast('/') !in excludedQuranPaths
+        RadioCatalogue.matches(it, RadioCategory.QURAN) && RadioCatalogue.officialPlayer(it) == null
     } + listOf(
         badr, herraz,
+        quranStation("هزاع البلوشي", "hazza"),
+        quranStation("محمد أيوب", "mohammed_ayyub"),
+        quranStation("عبد الباسط عبد الصمد · ورش", "abdulbasit_abdulsamad_warsh"),
         quranStation("محمود خليل الحصري · ورش", "mahmoud_khalil_alhussary_warsh"),
+        quranStation("علي جابر", "ali_jaber"),
+        quranStation("خالد الجليل", "khalid_aljileel"),
+        quranStation("محمد جبريل", "mohammed_jibreel"),
+        quranStation("مصطفى إسماعيل", "mustafa_ismail"),
+        quranStation("محمد الطبلاوي", "mohammad_altablaway"),
         quranStation("إبراهيم الدوسري", "ibrahim_aldosari"),
         quranStation("فارس عباد", "fares_abbad"),
         quranStation("ناصر القطامي", "nasser_alqatami"),
@@ -217,15 +238,7 @@ internal object Stations {
         quranStation("عبد الرشيد صوفي", "abdulrasheed_soufi_khalaf"),
         quranStation("عبد المحسن القاسم", "abdulmohsen_alqasim"),
         quranStation("علي الحذيفي", "ali_alhuthaifi"),
-    )).sortedBy { station ->
-        when (station.url.substringAfterLast('/')) {
-            "aloyoon_alkoshi" -> 0
-            "omar_alqazabri" -> 1
-            "bader" -> 2
-            "hsh-m-lhr-z" -> 3
-            else -> 4
-        }
-    }
+    )).sortedBy { station -> quranRank(station.url.substringAfterLast('/')) }
     private val tajwid = listOf(
         quranStation("عبد الباسط عبد الصمد", "abdulbasit_abdulsamad_mojawwad"),
         quranStation("محمد صديق المنشاوي · مجوّد", "mohammed_siddiq_alminshawi_mojawwad"),
@@ -265,6 +278,14 @@ internal object Stations {
         "عبد الرشيد صوفي" to listOf("Abdul Rashid Sufi", "Abdulrasheed Soufi"),
         "عبد المحسن القاسم" to listOf("Abdul Mohsen Al Qasim"),
         "علي الحذيفي" to listOf("Ali Al Hudhaifi", "Ali Al Huthaifi"),
+        "هزاع البلوشي" to listOf("Hazza Al Balushi", "Hazza Albalushi", "هزاع"),
+        "محمد أيوب" to listOf("Mohammed Ayyub", "Muhammad Ayoub"),
+        "علي جابر" to listOf("Ali Jaber", "Ali Jabir"),
+        "خالد الجليل" to listOf("Khalid Al Jalil", "Khalid Al Jileel"),
+        "محمد جبريل" to listOf("Mohamed Jebril", "Muhammad Jibreel"),
+        "مصطفى إسماعيل" to listOf("Mostafa Ismail", "Mustafa Ismail"),
+        "محمد الطبلاوي" to listOf("Mohamed El Tablawi", "Mohammad Al Tablaway"),
+        "إبراهيم الدوسري" to listOf("Ibrahim Al Dosari"),
         "العيون الكوشي" to listOf("Laayoun El Kouchi", "Al Oyoun Al Koshi"),
         "عبد الباسط عبد الصمد" to listOf("Abdelbaset Abdelssamad", "Abdulbasit Abdulsamad", "عبدالباسط عبدالصمد"),
         "محمد صديق المنشاوي" to listOf("Mohamed Siddiq Al Minshawi"),
@@ -278,7 +299,8 @@ internal object Stations {
     val all = localRadios + quranLibrary
 
     fun reciterName(station: RadioStation): String = station.name.substringBefore(" ·")
-    fun isRecording(station: RadioStation): Boolean = station.url in haram || station == herraz
+    // Haram excerpts are single recordings. Herraz plays round the clock like a radio, so it is not one.
+    fun isRecording(station: RadioStation): Boolean = station.url in haram
     fun isReciter(station: RadioStation): Boolean = quranSection(station) != null
     fun quranSection(station: RadioStation): QuranSection? = when {
         station in quran -> QuranSection.MURATTAL

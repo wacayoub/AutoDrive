@@ -55,6 +55,36 @@ internal object HerrazRecitations {
         }
     }
 
+    // Length in seconds of each file of [chapters], measured from the 128 kbit/s MP3Quran files on 15 November 2026.
+    private val seconds = intArrayOf(
+        41, 7051, 4108, 4404, 3419, 3593, 4165, 1484, 2950, 2110, 2286, 2034,
+        1095, 1039, 853, 2036, 1957, 2055, 1134, 1562, 1518, 1422, 1306, 1525,
+        1099, 1551, 1516, 1631, 1191, 986, 669, 476, 1091, 933, 894, 1075,
+        866, 1293, 1515, 973, 990, 1195, 398, 563, 799, 640, 661, 461,
+        450, 431, 379, 445, 452, 568, 567, 739, 599, 656, 448, 254,
+        233, 240, 285, 322, 341, 410, 400, 333, 277, 269, 264, 230,
+        308, 184, 295, 244, 232, 222, 190, 138, 100, 223, 127, 131,
+        76, 78, 108, 165, 95, 67, 85, 53, 29, 40, 84, 35,
+        112, 44, 48, 42, 33, 18, 40, 29, 29, 33, 16, 40,
+        20, 28, 14, 23, 31,
+    )
+    private val cycleSeconds = seconds.sum().toLong()
+
+    /**
+     * The recitation plays like a round-the-clock radio: this is where that broadcast is at [nowMs], as a playlist
+     * index and a position in that surah. Every listener joining at the same moment hears the same verse.
+     */
+    fun live(nowMs: Long): Pair<Int, Long> {
+        var offset = Math.floorMod(nowMs / 1000, cycleSeconds)
+        seconds.forEachIndexed { index, length ->
+            if (offset < length) return index to offset * 1000
+            offset -= length
+        }
+        return 0 to 0L
+    }
+
+    internal val measuredChapters: Int get() = seconds.size
+
     /** Playlist position of surah [number], or null when this recitation does not include it. */
     fun indexOf(number: Int): Int? = chapters.indexOfFirst { it.number == number }.takeIf { it >= 0 }
 

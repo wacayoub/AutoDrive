@@ -2396,7 +2396,6 @@ class RadioActivity : ComponentActivity() {
             city = city,
             recents = ListeningPrefs.list(prefs, ListeningPrefs.RECENT_STATIONS).mapNotNull(::findStation),
             presets = presets,
-            herrazChapter = prefs.getInt(ListeningPrefs.HERRAZ_CHAPTER, 0).takeIf { it > 0 },
         )
     }
 
@@ -2422,11 +2421,6 @@ class RadioActivity : ComponentActivity() {
                 addChip("الكل · Tout", null, selected == null, "Toutes les récitations") { chooseQuranSection(null) }
                 for (section in QuranSection.entries) addChip(section.label, null, section == selected, section.label) {
                     chooseQuranSection(section)
-                }
-                prefs.getInt(ListeningPrefs.HERRAZ_CHAPTER, 0).takeIf { it > 0 }?.let(HerrazRecitations::chapter)?.let { surah ->
-                    addChip("Reprendre · سورة ${surah.name}", null, false, "Reprendre la sourate ${surah.latin}") {
-                        select(Stations.herrazStation, surah.number)
-                    }
                 }
             }
             StationTab.WORLD -> {
@@ -2774,16 +2768,10 @@ class RadioActivity : ComponentActivity() {
         renderPlayer()
     }
 
-    /** Herraz starts at the requested surah, otherwise where the listener stopped last time. */
+    /** A surah asked for by name starts Herraz there; otherwise the service joins its live broadcast. */
     private fun recitationStart(station: RadioStation, chapter: Int?): MediaItem? {
-        if (station != Stations.herrazStation) return null
-        val saved = prefs.getInt(ListeningPrefs.HERRAZ_CHAPTER, 0).takeIf { it > 0 }
-        val number = chapter ?: saved ?: return null
-        val position = if (number == saved) prefs.getLong(ListeningPrefs.HERRAZ_POSITION, 0L) else 0L
-        val extras = Bundle().apply {
-            putInt(ListeningPrefs.HERRAZ_CHAPTER, number)
-            putLong(ListeningPrefs.HERRAZ_POSITION, position)
-        }
+        if (station != Stations.herrazStation || chapter == null) return null
+        val extras = Bundle().apply { putInt(ListeningPrefs.HERRAZ_CHAPTER, chapter) }
         return Stations.item(station).buildUpon()
             .setRequestMetadata(MediaItem.RequestMetadata.Builder().setExtras(extras).build()).build()
     }
