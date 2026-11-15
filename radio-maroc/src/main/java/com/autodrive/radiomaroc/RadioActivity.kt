@@ -1418,7 +1418,7 @@ class RadioActivity : ComponentActivity() {
                         if (station != null) {
                             RadioSound.playClick(this@RadioActivity, prefs)
                             if (television) catalogueFocusStation = station.url
-                            select(station)
+                            pick(station)
                         } else if (inlineDirectoryPage && position == catalogueAdapter.count - 1) {
                             RadioSound.playClick(this@RadioActivity, prefs)
                             directory.loadMore()
@@ -2534,7 +2534,7 @@ class RadioActivity : ComponentActivity() {
             selectionMark.visibility = if (selected) View.VISIBLE else View.GONE
             contentDescription = "Écouter ${station.name}"
             stateDescription = if (playing) "En écoute" else if (selected) "Sélectionnée" else null
-            if (!television) setRadioClick { select(station) }
+            if (!television) setRadioClick { pick(station) }
             number.text = position.toString().padStart(2, '0')
             number.visibility = if (playing) View.INVISIBLE else View.VISIBLE
             number.setTextColor(if (selected) accent else muted)
@@ -2730,12 +2730,17 @@ class RadioActivity : ComponentActivity() {
         }.map(Suggestion::station) else Stations.visible(tab, favorites, query, radioFavoritesOnly, directory.stations,
             directoryBookmarks, sort, category, favoriteOrder, activeQuranSection(),
             customOrder = if (sort == StationSort.CUSTOM) ListeningPrefs.list(prefs, customOrderKey(tab)) else emptyList())
-        if (tab == StationTab.QURAN) HerrazRecitations.find(query)?.let { surah ->
-            // A surah name in the search starts Hicham El Herraz's recitation at that surah.
-            val herraz = Stations.herrazStation
-            notes[herraz.url] = "سورة ${surah.name} · ${surah.latin}"
-            chapters[herraz.url] = surah.number
-            listed = listOf(herraz) + listed.filter { it != herraz }
+        if (tab == StationTab.QURAN) HerrazRecitations.findNumber(query)?.let { number ->
+            // A surah name in the search offers that surah by Hicham El Herraz and by every reciter's whole Quran.
+            val title = "سورة ${HerrazRecitations.surahName(number)} · ${HerrazRecitations.latinName(number)}"
+            val herraz = Stations.herrazStation.takeIf { HerrazRecitations.indexOf(number) != null }
+            val readings = Mushaf.recitations.filter { number in it.surahs }.map { it.station }
+            val offered = listOfNotNull(herraz) + readings
+            offered.forEach { station ->
+                notes[station.url] = title
+                chapters[station.url] = number
+            }
+            listed = offered + listed.filter { it !in offered }
         }
         if (tab == StationTab.FAVORITES && sort == StationSort.DEFAULT) {
             listed.forEachIndexed { index, station -> notes.putIfAbsent(station.url, "Présélection ${index + 1}") }
@@ -3159,8 +3164,8 @@ class RadioActivity : ComponentActivity() {
         val station = findStation(active) ?: savedStation
         val luxe = if (station == Stations.luxe) luxeState() else null
         val recording = station?.let(Stations::isRecording) == true
-        val chapter = player?.currentMediaItem?.takeIf { it.mediaId == HerrazRecitations.SOURCE }
-            ?.mediaMetadata?.subtitle
+        val chapterItem = player?.currentMediaItem?.takeIf { it.mediaId == HerrazRecitations.SOURCE || Mushaf.of(it.mediaId) != null }
+        val chapter = chapterItem?.mediaMetadata?.subtitle
         val ended = player?.playbackState == Player.STATE_ENDED
         val waitingForNetwork = luxe == null && player?.let(::waitingForNetwork) == true
         val requesting = if (luxe != null) luxe == LuxeRadio.State.PLAYING || luxe == LuxeRadio.State.CONNECTING
@@ -3186,7 +3191,10 @@ class RadioActivity : ComponentActivity() {
         playerPanel.layoutDirection = directionOf(station?.name.orEmpty())
         playerGlow?.mirror(glowMirrors && playerPanel.layoutDirection == View.LAYOUT_DIRECTION_RTL)
         playerTitle.text = station?.name ?: "Choisir une station"
-        playerSubtitle.text = if (chapter != null) "$chapter · ${HerrazRecitations.NARRATION}" else programme?.let {
+        playerSubtitle.text = if (chapter != null) {
+            if (chapterItem.mediaId == HerrazRecitations.SOURCE) "$chapter · ${HerrazRecitations.NARRATION}"
+            else "$chapter · المصحف كاملاً"
+        } else programme?.let {
             listOfNotNull(it.title, it.hours, it.source.takeIf { playerCategory == null }).joinToString(" · ")
         } ?: station?.let(Stations::subtitle).orEmpty()
         playerSubtitle.visibility = if (playerSubtitle.text.isEmpty()) View.GONE else View.VISIBLE
@@ -3406,9 +3414,81 @@ class RadioActivity : ComponentActivity() {
         renderPlayer()
     }
 
-    /** A surah asked for by name starts Herraz there; otherwise the service joins its live broadcast. */
+    /** A tap on a station: a reciter's whole Quran first asks for the surah, unless a search already named it. */
+    private fun pick(station: RadioStation) {
+        val recitation = Mushaf.of(station)
+        if (recitation == null || rowChapters[station.url] != null) select(station) else showSurahPicker(recitation)
+    }
+
+    /** The 114 surahs of one reciter (fewer when MP3Quran lacks some), searchable in Arabic or Latin letters. */
+    private fun showSurahPicker(recitation: Mushaf.Recitation) {
+        val sheet = RadioSheet(this, Stations.reciterName(recitation.station), "${recitation.narration} · اختر السورة")
+        var shown = recitation.surahs
+        lateinit var adapter: BaseAdapter
+        val search = EditText(this).apply {
+            hint = "Sourate · سورة"
+            setSingleLine(true)
+            setTextColor(textColor)
+            setHintTextColor(muted)
+            background = getDrawable(R.drawable.radio_control)
+            setPadding(dp(14), 0, dp(14), 0)
+            addTextChangedListener(object : TextWatcher {
+                override fun beforeTextChanged(text: CharSequence?, start: Int, count: Int, after: Int) = Unit
+                override fun onTextChanged(text: CharSequence?, start: Int, before: Int, count: Int) = Unit
+                override fun afterTextChanged(text: Editable?) {
+                    val query = text?.toString().orEmpty().trim()
+                    val key = RadioCatalogue.searchKey(query)
+                    shown = if (key.isEmpty()) recitation.surahs else recitation.surahs.filter { number ->
+                        number.toString() == key || RadioCatalogue.searchKey(HerrazRecitations.surahName(number)).contains(key) ||
+                            RadioCatalogue.searchKey(HerrazRecitations.latinName(number)).contains(key)
+                    }.ifEmpty { listOfNotNull(HerrazRecitations.findNumber(query)?.takeIf { it in recitation.surahs }) }
+                    adapter.notifyDataSetChanged()
+                }
+            })
+        }
+        adapter = object : BaseAdapter() {
+            override fun getCount() = shown.size
+            override fun getItem(position: Int) = shown[position]
+            override fun getItemId(position: Int) = shown[position].toLong()
+            override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
+                val line = (convertView as? LinearLayout) ?: row().apply {
+                    gravity = Gravity.CENTER_VERTICAL
+                    minimumHeight = dp(52)
+                    setPadding(dp(12), 0, dp(12), 0)
+                    background = getDrawable(R.drawable.radio_option)
+                    addView(label("", 13, accent, bold = true).apply { tag = "n"; gravity = Gravity.CENTER },
+                        LinearLayout.LayoutParams(dp(40), -2))
+                    addView(label("", 13, muted).apply { tag = "latin" }, LinearLayout.LayoutParams(0, -2, 1f))
+                    addView(label("", 17, textColor, bold = true).apply { tag = "name" }, LinearLayout.LayoutParams(-2, -2))
+                }
+                val number = shown[position]
+                line.findViewWithTag<TextView>("n").text = number.toString()
+                line.findViewWithTag<TextView>("latin").text = HerrazRecitations.latinName(number)
+                line.findViewWithTag<TextView>("name").text = "سورة ${HerrazRecitations.surahName(number)}"
+                line.contentDescription = "Sourate $number · ${HerrazRecitations.latinName(number)}"
+                return line
+            }
+        }
+        sheet.body.addView(search, LinearLayout.LayoutParams(-1, dp(46)).apply { bottomMargin = dp(8) })
+        sheet.body.addView(ListView(this).apply {
+            this.adapter = adapter
+            divider = null
+            dividerHeight = dp(6)
+            selector = ColorDrawable(Color.TRANSPARENT)
+            setOnItemClickListener { _, _, position, _ ->
+                sheet.dismiss()
+                select(recitation.station, shown[position])
+            }
+        }, LinearLayout.LayoutParams(-1, (resources.displayMetrics.heightPixels - dp(220)).coerceAtLeast(dp(160))))
+        sheet.show()
+    }
+
+    /**
+     * A surah asked for by name starts Herraz there, otherwise the service joins its live broadcast; a reciter's whole
+     * Quran starts at the surah picked.
+     */
     private fun recitationStart(station: RadioStation, chapter: Int?): MediaItem? {
-        if (station != Stations.herrazStation || chapter == null) return null
+        if (chapter == null || (station != Stations.herrazStation && Mushaf.of(station) == null)) return null
         val extras = Bundle().apply { putInt(ListeningPrefs.HERRAZ_CHAPTER, chapter) }
         return Stations.item(station).buildUpon()
             .setRequestMetadata(MediaItem.RequestMetadata.Builder().setExtras(extras).build()).build()

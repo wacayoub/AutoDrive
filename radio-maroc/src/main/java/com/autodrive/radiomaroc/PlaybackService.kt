@@ -370,8 +370,14 @@ internal class PlaybackService : MediaLibraryService() {
                     val herraz = mediaItems.singleOrNull()?.takeIf { it.mediaId == HerrazRecitations.SOURCE }
                     val surah = herraz?.requestMetadata?.extras?.getInt(ListeningPrefs.HERRAZ_CHAPTER, 0)
                         ?.takeIf { it > 0 }?.let(HerrazRecitations::indexOf)
+                    // A reciter's whole Quran starts at the surah the listener picked.
+                    val mushaf = mediaItems.singleOrNull()?.let { Mushaf.of(it.mediaId) }
+                    val mushafSurah = mediaItems.singleOrNull()?.requestMetadata?.extras
+                        ?.getInt(ListeningPrefs.HERRAZ_CHAPTER, 0)?.takeIf { it > 0 }
                     return Futures.transform(onAddMediaItems(session, controller, mediaItems), { resolved ->
                         val (index, position) = when {
+                            mushaf != null && resolved.size == mushaf.surahs.size ->
+                                Mushaf.startIndex(mushaf, mushafSurah) to 0L
                             herraz == null || resolved.size != HerrazRecitations.chapters.size -> startIndex to startPositionMs
                             surah != null -> surah to 0L
                             else -> HerrazRecitations.live(System.currentTimeMillis())

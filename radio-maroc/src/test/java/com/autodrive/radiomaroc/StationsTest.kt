@@ -16,7 +16,8 @@ class StationsTest {
         val tajwid = quran.filter { Stations.quranSection(it) == QuranSection.TAJWID }
         assertEquals(61, morocco.size)
         assertTrue(morocco.mapNotNull { it.logoUrl }.all { RadioStation.validUrl(it) != null })
-        assertEquals(43, quran.size)
+        // 33 live reciters, 2 adhkar radios, 37 whole Qurans, 4 tajwid radios and 6 Haram prayers.
+        assertEquals(82, quran.size)
         assertEquals(33, quran.count { Stations.quranSection(it) == QuranSection.MURATTAL })
         assertEquals(4, tajwid.size)
         assertEquals(Stations.all.size, Stations.all.map { it.url }.toSet().size)
@@ -83,7 +84,8 @@ class StationsTest {
         assertEquals("Med Radio", RadioQueue.neighbor(morocco, morocco.first().url, 1)?.name)
         assertEquals(morocco.last(), RadioQueue.neighbor(morocco, morocco.first().url, -1))
         assertEquals("Radio Aswat", Stations.visible(StationTab.MOROCCO, emptySet(), "aswat").single().name)
-        val quran = Stations.visible(StationTab.QURAN, emptySet(), "قَزَابْرِي").single()
+        val quran = Stations.visible(StationTab.QURAN, emptySet(), "قَزَابْرِي")
+            .single { Stations.quranSection(it) == QuranSection.MURATTAL }
         assertEquals("عمر القزابري", quran.name)
         assertEquals(listOf(quran), Stations.visible(StationTab.FAVORITES, setOf(quran.url), ""))
     }
@@ -267,12 +269,13 @@ class StationsTest {
         val results = Stations.visible(StationTab.QURAN, emptySet(), "Badr Turki")
         val badr = results.single { Stations.quranSection(it) == QuranSection.MURATTAL }
         assertEquals("بدر التركي", badr.name)
-        assertEquals(3, results.size)
+        // His live radio, his whole Quran and two Haram prayers.
+        assertEquals(4, results.size)
         assertEquals(results, Stations.visible(StationTab.QURAN, emptySet(), "بَدْر التُّرْكِي"))
         val abdelbasetResults = Stations.visible(StationTab.QURAN, emptySet(), "Abdelbaset")
-        // Murattal in Hafs and in Warsh, then the mojawwad recitation.
-        assertEquals(listOf(QuranSection.MURATTAL, QuranSection.MURATTAL, QuranSection.TAJWID),
-            abdelbasetResults.mapNotNull(Stations::quranSection))
+        // Murattal in Hafs and in Warsh, his three whole Qurans, then the mojawwad radio.
+        assertEquals(listOf(QuranSection.MURATTAL, QuranSection.MURATTAL, QuranSection.MUSHAF, QuranSection.MUSHAF,
+            QuranSection.MUSHAF, QuranSection.TAJWID), abdelbasetResults.mapNotNull(Stations::quranSection))
         val abdelbaset = abdelbasetResults.single { Stations.quranSection(it) == QuranSection.TAJWID }
         assertTrue(abdelbaset.url.endsWith("abdulbasit_abdulsamad_mojawwad"))
         assertTrue(Stations.subtitle(abdelbaset).startsWith("المصحف المجوّد"))
@@ -291,7 +294,8 @@ class StationsTest {
             assertTrue(results.all { Stations.subtitle(it).startsWith("صلاة $prayer · المسجد الحرام · 2026-") })
         }
         assertEquals("بدر التركي · سورة التين", Stations.visible(StationTab.QURAN, emptySet(), "سورة التين").single().name)
-        val badr = Stations.visible(StationTab.QURAN, emptySet(), "Badr Turki").filter(Stations::isRecording)
+        val badr = Stations.visible(StationTab.QURAN, emptySet(), "Badr Turki")
+            .filter { Stations.quranSection(it) == QuranSection.HARAM }
         assertEquals(2, badr.size)
         assertTrue(badr.all { Stations.reciterName(it) == "بدر التركي" })
         assertEquals(badr, Stations.visible(StationTab.FAVORITES, badr.map { it.url }.toSet(), ""))
@@ -308,9 +312,11 @@ class StationsTest {
     }
 
     @Test fun herrazUsesThePublishedWarshCollectionAndMatchesTheRequestedSpelling() {
-        val herraz = Stations.visible(StationTab.QURAN, emptySet(), "Hicham Hezzaz").single()
+        fun live(query: String) = Stations.visible(StationTab.QURAN, emptySet(), query)
+            .single { Stations.quranSection(it) == QuranSection.MURATTAL }
+        val herraz = live("Hicham Hezzaz")
         assertEquals("هشام الهراز", herraz.name)
-        assertEquals(herraz, Stations.visible(StationTab.QURAN, emptySet(), "هشام لحراز").single())
+        assertEquals(herraz, live("هشام لحراز"))
         assertEquals(herraz, CarRadioLibrary.stationForQuery("Hicham Hezzaz", null))
         assertEquals(QuranSection.MURATTAL, Stations.quranSection(herraz))
         assertFalse(Stations.isRecording(herraz))
@@ -329,9 +335,10 @@ class StationsTest {
                 Stations.visible(StationTab.QURAN, emptySet(), section.label))
         }
         val endOfMurattal = quran.last { Stations.quranSection(it) == QuranSection.MURATTAL }
-        val firstTajwid = quran.first { Stations.quranSection(it) == QuranSection.TAJWID }
-        assertEquals(firstTajwid, RadioQueue.neighbor(quran, endOfMurattal.url, 1))
-        assertEquals("فارس عباد", Stations.visible(StationTab.QURAN, emptySet(), "Fares Abbad").single().name)
+        val firstAdhkar = quran.first { Stations.quranSection(it) == QuranSection.ADHKAR }
+        assertEquals(firstAdhkar, RadioQueue.neighbor(quran, endOfMurattal.url, 1))
+        assertEquals(listOf("فارس عباد", "فارس عباد · حفص"),
+            Stations.visible(StationTab.QURAN, emptySet(), "Fares Abbad").map { it.name })
         assertEquals(StationTab.QURAN, StationTab.restore("TAJWID"))
         assertEquals(StationTab.QURAN, StationTab.restore("HARAM"))
         assertEquals(StationTab.WORLD, StationTab.restore("WORLD"))
@@ -397,5 +404,33 @@ class StationsTest {
         assertEquals(listOf("Radio Adwaa FM 2"), names.filter { "Adwaa" in it })
         assertTrue(names.none { "Kabana" in it || "Fay" in it })
         assertEquals(1, names.count { it == "Atlantic Radio" })
+    }
+
+    @Test fun everyReciterHasHisWholeQuranAndAdhkarAreLiveRadios() {
+        val quran = Stations.visible(StationTab.QURAN, emptySet(), "")
+        val murattal = quran.filter { Stations.quranSection(it) == QuranSection.MURATTAL }
+        val tajwid = quran.filter { Stations.quranSection(it) == QuranSection.TAJWID }
+        val whole = quran.filter { Stations.quranSection(it) == QuranSection.MUSHAF }
+        // One whole Quran per live reciter radio and per tajwid radio.
+        assertEquals((murattal + tajwid).size, whole.size)
+        assertEquals((murattal + tajwid).map { it.url.substringAfterLast('/') }.toSet(),
+            Mushaf.recitations.map { it.radio }.toSet() - "hsh-m-lhr-z" + "hsh-m-lhr-z")
+        assertTrue(whole.all { it.url.startsWith("https://cdn.mp3quran.net/audio/") && Stations.isRecording(it) })
+        val alafasy = whole.first()
+        assertEquals("مشاري راشد العفاسي · حفص", alafasy.name)
+        assertEquals(ReciterPortraits.forStation(murattal.first()), ReciterPortraits.forStation(alafasy))
+        // Its playlist (Stations.playbackItems, checked on the device) has one item per surah.
+        assertEquals((1..114).toList(), Mushaf.of(alafasy)!!.surahs)
+        assertEquals("https://cdn.mp3quran.net/audio/mishary-alafasy/r1/018.mp3", Mushaf.url(Mushaf.of(alafasy)!!, 18))
+        assertEquals(17, Mushaf.startIndex(Mushaf.of(alafasy)!!, 18))
+        // MP3Quran lacks some surahs of Hazza Al-Balushi: the playlist skips them and so does the picker.
+        val hazza = Mushaf.recitations.single { it.radio == "hazza" }
+        assertEquals(91, hazza.surahs.size)
+        assertEquals(0, Mushaf.startIndex(hazza, 2))
+        assertEquals(18, HerrazRecitations.findNumber("Al-Kahf"))
+        assertEquals(33, HerrazRecitations.findNumber("الأحزاب"))
+        assertEquals(listOf("أذكار الصباح", "أذكار المساء"),
+            quran.filter { Stations.quranSection(it) == QuranSection.ADHKAR }.map { it.name })
+        assertTrue(Adhkar.stations.none(Stations::isRecording))
     }
 }

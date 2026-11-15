@@ -1,9 +1,9 @@
-Cette version corrige la fermeture de la radio à l’ouverture signalée sur un téléphone.
+L’onglet Coran gagne deux catégories.
 
-Les fonctions ajoutées pour l’Incarlink, le mini-lecteur et ses boutons, ne démarrent plus du tout sur téléphone, et le suivi du mode Système ne peut plus recharger l’écran en boucle.
+« الأذكار » propose les radios en direct des adhkar du matin (أذكار الصباح) et du soir (أذكار المساء).
 
-Si la radio se ferme encore, elle affiche au lancement suivant l’écran « La radio s’est fermée », avec le bouton « Partager le rapport ». Envoie ce rapport par WhatsApp ou par e-mail : il donne la cause exacte de l’erreur. Le bouton « Relancer la radio » la rouvre.
+« المصحف كاملاً » donne le Coran complet de chaque cheikh de l’onglet : Alafasy, Abdul Basit, Al-Soudais, Al-Mueaqly, Al-Qazabri, El Herraz, El Kouchi, Al-Minshawi, Al-Hussary et tous les autres, en Hafs, en Warsh ou en mujawwad, soit 37 récitations. On touche un cheikh, on choisit la sourate dans la liste (recherche en arabe ou en lettres latines, par exemple « Kahf » ou « Yasin »), et la lecture continue jusqu’à la fin du Coran. Chercher une sourate dans l’onglet Coran la propose aussitôt par tous les cheikhs.
 
 Cette version se met à jour automatiquement depuis la 2.5.35 et les versions suivantes.
 
-Vérifié sur un émulateur Android 13 en format téléphone et en 800 × 480 : après une fermeture provoquée, l’écran de rapport s’est affiché et « Relancer la radio » a rouvert la radio. La fermeture du téléphone concerné n’a pas pu être reproduite sur l’émulateur.
+Vérifié sur un émulateur Android 13 en 800 × 480 : أذكار الصباح a joué en direct, et Al-Kahf a démarré chez Alafasy et chez Abdul Basit.

@@ -24,7 +24,7 @@ internal enum class StationTab(val label: String) {
 }
 
 internal enum class QuranSection(val label: String) {
-    MURATTAL("الترتيل"), TAJWID("التجويد"), HARAM("تلاوات الحرم")
+    MURATTAL("الترتيل"), ADHKAR("الأذكار"), MUSHAF("المصحف كاملاً"), TAJWID("التجويد"), HARAM("تلاوات الحرم")
 }
 
 internal enum class StationSort(val label: String) {
@@ -313,17 +313,22 @@ internal object Stations {
         "ياسر الدوسري" to listOf("Yasser Al Dosari", "Yasser Al Dossari"),
         "عبد الله الجهني" to listOf("Abdullah Al Juhany", "عبدالله الجهني"),
     )
-    private val quranLibrary = quran + tajwid + haramStations
+    // Live radios first, then the remembrances, every reciter's whole Quran, tajwid and the Haram prayers.
+    private val mushafStations = Mushaf.recitations.map { it.station }
+    private val quranLibrary = quran + Adhkar.stations + mushafStations + tajwid + haramStations
     // Fayrouz is a tribute webradio to the Lebanese singer, not a Moroccan station: it left the Maroc tab but stays
     // here so favourites saved by earlier versions keep playing.
     val all = localRadios + fayrouz + quranLibrary
 
     fun reciterName(station: RadioStation): String = station.name.substringBefore(" ·")
     // Haram excerpts are single recordings. Herraz plays round the clock like a radio, so it is not one.
-    fun isRecording(station: RadioStation): Boolean = station.url in haram
+    // A reciter's whole Quran is a recording too: no LIVE badge, it ends after its last surah.
+    fun isRecording(station: RadioStation): Boolean = station.url in haram || Mushaf.of(station) != null
     fun isReciter(station: RadioStation): Boolean = quranSection(station) != null
     fun quranSection(station: RadioStation): QuranSection? = when {
         station in quran -> QuranSection.MURATTAL
+        station in Adhkar.stations -> QuranSection.ADHKAR
+        Mushaf.of(station) != null -> QuranSection.MUSHAF
         station in tajwid -> QuranSection.TAJWID
         station.url in haram -> QuranSection.HARAM
         else -> null
@@ -560,7 +565,11 @@ internal object Stations {
 
     fun item(station: RadioStation): MediaItem = MediaItem.Builder()
         .setMediaId(station.url)
-        .setUri(if (station == herraz) HerrazRecitations.chapters.first().url else streamUrl(station))
+        .setUri(when {
+            station == herraz -> HerrazRecitations.chapters.first().url
+            Mushaf.of(station) != null -> Mushaf.of(station)!!.let { Mushaf.url(it, it.surahs.first()) }
+            else -> streamUrl(station)
+        })
         .setMediaMetadata(metadata(station))
         .apply {
             if (isHls(station)) setMimeType(MimeTypes.APPLICATION_M3U8)
@@ -578,6 +587,15 @@ internal object Stations {
 
     fun playbackItems(station: RadioStation): List<MediaItem> {
         val entry = item(station)
+        Mushaf.of(station)?.let { recitation ->
+            // The whole Quran of one reciter: one item per surah, all under the station's ID.
+            return recitation.surahs.map { number ->
+                entry.buildUpon().setUri(Mushaf.url(recitation, number))
+                    .setMediaMetadata(entry.mediaMetadata.buildUpon()
+                        .setSubtitle("سورة ${HerrazRecitations.surahName(number)}").build())
+                    .build()
+            }
+        }
         if (station != herraz) return listOf(entry)
         return HerrazRecitations.chapters.map { chapter ->
             entry.buildUpon().setUri(chapter.url)

@@ -101,7 +101,10 @@ internal object CarRadioLibrary {
         if (query.isBlank()) return lastId?.let { selection(it, favorites)?.station } ?: moroccoStations.firstOrNull()
         val key = RadioCatalogue.searchKey(query.take(160))
         val results = search(query, favorites)
+        // A reciter's name also finds his whole Quran and Haram prayers: play his live radio, listed first.
         return results.firstOrNull { RadioCatalogue.searchKey(it.name) == key } ?: results.singleOrNull()
+            ?: results.takeIf { found -> found.isNotEmpty() && found.all(Stations::isReciter) &&
+                found.map(Stations::reciterName).distinct().size == 1 }?.first()
     }
 
     fun search(query: String, favorites: List<RadioStation>): List<RadioStation> {

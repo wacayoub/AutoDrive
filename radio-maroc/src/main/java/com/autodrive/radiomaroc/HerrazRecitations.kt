@@ -13,7 +13,7 @@ internal object HerrazRecitations {
         "التوبة", "يونس", "هود", "يوسف", "الرعد", "إبراهيم", "الحجر", "النحل",
         "الإسراء", "الكهف", "مريم", "طه", "الأنبياء", "الحج", "المؤمنون", "النور",
         "الفرقان", "الشعراء", "النمل", "القصص", "العنكبوت", "الروم", "لقمان", "السجدة",
-        "", "سبأ", "فاطر", "يس", "الصافات", "ص", "الزمر", "غافر",
+        "الأحزاب", "سبأ", "فاطر", "يس", "الصافات", "ص", "الزمر", "غافر",
         "فصلت", "الشورى", "الزخرف", "الدّخان", "الجاثية", "الأحقاف", "محمد", "الفتح",
         "الحجرات", "ق", "الذاريات", "الطور", "النجم", "القمر", "الرحمن", "الواقعة",
         "الحديد", "المجادلة", "الحشر", "الممتحنة", "الصف", "الجمعة", "المنافقون", "التغابن",
@@ -48,11 +48,20 @@ internal object HerrazRecitations {
     data class Chapter(val number: Int, val name: String, val url: String) {
         val latin: String get() = latinNames[number - 1]
     }
+    // Herraz's recording on MP3Quran has no Al-Ahzab (33).
+    private const val MISSING = 33
+
+    /** Arabic name of surah [number] (1–114), shared by every full recitation (see Mushaf). */
+    fun surahName(number: Int): String = names[number - 1]
+
+    fun latinName(number: Int): String = latinNames[number - 1]
+
+    /** Audio of surah [number] in an MP3Quran folder: 001.mp3 to 114.mp3. */
+    fun chapterUrl(folder: String, number: Int) = "${folder.trimEnd('/')}/${String.format(Locale.ROOT, "%03d", number)}.mp3"
+
     val chapters = names.mapIndexedNotNull { index, name ->
-        if (name.isBlank()) null else {
-            val number = index + 1
-            Chapter(number, name, "$AUDIO_ROOT/${String.format(Locale.ROOT, "%03d", number)}.mp3")
-        }
+        val number = index + 1
+        if (number == MISSING) null else Chapter(number, name, chapterUrl(AUDIO_ROOT, number))
     }
 
     // Length in seconds of each file of [chapters], measured from the 128 kbit/s MP3Quran files on 15 November 2026.
@@ -94,7 +103,15 @@ internal object HerrazRecitations {
      * The surah a search names, in Arabic or Latin letters ("الكهف", "kahf", "Al-Kahf", "ya sin").
      * Exact names win over prefixes, so "nas" finds An-Nas rather than An-Nasr.
      */
-    fun find(query: String): Chapter? {
+    fun find(query: String): Chapter? = findIn(chapters, query)
+
+    /** The surah number a search names among all 114, for the full recitations of every reciter. */
+    fun findNumber(query: String): Int? = findIn(allChapters, query)?.number
+
+    // All 114 surahs; their URLs point at Herraz's folder but only the numbers and names are used.
+    private val allChapters = names.mapIndexed { index, name -> Chapter(index + 1, name, "") }
+
+    private fun findIn(chapters: List<Chapter>, query: String): Chapter? {
         val key = RadioCatalogue.searchKey(query).removePrefix("sourate").removePrefix("surah").removePrefix("سورة")
         if (key.length < 3) return null
         fun cores(chapter: Chapter): List<String> {
