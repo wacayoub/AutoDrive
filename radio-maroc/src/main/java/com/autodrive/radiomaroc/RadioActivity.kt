@@ -19,7 +19,9 @@ import android.graphics.Bitmap
 import android.graphics.Outline
 import android.graphics.Typeface
 import android.graphics.drawable.ColorDrawable
+import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.InsetDrawable
 import android.graphics.drawable.LayerDrawable
 import android.graphics.drawable.RippleDrawable
 import android.os.Bundle
@@ -1754,6 +1756,12 @@ class RadioActivity : ComponentActivity() {
         })
     }
 
+    /** A catalogue row as a rounded card over a [light] in its logo's colour, with an optional [face] under it. */
+    private fun litCard(face: Drawable?, light: GradientDrawable) = RippleDrawable(ripple,
+        InsetDrawable(LayerDrawable(listOfNotNull(face, light).toTypedArray()), dp(3), dp(2), dp(3), dp(2)),
+        InsetDrawable(GradientDrawable().apply { setColor(Color.WHITE); cornerRadius = dp(12).toFloat() },
+            dp(3), dp(2), dp(3), dp(2)))
+
     /** Lights the player panel in the colour of the station logo, centred where the logo sits. */
     private fun glowBehind(panel: View, artwork: StationArtwork, centerX: Float, centerY: Float, mirrors: Boolean = true) {
         val night = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES
@@ -2001,21 +2009,44 @@ class RadioActivity : ComponentActivity() {
         private val bandTile = touchMosaic && incarlinkStyle
         // Preset tiles carry a soft light in their logo's colour, stronger on the selected station.
         private val night = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES
-        private val idleLight = if (touchMosaic) RadioMotion.tileLight(dp(18).toFloat()) else null
-        private val selectedLight = if (touchMosaic) RadioMotion.tileLight(dp(18).toFloat()) else null
+        // Touch guides (the Cockpit catalogue) draw these tiles as rows: rounded cards washed from the logo side.
+        private val rowStyle = tvGuide && !television
+        private val idleLight = when {
+            touchMosaic -> RadioMotion.tileLight(dp(18).toFloat())
+            rowStyle -> RadioMotion.rowLight(dp(12).toFloat())
+            else -> null
+        }
+        private val selectedLight = when {
+            touchMosaic -> RadioMotion.tileLight(dp(18).toFloat())
+            rowStyle -> RadioMotion.rowLight(dp(12).toFloat())
+            else -> null
+        }
         private var boundUrl: String? = null
-        private val idleBackground = if (idleLight != null) litTile(R.drawable.radio_tile, idleLight) else pressable(when {
-            tvGuide -> R.drawable.radio_station_rule
-            else -> R.drawable.radio_control
-        })
-        private val selectedBackground = if (selectedLight != null) litTile(R.drawable.radio_tile_selected, selectedLight)
-            else pressable(R.drawable.radio_selected)
+        private var tileColor: Int? = null
+        private val idleBackground = when {
+            touchMosaic -> litTile(R.drawable.radio_tile, idleLight!!)
+            rowStyle -> litCard(null, idleLight!!)
+            tvGuide -> pressable(R.drawable.radio_station_rule)
+            else -> pressable(R.drawable.radio_control)
+        }
+        private val selectedBackground = when {
+            touchMosaic -> litTile(R.drawable.radio_tile_selected, selectedLight!!)
+            rowStyle -> litCard(getDrawable(R.drawable.radio_selected), selectedLight!!)
+            else -> pressable(R.drawable.radio_selected)
+        }
 
         private fun litTile(face: Int, light: GradientDrawable) = RippleDrawable(ripple,
             LayerDrawable(arrayOf(getDrawable(face)!!, light)),
             GradientDrawable().apply { setColor(Color.WHITE); cornerRadius = dp(18).toFloat() })
 
         private fun paintLights(color: Int?) {
+            tileColor = color
+            if (rowStyle) {
+                val rtl = layoutDirection == View.LAYOUT_DIRECTION_RTL
+                idleLight?.let { RadioMotion.paintRow(it, color, if (night) 0x40 else 0x2A, rtl) }
+                selectedLight?.let { RadioMotion.paintRow(it, color, if (night) 0x78 else 0x48, rtl) }
+                return
+            }
             idleLight?.let { RadioMotion.paintLight(it, color, if (night) 0x55 else 0x30) }
             selectedLight?.let { RadioMotion.paintLight(it, color, if (night) 0x8C else 0x50) }
         }
@@ -2060,9 +2091,9 @@ class RadioActivity : ComponentActivity() {
         init {
             layoutParams = AbsListView.LayoutParams(-1, dp(heightDp))
             background = idleBackground
-            if (!tvGuide) RadioMotion.pressScale(this, .95f)
+            if (!tvGuide) RadioMotion.pressScale(this, .95f) else if (rowStyle) RadioMotion.pressScale(this, .98f)
             if (idleLight != null) {
-                addOnLayoutChangeListener { _, left, _, right, _, _, _, _, _ ->
+                if (touchMosaic) addOnLayoutChangeListener { _, left, _, right, _, _, _, _, _ ->
                     val radius = (right - left) * .62f
                     idleLight.gradientRadius = radius
                     selectedLight?.gradientRadius = radius
@@ -2111,6 +2142,7 @@ class RadioActivity : ComponentActivity() {
             stateDescription = if (favorite) listOfNotNull(playbackState, "Favori").joinToString(" · ") else playbackState
             favoriteMark?.visibility = if (favorite) View.VISIBLE else View.GONE
             if (tvGuide) layoutDirection = directionOf(station.name)
+            if (rowStyle) paintLights(tileColor)
             logo.bind(station)
             name.text = station.name
             name.setTextColor(if (selected) accent else textColor)
@@ -2125,8 +2157,22 @@ class RadioActivity : ComponentActivity() {
     }
 
     private inner class StationLine(context: Context) : LinearLayout(context) {
-        private val idleBackground = RippleDrawable(ripple, null, ColorDrawable(Color.WHITE))
-        private val selectedBackground = pressable(R.drawable.radio_selected)
+        // Touch catalogues: each row is a rounded card washed with its logo's colour from the logo side.
+        private val lit = !television
+        private val night = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES
+        private val idleLight = RadioMotion.rowLight(dp(12).toFloat())
+        private val selectedLight = RadioMotion.rowLight(dp(12).toFloat())
+        private var boundUrl: String? = null
+        private var rowColor: Int? = null
+        private val idleBackground = if (lit) litCard(null, idleLight) else RippleDrawable(ripple, null, ColorDrawable(Color.WHITE))
+        private val selectedBackground = if (lit) litCard(getDrawable(R.drawable.radio_selected), selectedLight)
+            else pressable(R.drawable.radio_selected)
+
+        private fun paintLights() {
+            val rtl = layoutDirection == View.LAYOUT_DIRECTION_RTL
+            RadioMotion.paintRow(idleLight, rowColor, if (night) 0x40 else 0x2A, rtl)
+            RadioMotion.paintRow(selectedLight, rowColor, if (night) 0x78 else 0x48, rtl)
+        }
         private val number = label("", 11, muted, bold = true).apply {
             gravity = Gravity.CENTER
             importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
@@ -2185,6 +2231,14 @@ class RadioActivity : ComponentActivity() {
                     importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
                 }, LinearLayout.LayoutParams(dp(48), dp(48)))
             } else addView(star, LinearLayout.LayoutParams(dp(48), dp(48)))
+            if (lit) {
+                RadioMotion.pressScale(this, .98f)
+                badge.onLogoColor = { color ->
+                    boundUrl?.let { logoColors[it] = color ?: Color.TRANSPARENT }
+                    rowColor = color
+                    paintLights()
+                }
+            }
         }
 
         fun bind(station: RadioStation, position: Int) {
@@ -2193,6 +2247,11 @@ class RadioActivity : ComponentActivity() {
             val rowBackground = if (selected) selectedBackground else idleBackground
             if (background !== rowBackground) background = rowBackground
             layoutDirection = directionOf(station.name)
+            if (lit && boundUrl != station.url) {
+                boundUrl = station.url
+                rowColor = logoColors[station.url]
+            }
+            if (lit) paintLights()
             selectionMark.visibility = if (selected) View.VISIBLE else View.GONE
             contentDescription = "Écouter ${station.name}"
             stateDescription = if (playing) "En écoute" else if (selected) "Sélectionnée" else null

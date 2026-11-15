@@ -62,6 +62,23 @@ internal object RadioMotion {
         colors = intArrayOf(Color.TRANSPARENT, Color.TRANSPARENT)
     }
 
+    /** A wash of colour from the logo side of a list row, fading out before the text ends. */
+    fun rowLight(corner: Float) = GradientDrawable().apply {
+        orientation = GradientDrawable.Orientation.LEFT_RIGHT
+        cornerRadius = corner
+        colors = intArrayOf(Color.TRANSPARENT, Color.TRANSPARENT)
+    }
+
+    fun paintRow(light: GradientDrawable, color: Int?, alpha: Int, rightToLeft: Boolean) {
+        light.orientation = if (rightToLeft) GradientDrawable.Orientation.RIGHT_LEFT else GradientDrawable.Orientation.LEFT_RIGHT
+        light.colors = if (color == null || color == Color.TRANSPARENT) intArrayOf(Color.TRANSPARENT, Color.TRANSPARENT)
+            else intArrayOf(
+                Color.argb(alpha, Color.red(color), Color.green(color), Color.blue(color)),
+                Color.argb(alpha / 4, Color.red(color), Color.green(color), Color.blue(color)),
+                Color.TRANSPARENT,
+            )
+    }
+
     fun paintLight(light: GradientDrawable, color: Int?, alpha: Int) {
         light.colors = if (color == null || color == Color.TRANSPARENT) intArrayOf(Color.TRANSPARENT, Color.TRANSPARENT)
             else intArrayOf(Color.argb(alpha, Color.red(color), Color.green(color), Color.blue(color)), Color.TRANSPARENT)
