@@ -3,6 +3,14 @@ package com.autodrive.radiomaroc
 import android.Manifest
 import android.animation.ValueAnimator
 import android.app.AlertDialog
+import android.app.PendingIntent
+import android.app.PictureInPictureParams
+import android.app.RemoteAction
+import android.content.BroadcastReceiver
+import android.content.IntentFilter
+import android.graphics.drawable.Icon
+import android.util.Rational
+import androidx.core.content.ContextCompat
 import android.app.NotificationManager
 import android.app.SearchManager
 import android.app.UiModeManager
@@ -106,6 +114,7 @@ class RadioActivity : ComponentActivity() {
     private companion object {
         const val PREFERENCES = "radio_maroc"
         const val APPEARANCE = "appearance"
+        const val MINI_PLAYER = "mini_player"
         const val LEGACY_DAY_APPEARANCE = "day_appearance"
         const val DISPLAY_LAYOUT = "tv_layout"
         const val CATALOGUE_LAYOUT = "tv_catalogue"
@@ -341,7 +350,10 @@ class RadioActivity : ComponentActivity() {
         returnFromListening.isEnabled = !showingCatalogue
         volumeControlStream = android.media.AudioManager.STREAM_MUSIC
         window.setDecorFitsSystemWindows(false)
-        setContentView(screen())
+        setContentView(withMiniPlayer(screen()))
+        ContextCompat.registerReceiver(this, miniPlayerControls, IntentFilter().apply {
+            MiniAction.entries.forEach { addAction(it.intentAction) }
+        }, ContextCompat.RECEIVER_NOT_EXPORTED)
         window.decorView.addOnUnhandledKeyEventListener { _, event -> handleStationKey(event) }
         updateDirectory()
         restoreTvCatalogueFocus()
@@ -455,6 +467,7 @@ class RadioActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        unregisterReceiver(miniPlayerControls)
         radioUpdates.close()
         directory.close()
         artwork.close()
@@ -742,6 +755,142 @@ class RadioActivity : ComponentActivity() {
     private val wideSheet get() = resources.configuration.screenWidthDp >= 600
 
     /** Settings panel: every option shows its current value, so the driver sees the state before tapping. */
+    /** The three buttons of the mini player; each reaches this activity through a broadcast kept inside the app. */
+    private enum class MiniAction(val code: Int) {
+        PREVIOUS(1), TOGGLE(2), NEXT(3);
+        val intentAction get() = "com.autodrive.radiomaroc.MINI_$name"
+    }
+
+    private val miniPlayerControls = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            when (MiniAction.entries.firstOrNull { it.intentAction == intent.action }) {
+                MiniAction.PREVIOUS -> skip(-1)
+                MiniAction.TOGGLE -> toggle()
+                MiniAction.NEXT -> skip(1)
+                null -> Unit
+            }
+        }
+    }
+
+    // Only on the head unit (car screens): a phone keeps Android's usual multitasking.
+    private val miniPlayerSupported by lazy {
+        carScreen && !television && packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)
+    }
+
+    /** Maps and YouTube buttons, shown with the player controls on the head unit only. */
+    private fun companionButtons(): List<ImageButton> = if (!carScreen || television) emptyList()
+        else CompanionApp.entries.map { app ->
+            transportButton(app.icon, "Ouvrir ${app.label}") { openCompanion(app) }
+        }
+    private val miniPlayerEnabled get() = miniPlayerSupported && prefs.getBoolean(MINI_PLAYER, true)
+    private var miniPlaying: Boolean? = null
+    private var miniArtwork: StationArtwork? = null
+    private var miniName: TextView? = null
+
+    /**
+     * The mini player: Android's picture-in-picture window, a small floating copy of the radio over Maps, YouTube or
+     * the home screen, with previous, play / pause and next. It opens by itself when the listener leaves the radio
+     * while it plays, unless switched off in Réglages.
+     */
+    private fun miniPlayerParams(playing: Boolean): PictureInPictureParams {
+        fun action(kind: MiniAction, icon: Int, title: String) = RemoteAction(
+            Icon.createWithResource(this, icon), title, title,
+            PendingIntent.getBroadcast(this, kind.code, Intent(kind.intentAction).setPackage(packageName),
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT),
+        )
+        return PictureInPictureParams.Builder()
+            .setAspectRatio(Rational(4, 3))
+            .setActions(listOf(
+                action(MiniAction.PREVIOUS, R.drawable.ic_radio_previous, "Station précédente"),
+                if (playing) action(MiniAction.TOGGLE, R.drawable.ic_radio_pause, "Pause")
+                else action(MiniAction.TOGGLE, R.drawable.ic_radio_play, "Écouter"),
+                action(MiniAction.NEXT, R.drawable.ic_radio_next, "Station suivante"),
+            ))
+            .apply { if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) setAutoEnterEnabled(playing && miniPlayerEnabled) }
+            .build()
+    }
+
+    private fun updateMiniPlayer(station: RadioStation?, playing: Boolean) {
+        miniArtwork?.bind(station)
+        miniName?.text = station?.name ?: getString(R.string.app_name)
+        if (!miniPlayerSupported || miniPlaying == playing) return
+        miniPlaying = playing
+        runCatching { setPictureInPictureParams(miniPlayerParams(playing)) }
+    }
+
+    /** Before Android 12 the window cannot open by itself: it opens here when the listener presses Home. */
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S && miniPlayerEnabled && miniPlaying == true) {
+            runCatching { enterPictureInPictureMode(miniPlayerParams(true)) }
+        }
+    }
+
+    /** In the floating window only the logo and the station name show; the full screen stays built underneath. */
+    private fun withMiniPlayer(content: View): View {
+        miniArtwork = null
+        miniName = null
+        if (!isInPictureInPictureMode) return content
+        content.visibility = View.GONE
+        return FrameLayout(this).apply {
+            background = getDrawable(R.drawable.radio_background)
+            addView(content)
+            addView(column().apply {
+                gravity = Gravity.CENTER
+                setPadding(dp(6), dp(6), dp(6), dp(6))
+                miniArtwork = StationArtwork(14).also { addView(it, LinearLayout.LayoutParams(-2, 0, 1f).apply {
+                    gravity = Gravity.CENTER_HORIZONTAL
+                }) }
+                miniName = label("", 12, textColor, bold = true).apply {
+                    gravity = Gravity.CENTER
+                    maxLines = 1
+                    ellipsize = TextUtils.TruncateAt.END
+                }.also { addView(it, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(4) }) }
+            }, FrameLayout.LayoutParams(-1, -1))
+            miniArtwork?.addOnLayoutChangeListener { view, _, top, _, bottom, _, _, _, _ ->
+                // Keep the logo square inside the small window.
+                val side = bottom - top
+                if (side > 0 && view.layoutParams.width != side) view.post { view.layoutParams = view.layoutParams.apply { width = side } }
+            }
+        }
+    }
+
+    override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+        // Switch between the floating logo and the full screen.
+        setContentView(withMiniPlayer(screen()))
+        renderRows()
+    }
+
+    /** Opens Maps or YouTube: next to the radio in split screen, otherwise full screen with the radio in its mini player. */
+    private fun openCompanion(app: CompanionApp) {
+        val intent = app.launchIntent(this)?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) ?: run {
+            Toast.makeText(this, "${app.label} n’est pas installé sur cet appareil.", Toast.LENGTH_LONG).show()
+            return
+        }
+        if (isInMultiWindowMode) {
+            intent.addFlags(Intent.FLAG_ACTIVITY_LAUNCH_ADJACENT)
+        } else if (miniPlayerEnabled) {
+            runCatching { enterPictureInPictureMode(miniPlayerParams(miniPlaying == true)) }
+        }
+        try {
+            startActivity(intent)
+        } catch (_: ActivityNotFoundException) {
+            Toast.makeText(this, "${app.label} n’a pas pu s’ouvrir.", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private fun showMiniPlayerSettings() {
+        val options = listOf(true, false)
+        showChoiceSheet("Mini-lecteur", listOf("Activé", "Désactivé"), options.indexOf(miniPlayerEnabled),
+            details = listOf("La radio reste visible en petite fenêtre au-dessus de Maps, YouTube ou de l’accueil",
+                "La radio continue en arrière-plan, sans fenêtre")) { index ->
+            prefs.edit().putBoolean(MINI_PLAYER, options[index]).apply()
+            miniPlaying = null
+            renderPlayer()
+        }
+    }
+
     private fun showMainMenu() {
         data class Entry(val icon: Int, val title: String, val value: String?, val action: () -> Unit)
         val version = runCatching { packageManager.getPackageInfo(packageName, 0).versionName }.getOrNull()
@@ -757,6 +906,8 @@ class RadioActivity : ComponentActivity() {
                 ::showWheelSettings))
             add(Entry(R.drawable.ic_settings_scores, "Scores en direct", "FotMob", ::showLiveScores))
             add(Entry(R.drawable.ic_settings_popup, "Pop-up des stations", "Notifications Android", ::configureStationPopup))
+            if (miniPlayerSupported) add(Entry(R.drawable.ic_app_maps, "Mini-lecteur",
+                if (miniPlayerEnabled) "Activé en quittant la radio" else "Désactivé", ::showMiniPlayerSettings))
             add(Entry(R.drawable.ic_radio_update, "Mises à jour", version?.let { "Version $it" }, radioUpdates::show))
         }
         val sheet = RadioSheet(this, "Réglages", getString(R.string.app_name))
@@ -930,7 +1081,7 @@ class RadioActivity : ComponentActivity() {
         if (::liveDot.isInitialized) liveDot.removeCallbacks(livePulse)
         livePulsing = false
         revealCatalogueSelection = true
-        setContentView(screen())
+        setContentView(withMiniPlayer(screen()))
         renderRows()
         restoreTvCatalogueFocus()
     }
@@ -1760,11 +1911,13 @@ class RadioActivity : ComponentActivity() {
             playerFavorite = favoriteButton
             listOf(previous, next, favoriteButton).forEach { roundControl(it) }
             roundControl(playButton, primary = true)
-            val gap = dp(if (short) 12 else 16)
+            val companions = companionButtons().onEach { roundControl(it) }
+            val gap = dp(if (companions.isNotEmpty()) 9 else if (short) 12 else 16)
             addView(previous, LinearLayout.LayoutParams(side, side))
             addView(playButton, LinearLayout.LayoutParams(main, main).apply { marginStart = gap; marginEnd = gap })
             addView(next, LinearLayout.LayoutParams(side, side))
             addView(favoriteButton, LinearLayout.LayoutParams(side, side).apply { marginStart = gap })
+            companions.forEach { addView(it, LinearLayout.LayoutParams(side, side).apply { marginStart = gap }) }
         }, LinearLayout.LayoutParams(-1, -2).apply {
             if (band) {
                 marginStart = -dp(13)
@@ -1923,6 +2076,10 @@ class RadioActivity : ComponentActivity() {
                 playerFavorite = favoriteButton
                 if (roundControls) roundControl(favoriteButton)
                 addView(favoriteButton, controlParams(controlHeight).apply { marginStart = dp(6) })
+            }
+            companionButtons().forEach {
+                if (roundControls) roundControl(it)
+                addView(it, controlParams(controlHeight).apply { marginStart = dp(6) })
             }
         }, LinearLayout.LayoutParams(if (wide) -1 else -2, if (roundControls) -2 else controlHeight))
     }
@@ -2919,6 +3076,7 @@ class RadioActivity : ComponentActivity() {
         val requesting = if (luxe != null) luxe == LuxeRadio.State.PLAYING || luxe == LuxeRadio.State.CONNECTING
             else player?.playWhenReady == true && (player.playerError == null || waitingForNetwork) && !ended
         val playing = if (luxe != null) luxe == LuxeRadio.State.PLAYING else player?.isPlaying == true
+        updateMiniPlayer(station, requesting)
         audioMotif.playing = luxe == null && playing
         val live = playing && !recording
         val streamInfo = player?.sessionExtras?.takeIf { it.getString(PlaybackService.STREAM_STATION) == active }
