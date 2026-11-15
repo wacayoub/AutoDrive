@@ -127,6 +127,8 @@ Les quatre pages de SNRT Live publient des flux HLS EasyBroadcast distincts. Une
 
 **Pour vous, Coran, Favoris.** Un récitateur sans portrait n’a plus l’icône de livre : `StationArtwork` affiche la première lettre de son nom en blanc sur une tuile émeraude, et la lueur du lecteur prend ce vert. Le sous-titre par défaut des radios MP3Quran devient « ترتيل · بث مباشر · MP3Quran » (et « بث مباشر » pour le tajwid et Badr). Dans Pour vous et Favoris, les notes « Écoutée récemment » et « Présélection N » reçoivent le genre de la station (`Stations.shortKind`), par exemple « Présélection 1 · Débats ». La puce « Organiser les présélections » devient « Organiser », et la rangée de puces ne défile plus que si la puce choisie sort de l’écran, du strict nécessaire, si bien que la première n’est plus coupée. Vérifié en Jour sur l’émulateur.
 
+**Ordre des présélections.** Dans **Favoris › Organiser**, chaque station porte une poignée ≡ : on la tient et on glisse la station à sa place, les autres s’écartent pour montrer où elle va se poser, et l’ordre est enregistré au lâcher. Le logo de chaque station est affiché. Les flèches monter / descendre restent pour la télécommande, le volant et TalkBack ; la poignée n’apparaît pas sur la télévision. Sur l’émulateur, Radio Aswat glissée de la 3e à la 1re place est passée en tête de Favoris.
+
 Sur l’émulateur Android 13 en 800 × 480, sans Luxe Radio, l’ordre de l’onglet Coran, le direct de Herraz et le passage à Med Radio ont été vérifiés. Les tests unitaires ont réussi et lint a signalé 0 erreur. Le passage de Luxe Radio à une autre station reste à vérifier sur l’Incarlink.
 
 ## Vérifications de la version 2.5.40

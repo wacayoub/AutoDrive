@@ -10,6 +10,8 @@ Dans l’onglet Maroc, la rangée Toutes, Infos & débats, Sport, Hits… dispar
 
 Dans le Coran, les récitateurs sans photo ont maintenant une tuile verte à l’initiale de leur nom, et le sous-titre indique « ترتيل · بث مباشر ». Pour vous et Favoris précisent le genre de chaque station, par exemple « Présélection 1 · Débats ». Le bouton « Organiser » des Favoris n’est plus coupé.
 
+Placer ses stations devient facile : dans Favoris › Organiser, tiens la poignée ≡ d’une station et fais-la glisser à la place voulue. Les logos aident à s’y retrouver, et les flèches restent disponibles.
+
 Changer de station après Luxe Radio arrête maintenant Luxe Radio à coup sûr, même si Android a redémarré le service de lecture entre-temps.
 
 Cette version se met à jour automatiquement depuis la 2.5.35 et les versions suivantes.

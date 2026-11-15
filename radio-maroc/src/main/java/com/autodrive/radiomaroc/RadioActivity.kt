@@ -6,6 +6,7 @@ import android.app.AlertDialog
 import android.app.NotificationManager
 import android.app.SearchManager
 import android.app.UiModeManager
+import android.annotation.SuppressLint
 import android.content.ActivityNotFoundException
 import android.content.ComponentName
 import android.content.Context
@@ -2665,47 +2666,110 @@ class RadioActivity : ComponentActivity() {
         }
     }
 
-    /** Reorders the presets with large up and down buttons; the order drives the Présélections tiles. */
+    /**
+     * Reorders the presets: hold the ≡ handle and drag a station to its place, or use the up and down buttons (remote,
+     * steering wheel, TalkBack). The order drives the Présélections tiles and the steering wheel presets.
+     */
+    @SuppressLint("ClickableViewAccessibility")
     private fun organizePresets() {
-        val sheet = RadioSheet(this, "Ordre des présélections", "Le n° 1 s’affiche en premier")
+        val sheet = RadioSheet(this, "Ordre des présélections", "Glisse ≡ pour placer une station · le n° 1 en premier")
+        fun save(order: List<String>) {
+            favoriteOrder = order
+            ListeningPrefs.put(prefs.edit(), ListeningPrefs.FAVORITE_ORDER, order).apply()
+            renderRows()
+        }
         fun render() {
             sheet.body.removeAllViews()
             val presets = Stations.visible(StationTab.FAVORITES, favorites, "", bookmarks = directoryBookmarks,
                 favoriteOrder = favoriteOrder)
+            val rows = mutableListOf<View>()
+            val gap = dp(6)
             presets.forEachIndexed { index, station ->
-                sheet.body.addView(row().apply {
+                val line = row().apply {
                     gravity = Gravity.CENTER_VERTICAL
                     background = getDrawable(R.drawable.radio_option)
-                    setPadding(dp(12), dp(4), dp(6), dp(4))
+                    setPadding(dp(4), dp(4), dp(6), dp(4))
                     minimumHeight = dp(56)
-                    addView(label("${index + 1}", 16, accent, bold = true).apply { gravity = Gravity.CENTER },
-                        LinearLayout.LayoutParams(dp(28), -2))
-                    addView(label(station.name, 15, textColor, bold = true).apply {
-                        maxLines = 1
-                        ellipsize = TextUtils.TruncateAt.END
-                        layoutDirection = directionOf(station.name)
-                    }, LinearLayout.LayoutParams(0, -2, 1f).apply { marginStart = dp(8) })
-                    fun move(by: Int, icon: Float, description: String) = ImageButton(context).apply {
-                        setImageResource(R.drawable.ic_radio_chevron)
-                        rotation = icon
-                        imageTintList = ColorStateList.valueOf(textColor)
-                        background = pressable(R.drawable.radio_round)
-                        contentDescription = "$description · ${station.name}"
-                        remoteFocus()
-                        val target = index + by
-                        enable(this, target in presets.indices)
-                        setRadioClick {
-                            val order = presets.map(RadioStation::url).toMutableList()
-                            order.add(target, order.removeAt(index))
-                            favoriteOrder = order
-                            ListeningPrefs.put(prefs.edit(), ListeningPrefs.FAVORITE_ORDER, order).apply()
-                            render()
-                            renderRows()
+                }
+                rows += line
+                if (!television) line.addView(ImageView(this).apply {
+                    setImageResource(R.drawable.ic_radio_drag)
+                    imageTintList = ColorStateList.valueOf(muted)
+                    scaleType = ImageView.ScaleType.CENTER
+                    contentDescription = null
+                    importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+                    var startY = 0f
+                    var target = index
+                    setOnTouchListener { _, event ->
+                        val step = (line.height + gap).toFloat()
+                        when (event.actionMasked) {
+                            MotionEvent.ACTION_DOWN -> {
+                                startY = event.rawY
+                                target = index
+                                line.parent?.requestDisallowInterceptTouchEvent(true)
+                                line.elevation = dp(8).toFloat()
+                                line.animate().scaleX(1.03f).scaleY(1.03f).setDuration(120).start()
+                            }
+                            MotionEvent.ACTION_MOVE -> {
+                                val moved = event.rawY - startY
+                                line.translationY = moved
+                                target = (index + Math.round(moved / step)).coerceIn(0, presets.lastIndex)
+                                // The other stations slide aside to show where the dragged one will land.
+                                rows.forEachIndexed { other, view ->
+                                    if (view === line) return@forEachIndexed
+                                    val shift = when {
+                                        other in (index + 1)..target -> -step
+                                        other in target until index -> step
+                                        else -> 0f
+                                    }
+                                    if (view.translationY != shift) view.animate().translationY(shift).setDuration(140).start()
+                                }
+                            }
+                            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                                line.parent?.requestDisallowInterceptTouchEvent(false)
+                                if (target != index && event.actionMasked == MotionEvent.ACTION_UP) {
+                                    val order = presets.map(RadioStation::url).toMutableList()
+                                    order.add(target, order.removeAt(index))
+                                    save(order)
+                                    sheet.body.post { render() }
+                                } else {
+                                    line.elevation = 0f
+                                    line.animate().scaleX(1f).scaleY(1f).translationY(0f).setDuration(160).start()
+                                    rows.forEach { if (it !== line) it.animate().translationY(0f).setDuration(160).start() }
+                                }
+                            }
                         }
+                        true
                     }
-                    addView(move(-1, -90f, "Monter"), LinearLayout.LayoutParams(dp(48), dp(48)).apply { marginEnd = dp(6) })
-                    addView(move(1, 90f, "Descendre"), LinearLayout.LayoutParams(dp(48), dp(48)))
-                }, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(6) })
+                }, LinearLayout.LayoutParams(dp(40), dp(48)))
+                line.addView(label("${index + 1}", 16, accent, bold = true).apply { gravity = Gravity.CENTER },
+                    LinearLayout.LayoutParams(dp(26), -2))
+                line.addView(StationArtwork(12).apply { bind(station) },
+                    LinearLayout.LayoutParams(dp(40), dp(40)).apply { marginStart = dp(4) })
+                line.addView(label(station.name, 15, textColor, bold = true).apply {
+                    maxLines = 1
+                    ellipsize = TextUtils.TruncateAt.END
+                    layoutDirection = directionOf(station.name)
+                }, LinearLayout.LayoutParams(0, -2, 1f).apply { marginStart = dp(10) })
+                fun move(by: Int, icon: Float, description: String) = ImageButton(this).apply {
+                    setImageResource(R.drawable.ic_radio_chevron)
+                    rotation = icon
+                    imageTintList = ColorStateList.valueOf(textColor)
+                    background = pressable(R.drawable.radio_round)
+                    contentDescription = "$description · ${station.name}"
+                    remoteFocus()
+                    val target = index + by
+                    enable(this, target in presets.indices)
+                    setRadioClick {
+                        val order = presets.map(RadioStation::url).toMutableList()
+                        order.add(target, order.removeAt(index))
+                        save(order)
+                        render()
+                    }
+                }
+                line.addView(move(-1, -90f, "Monter"), LinearLayout.LayoutParams(dp(44), dp(44)).apply { marginEnd = dp(6) })
+                line.addView(move(1, 90f, "Descendre"), LinearLayout.LayoutParams(dp(44), dp(44)))
+                sheet.body.addView(line, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = gap })
             }
         }
         render()
