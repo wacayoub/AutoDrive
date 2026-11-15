@@ -16,6 +16,7 @@ internal data class ReciterPortrait(
         "CC BY 3.0" -> "https://creativecommons.org/licenses/by/3.0/"
         "CC BY 4.0" -> "https://creativecommons.org/licenses/by/4.0/"
         "CC0 1.0" -> "https://creativecommons.org/publicdomain/zero/1.0/"
+        "GODL-India" -> "https://data.gov.in/government-open-data-license-india"
         else -> null
     }
 }
@@ -37,6 +38,13 @@ internal object ReciterPortraits {
         "أحمد العجمي" to ReciterPortrait(R.drawable.reciter_ajmi, "Ahmad bin Ali Al-Ajmi.png", "أحمد زين", "CC BY-SA 3.0"),
         "ياسر الدوسري" to ReciterPortrait(R.drawable.reciter_dosari, "Yasser Al-Dosari.png", "أحمد زين", "CC BY-SA 3.0"),
         "عبد الله الجهني" to ReciterPortrait(R.drawable.reciter_juhany, "Abdullah Al Juhany (Cropped).png", "الشيخ هيثم الدخين", "CC BY-SA 4.0"),
+        // Wikidata portraits (P18) of these reciters, checked on Commons on 15 November 2026.
+        "مشاري راشد العفاسي" to ReciterPortrait(R.drawable.reciter_alafasy, "Мишари Рашид.jpg", "quranic.ru", "Copyrighted free use"),
+        "عبد الرحمن السديس" to ReciterPortrait(R.drawable.reciter_sudais, "Abdul-Rahman Al-Sudais (Cropped, 2011).jpg",
+            "Prime Minister's Office (Inde)", "GODL-India"),
+        "هزاع البلوشي" to ReciterPortrait(R.drawable.reciter_hazza, "هزاع البلوشي.jpg", "Ammar molla", "CC BY-SA 4.0"),
+        "علي جابر" to ReciterPortrait(R.drawable.reciter_alijaber, "الشيخ علي جابر.png", "Engalali9", "CC0 1.0"),
+        "مصطفى إسماعيل" to ReciterPortrait(R.drawable.reciter_mustafa, "Mostafa Ismaeel.jpg", "Riad Shehata", "Domaine public"),
     )
 
     fun forStation(station: RadioStation): ReciterPortrait? = portraits[Stations.reciterName(station)]

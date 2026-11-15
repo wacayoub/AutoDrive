@@ -113,7 +113,10 @@ internal object Stations {
         RadioStation("Ness Radio", "https://radio.nessradio.net:8212/nessradio-hd",
             logoUrl = "https://nessradio.com/wp-content/uploads/2026/09/ness_logo_outline_723px_2026.png", tags = setOf("Musique")),
         fayrouz,
-        RadioStation("Tarab Radio", "https://stream.zeno.fm/fy8achbq97zuv", tags = setOf("Webradio indépendante · طرب")),
+        // Logo published for this stream in the Radio Browser directory (checked 15 November 2026).
+        RadioStation("Tarab Radio", "https://stream.zeno.fm/fy8achbq97zuv",
+            logoUrl = "https://non-stop-radio.blr1.cdn.digitaloceanspaces.com/new_images/radio/64429.png",
+            tags = setOf("Webradio indépendante · طرب")),
     )
     val snrtNational = RadioCatalogue.featured.filter { RadioCatalogue.officialPlayer(it) != null }
     private val radio2m = RadioStation("Radio 2M", "https://radio2m.ma/", logoUrl = "https://radio2m.ma/_nuxt/img/Logo@2x.df151f1.png")

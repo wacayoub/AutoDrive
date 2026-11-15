@@ -2348,8 +2348,14 @@ class RadioActivity : ComponentActivity() {
                 reciter -> Stations.reciterName(station!!).trim().take(1).ifEmpty { "ق" }
                 else -> station.name.split(' ').take(2).joinToString("") { it.take(1) }
             }
-            initials.background = if (reciter) reciterTile() else null
-            initials.setTextColor(if (reciter) Color.WHITE else accent)
+            // Every station gets a picon: reciters an emerald tile, stations a tile in a colour of their own until
+            // (or instead of) their logo.
+            initials.background = when {
+                station == null -> null
+                reciter -> reciterTile()
+                else -> stationTile(station.name)
+            }
+            initials.setTextColor(if (station == null) accent else Color.WHITE)
             initials.visibility = View.VISIBLE
             logo.visibility = View.INVISIBLE
             logo.setImageDrawable(null)
@@ -2363,6 +2369,14 @@ class RadioActivity : ComponentActivity() {
             } else if (reciter && portrait == null) onLogoColor?.invoke(reciterGreen)
             if (reciter && portrait == null) return
             loadArtwork()
+        }
+
+        private fun stationTile(name: String): GradientDrawable {
+            val hue = ((name.lowercase().hashCode() % 360) + 360) % 360f
+            fun shade(value: Float) = Color.HSVToColor(floatArrayOf(hue, .62f, value))
+            return GradientDrawable(GradientDrawable.Orientation.TL_BR, intArrayOf(shade(.78f), shade(.46f))).apply {
+                cornerRadius = minOf(width, height).takeIf { it > 0 }?.let { it * .2f } ?: dp(10).toFloat()
+            }
         }
 
         private fun reciterTile() = GradientDrawable(GradientDrawable.Orientation.TL_BR,
