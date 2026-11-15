@@ -1,21 +1,7 @@
-Hicham El Herraz passe en direct. Sa récitation tourne désormais comme une radio, 24 h sur 24 : à l’ouverture, on rejoint la sourate en cours de diffusion, avec le badge LIVE, et après une pause de plus de 30 secondes on reprend au direct. La recherche d’une sourate par son nom, par exemple « Al-Kahf », démarre toujours à cette sourate. Les boutons « Reprendre » disparaissent.
+Le réglage Système de Jour / Nuit suit maintenant le téléphone sur tous les appareils. Quand Android passe en mode sombre, à la main ou à l’heure programmée, la radio passe en Nuit, puis revient en Jour le matin.
 
-L’onglet Coran compte 33 récitateurs, classés par notoriété : Mishary Alafasy, Abdul Basit Abdul Samad, Abdul Rahman Al-Soudais, Maher Al-Mueaqly, Yasser Al-Dosari, puis Omar Al-Qazabri, Hicham El Herraz, Laayoun El Kouchi et les autres. Alafasy, Al-Soudais et Yasser Al-Dosari reviennent. Hazza Al-Balushi, Mohammed Ayyub, Ali Jaber, Khalid Al-Jalil, Mohammed Jibreel, Mustafa Ismail et Mohamed El-Tablawi arrivent, ainsi qu’Abdul Basit en lecture Warsh. Ce sont les radios en direct de MP3Quran. Aucune mesure d’audience n’est publiée pour elles : l’ordre suit la notoriété des récitateurs.
-
-Changer de station devient plus fluide. Le logo de la nouvelle station apparaît avec un léger zoom et son nom glisse depuis le côté choisi, suivant ou précédent. Une lumière douce aux couleurs du logo éclaire le lecteur et change de teinte d’une station à l’autre. Dans Présélections, chaque tuile s’éclaire elle aussi aux couleurs de son logo, avec des coins plus arrondis et des logos aux angles adoucis ; la station choisie ressort davantage. Dans la liste des chaînes, chaque station devient une carte arrondie plus aérée, teintée par la couleur de son logo, et la station en écoute est marquée par de petites barres animées. Les tuiles et les boutons s’enfoncent légèrement sous le doigt. Ces effets suivent le réglage des animations d’Android.
-
-Le mode Jour abandonne le bleu : fond ivoire en dégradé chaud, boutons, onglet actif et station choisie en noir, touches de vert émeraude. Le lecteur passe doucement du blanc au sable, éclairé par la couleur du logo. Les panneaux deviennent légèrement transparents et laissent voir, derrière eux, des halos vert, ambre et corail qui dérivent lentement sur le fond. La barre d’actualités se fond elle aussi dans le lecteur.
-
-Dans l’onglet Maroc, la rangée Toutes, Infos & débats, Sport, Hits… disparaît : toutes les stations s’affichent directement, avec plus de place pour la liste.
-
-Dans le Coran, les récitateurs sans photo ont maintenant une tuile verte à l’initiale de leur nom, et le sous-titre indique « ترتيل · بث مباشر ». Pour vous et Favoris précisent le genre de chaque station, par exemple « Présélection 1 · Débats ». Le bouton « Organiser » des Favoris n’est plus coupé.
-
-Placer ses stations devient facile, pas seulement les favoris. Dans Favoris › Organiser, et dans Maroc ou Coran avec Trier › Mon ordre, tiens la poignée ≡ d’une station et fais-la glisser à sa place ; la liste défile toute seule près des bords. Le bouton « ≡ Placer les stations » rouvre cette fenêtre, et « Rétablir l’ordre par popularité » revient à l’ordre d’origine. L’onglet Maroc s’ouvre aussi plus vite.
-
-Chaque chaîne a maintenant son picon. Mishary Alafasy, Abdul Rahman Al-Soudais, Hazza Al-Balushi, Ali Jaber et Mustafa Ismail ont leur photo, sous licence libre et créditée. Les stations sans logo, au Maroc comme dans le Monde, ont une tuile colorée à leurs initiales, et Tarab Radio a son logo.
-
-Changer de station après Luxe Radio arrête maintenant Luxe Radio à coup sûr, même si Android a redémarré le service de lecture entre-temps.
+Sur certains téléphones, la radio restait en Jour alors que le téléphone était déjà sombre. Elle lit désormais elle-même le réglage du mode sombre d’Android : toujours actif, désactivé, horaire personnalisé ou du coucher au lever du soleil. Elle vérifie à chaque retour à l’écran et chaque minute.
 
 Cette version se met à jour automatiquement depuis la 2.5.35 et les versions suivantes.
 
-Ces changements ont été vérifiés sur un émulateur Android 13 en 800 × 480, sans Luxe Radio installée. Le passage de Luxe Radio à une autre station reste à vérifier sur l’Incarlink.
+Ce changement a été vérifié sur un émulateur Android 13 en 800 × 480, en passant le système de clair à sombre puis à clair. Le téléphone où le défaut a été constaté reste à vérifier.

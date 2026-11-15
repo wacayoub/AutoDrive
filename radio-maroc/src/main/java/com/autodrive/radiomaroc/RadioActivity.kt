@@ -291,7 +291,7 @@ class RadioActivity : ComponentActivity() {
 
     override fun attachBaseContext(newBase: Context) {
         val appearance = Appearance.restore(newBase.getSharedPreferences(PREFERENCES, MODE_PRIVATE))
-        val nightFlag = appearance.nightFlag
+        val nightFlag = appearance.nightFlag ?: systemNightFlag(newBase)
         val baseMode = newBase.resources.configuration.uiMode
         val baseType = baseMode and Configuration.UI_MODE_TYPE_MASK
         val context = when {
@@ -302,7 +302,8 @@ class RadioActivity : ComponentActivity() {
             baseType == Configuration.UI_MODE_TYPE_CAR -> newBase.createConfigurationContext(Configuration().apply {
                 uiMode = Configuration.UI_MODE_TYPE_NORMAL or (nightFlag ?: (baseMode and Configuration.UI_MODE_NIGHT_MASK))
             })
-            Build.VERSION.SDK_INT == Build.VERSION_CODES.R && nightFlag != null ->
+            // « Système » is resolved here from Android's own setting (see SystemNight), on every version.
+            Build.VERSION.SDK_INT == Build.VERSION_CODES.R || appearance == Appearance.SYSTEM ->
                 newBase.createConfigurationContext(Configuration().apply { uiMode = nightFlag })
             else -> newBase
         }
@@ -313,7 +314,7 @@ class RadioActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         prefs = getSharedPreferences(PREFERENCES, MODE_PRIVATE)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            getSystemService(UiModeManager::class.java).setApplicationNightMode(Appearance.restore(prefs).androidMode)
+            getSystemService(UiModeManager::class.java).setApplicationNightMode(androidNightMode(Appearance.restore(prefs)))
         }
         val artworkCacheMb = if (television && resources.displayMetrics.density >= 2f) 8 else 2
         artwork = RadioArtwork(this, maxImageBytes = 1024 * 1024, memoryBytes = artworkCacheMb * 1024 * 1024,
@@ -425,9 +426,11 @@ class RadioActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         PlaybackService.radioScreenActive = true
+        followSystemNight.run()
     }
 
     override fun onPause() {
+        window.decorView.removeCallbacks(followSystemNight)
         PlaybackService.radioScreenActive = false
         super.onPause()
     }
@@ -3042,6 +3045,30 @@ class RadioActivity : ComponentActivity() {
         }
     }
 
+    private fun systemNightFlag(context: Context) =
+        if (SystemNight.isNight(context)) Configuration.UI_MODE_NIGHT_YES else Configuration.UI_MODE_NIGHT_NO
+
+    /**
+     * The per-app night mode handed to Android. « Système » still asks Android to follow the system, so phones that
+     * honour it recreate the screen at once; attachBaseContext then applies the state read by SystemNight, and
+     * followSystemNight catches phones that do not.
+     */
+    private fun androidNightMode(appearance: Appearance): Int = appearance.androidMode
+
+    /** In « Système », switch between Jour and Nuit as soon as Android does: on return to the screen and every minute. */
+    private val followSystemNight = object : Runnable {
+        override fun run() {
+            window.decorView.removeCallbacks(this)
+            if (Appearance.restore(prefs) != Appearance.SYSTEM) return
+            val wanted = systemNightFlag(this@RadioActivity)
+            if (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK != wanted) {
+                recreate()
+                return
+            }
+            window.decorView.postDelayed(this, 60_000)
+        }
+    }
+
     private fun showAppearance() {
         val appearance = Appearance.restore(prefs)
         val options = Appearance.entries
@@ -3058,7 +3085,7 @@ class RadioActivity : ComponentActivity() {
             if (selected == appearance) return@showChoiceSheet
             prefs.edit().putString(APPEARANCE, selected.name).commit()
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                getSystemService(UiModeManager::class.java).setApplicationNightMode(selected.androidMode)
+                getSystemService(UiModeManager::class.java).setApplicationNightMode(androidNightMode(selected))
             }
             // The night mode alone does not change when entering or leaving Incarlink (both can be dark).
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||

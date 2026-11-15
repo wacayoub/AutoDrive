@@ -34,7 +34,7 @@ python tools/github_release.py --radio-maroc --apk radio-maroc/build/outputs/apk
 
 ## Écoute
 
-Dans **Menu ⋮ → Jour / Nuit**, choisis **Jour** pour le thème ivoire, noir encre et vert émeraude, **Nuit** pour le thème sombre ou **Système** pour suivre le réglage d’Android. La radio mémorise ce choix pour les trois vues.
+Dans **Menu ⋮ → Jour / Nuit**, choisis **Jour** pour le thème ivoire, noir encre et vert émeraude, **Nuit** pour le thème sombre ou **Système** pour suivre le mode sombre d’Android, y compris son horaire programmé. La radio mémorise ce choix pour les trois vues.
 
 Dans **Menu ⋮ → Effets sonores**, **Clics de l’interface** active le son intégré des boutons et des changements de station. Son niveau suit le volume média. Les profils **Normal**, **Basses** et **Voix** traitent le son décodé du lecteur intégré pendant l’écoute. Les barres autour du logo suivent le niveau des basses, des médiums et des aigus. Luxe Radio gère le son dans sa propre application. [Traitement PCM Media3](https://developer.android.com/reference/androidx/media3/exoplayer/audio/DefaultAudioSink.Builder#setAudioProcessors(androidx.media3.common.audio.AudioProcessor%5B%5D)).
 
@@ -110,6 +110,10 @@ Le portrait du lecteur ouvre les crédits. Les images proviennent de Wikimedia C
 Le flux de Radio 2M correspond au champ audio `link_ecouter` du service utilisé par son site, sur le CDN de son lecteur. Le manifeste, sa variante et un segment audio ont répondu. Le segment contrôlé contenait de l’AAC décodable. Le titre d’émission était absent de la réponse contrôlée. [Lecteur Radio 2M](https://radio2m.ma/) · [Données officielles du direct](https://bo.radio2m.ma/api/live).
 
 Les quatre pages de SNRT Live publient des flux HLS EasyBroadcast distincts. Une requête directe sans jeton reçoit HTTP 403. Avec un jeton temporaire obtenu auprès du service du lecteur officiel, les quatre manifestes, leurs variantes et des segments audio ont répondu lors des essais. L’application garde le jeton en mémoire jusqu’au renouvellement et ne transmet les paramètres qu’aux listes HLS correspondantes. [Radio Nationale](https://snrtlive.ma/fr/alidaa-alwatania) · [Radio Amazighe](https://snrtlive.ma/fr/alidaa-alamazighia) · [Chaîne Inter](https://snrtlive.ma/fr/chaine-inter) · [Mohammed VI du Saint Coran](https://snrtlive.ma/fr/idaat-mohammed-assadiss).
+
+## Vérifications de la version 2.5.42
+
+**Jour / Nuit › Système.** Sur un téléphone, la radio restait en Jour alors qu’Android était passé en sombre. En Système, l’application demandait seulement à Android de la faire suivre le système (`setApplicationNightMode(MODE_NIGHT_AUTO)`), ce que cet appareil n’a pas appliqué. Elle demande toujours ce suivi, pour réagir aussitôt là où il fonctionne, mais `attachBaseContext` applique maintenant l’état lu par `SystemNight` : le réglage `UiModeManager.getNightMode()` d’Android, qu’aucun réglage propre à l’application ne modifie. Toujours actif ou désactivé se lit directement ; l’horaire personnalisé avec `customNightModeStart` et `customNightModeEnd` ; « du coucher au lever du soleil » par un calcul solaire pour Casablanca. `followSystemNight` revérifie au retour à l’écran puis chaque minute et recrée l’écran si l’état diffère. Sur l’émulateur Android 13 en 800 × 480, la radio en Système est passée de Jour à Nuit puis à Jour en moins de 15 s avec `cmd uimode night`. Les tests unitaires (`SystemNightTest`) ont réussi et lint a signalé 0 erreur. Le téléphone où le défaut a été constaté reste à vérifier.
 
 ## Vérifications de la version 2.5.41
 
