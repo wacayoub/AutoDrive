@@ -115,6 +115,8 @@ class RadioActivity : ComponentActivity() {
         const val PREFERENCES = "radio_maroc"
         const val APPEARANCE = "appearance"
         const val MINI_PLAYER = "mini_player"
+        // Across recreations, so a screen that keeps disagreeing with the system night mode cannot loop.
+        private var lastNightRecreate = 0L
         const val LEGACY_DAY_APPEARANCE = "day_appearance"
         const val DISPLAY_LAYOUT = "tv_layout"
         const val CATALOGUE_LAYOUT = "tv_catalogue"
@@ -298,7 +300,14 @@ class RadioActivity : ComponentActivity() {
         }
     }
 
+    // Set when a crash report waits: this activity then only hands over to CrashReportActivity.
+    private var reportOnly = false
+
     override fun attachBaseContext(newBase: Context) {
+        if (CrashReport.pending(newBase)) {
+            super.attachBaseContext(newBase)
+            return
+        }
         val appearance = Appearance.restore(newBase.getSharedPreferences(PREFERENCES, MODE_PRIVATE))
         val nightFlag = appearance.nightFlag ?: systemNightFlag(newBase)
         val baseMode = newBase.resources.configuration.uiMode
@@ -321,6 +330,13 @@ class RadioActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (CrashReport.pending(this)) {
+            // The radio closed last time: show the report instead of running into the same error again.
+            reportOnly = true
+            startActivity(Intent(this, CrashReportActivity::class.java))
+            finish()
+            return
+        }
         prefs = getSharedPreferences(PREFERENCES, MODE_PRIVATE)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             getSystemService(UiModeManager::class.java).setApplicationNightMode(androidNightMode(Appearance.restore(prefs)))
@@ -351,9 +367,12 @@ class RadioActivity : ComponentActivity() {
         volumeControlStream = android.media.AudioManager.STREAM_MUSIC
         window.setDecorFitsSystemWindows(false)
         setContentView(withMiniPlayer(screen()))
-        ContextCompat.registerReceiver(this, miniPlayerControls, IntentFilter().apply {
-            MiniAction.entries.forEach { addAction(it.intentAction) }
-        }, ContextCompat.RECEIVER_NOT_EXPORTED)
+        // Only the head unit has the mini player; a failure here must never stop the radio from opening.
+        if (miniPlayerSupported) miniReceiverRegistered = runCatching {
+            ContextCompat.registerReceiver(this, miniPlayerControls, IntentFilter().apply {
+                MiniAction.entries.forEach { addAction(it.intentAction) }
+            }, ContextCompat.RECEIVER_NOT_EXPORTED)
+        }.isSuccess
         window.decorView.addOnUnhandledKeyEventListener { _, event -> handleStationKey(event) }
         updateDirectory()
         restoreTvCatalogueFocus()
@@ -384,6 +403,10 @@ class RadioActivity : ComponentActivity() {
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
+        if (reportOnly) {
+            super.onSaveInstanceState(outState)
+            return
+        }
         outState.putString("query", query)
         outState.putBoolean("radio_favorites_only", radioFavoritesOnly)
         outState.putLong("startup_deadline", startupDeadline)
@@ -396,6 +419,7 @@ class RadioActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
+        if (reportOnly) return
         RadioSound.prepareClicks(this, prefs)
         if (!restoringActivity || carResume() == CarResume.AFTER_BOOT) armCarStartup()
         restoringActivity = false
@@ -404,6 +428,7 @@ class RadioActivity : ComponentActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        if (reportOnly) return
         playbackQuery = voiceQuery(intent)
         playFromSearch()
         if ((intent.action == Intent.ACTION_MAIN || intent.action == null) && carResume() == CarResume.ON_OPEN) {
@@ -425,6 +450,10 @@ class RadioActivity : ComponentActivity() {
     }
 
     override fun onStop() {
+        if (reportOnly) {
+            super.onStop()
+            return
+        }
         startupDeadline = 0L
         controller?.removeListener(playerListener)
         controller = null
@@ -437,11 +466,16 @@ class RadioActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        if (reportOnly) return
         PlaybackService.radioScreenActive = true
         followSystemNight.run()
     }
 
     override fun onPause() {
+        if (reportOnly) {
+            super.onPause()
+            return
+        }
         window.decorView.removeCallbacks(followSystemNight)
         PlaybackService.radioScreenActive = false
         super.onPause()
@@ -467,7 +501,11 @@ class RadioActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
-        unregisterReceiver(miniPlayerControls)
+        if (reportOnly) {
+            super.onDestroy()
+            return
+        }
+        if (miniReceiverRegistered) runCatching { unregisterReceiver(miniPlayerControls) }
         radioUpdates.close()
         directory.close()
         artwork.close()
@@ -784,6 +822,7 @@ class RadioActivity : ComponentActivity() {
         }
     private val miniPlayerEnabled get() = miniPlayerSupported && prefs.getBoolean(MINI_PLAYER, true)
     private var miniPlaying: Boolean? = null
+    private var miniReceiverRegistered = false
     private var miniArtwork: StationArtwork? = null
     private var miniName: TextView? = null
     private var miniDetail: TextView? = null
@@ -3260,8 +3299,9 @@ class RadioActivity : ComponentActivity() {
         }
     }
 
-    private fun systemNightFlag(context: Context) =
-        if (SystemNight.isNight(context)) Configuration.UI_MODE_NIGHT_YES else Configuration.UI_MODE_NIGHT_NO
+    private fun systemNightFlag(context: Context) = runCatching { SystemNight.isNight(context) }.getOrDefault(
+        context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES
+    ).let { if (it) Configuration.UI_MODE_NIGHT_YES else Configuration.UI_MODE_NIGHT_NO }
 
     /**
      * The per-app night mode handed to Android. « Système » still asks Android to follow the system, so phones that
@@ -3277,8 +3317,13 @@ class RadioActivity : ComponentActivity() {
             if (Appearance.restore(prefs) != Appearance.SYSTEM) return
             val wanted = systemNightFlag(this@RadioActivity)
             if (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK != wanted) {
-                recreate()
-                return
+                // Recreate once per change: if the screen still disagrees just after, leave it rather than loop.
+                val now = android.os.SystemClock.elapsedRealtime()
+                if (now - lastNightRecreate > 10_000) {
+                    lastNightRecreate = now
+                    recreate()
+                    return
+                }
             }
             window.decorView.postDelayed(this, 60_000)
         }

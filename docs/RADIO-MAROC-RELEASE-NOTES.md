@@ -1,9 +1,9 @@
-La liste Radio Maroc est remise en ordre. Elle suit les audiences publiées par Radiométrie Maroc : Mohammed VI du Saint Coran, Med Radio, Hit Radio, MFM, Medi 1, Radio Nationale, puis Aswat, Chada, Mars, Radio 2M et les autres stations mesurées. Viennent ensuite les radios FM comme Luxe Radio, U Radio, Atlantic Radio et Radio Plus, puis les webradios des grands groupes, et enfin les webradios indépendantes.
+Cette version corrige la fermeture de la radio à l’ouverture signalée sur un téléphone.
 
-MFM Radio et Atlantic Radio arrivent, avec leur flux officiel et leur logo. Les stations en double disparaissent, comme Radio Sawt Alamal et les chaînes répétées de Radio Adwaa, ainsi que deux entrées qui ne sont pas des radios marocaines : Kabana Rooftop et Fayrouz. Fayrouz reste dans les favoris de ceux qui l’avaient ajoutée.
+Les fonctions ajoutées pour l’Incarlink, le mini-lecteur et ses boutons, ne démarrent plus du tout sur téléphone, et le suivi du mode Système ne peut plus recharger l’écran en boucle.
 
-Sur l’Incarlink, deux boutons à côté de l’étoile du lecteur ouvrent Maps et YouTube. La radio continue de jouer dans un mini-lecteur flottant : le logo éclairé de sa couleur, le nom de la station, l’émission en cours, le badge LIVE avec ses barres animées, et les boutons précédent, lecture et suivant. Un appui le remet en plein écran. Le mini-lecteur s’ouvre aussi quand on quitte la radio pendant l’écoute. Il se désactive dans Réglages › Mini-lecteur. Le téléphone garde son fonctionnement habituel.
+Si la radio se ferme encore, elle affiche au lancement suivant l’écran « La radio s’est fermée », avec le bouton « Partager le rapport ». Envoie ce rapport par WhatsApp ou par e-mail : il donne la cause exacte de l’erreur. Le bouton « Relancer la radio » la rouvre.
 
 Cette version se met à jour automatiquement depuis la 2.5.35 et les versions suivantes.
 
-Ces changements ont été vérifiés sur un émulateur Android 13 en 800 × 480 : MFM Radio et Atlantic Radio ont joué en direct, et le mini-lecteur a fonctionné avec une autre application ouverte. Les boutons Maps et YouTube restent à essayer sur l’Incarlink, ces applications n’étant pas installées sur l’émulateur.
+Vérifié sur un émulateur Android 13 en format téléphone et en 800 × 480 : après une fermeture provoquée, l’écran de rapport s’est affiché et « Relancer la radio » a rouvert la radio. La fermeture du téléphone concerné n’a pas pu être reproduite sur l’émulateur.
