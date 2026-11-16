@@ -1,0 +1,49 @@
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+}
+
+// Incar Drive: a home screen (launcher) for the Incarlink head unit, separate from AutoDrive.
+android {
+    namespace 'com.incardrive.home'
+    compileSdk 35
+    // Weather, prayer times, glass and motion effects shared with Radio Maroc & Coran (and their small helpers).
+    sourceSets.main.java.srcDir rootProject.file('shared-info/src/main/java')
+    sourceSets.main.java.srcDir rootProject.file('shared-radio/src/main/java')
+
+    defaultConfig {
+        applicationId 'com.incardrive.home'
+        minSdk 30
+        targetSdk 35
+        versionCode providers.gradleProperty('incarDriveVersionCode').getOrElse('1').toInteger()
+        versionName providers.gradleProperty('incarDriveVersionName').getOrElse('1.0.0')
+    }
+
+    // Signed with the Radio Maroc & Coran key: same publisher for both apps.
+    signingConfigs {
+        release {
+            def keyPath = System.getenv('RADIO_MAROC_KEYSTORE_FILE')
+            if (keyPath) {
+                storeFile file(keyPath)
+                storePassword System.getenv('RADIO_MAROC_KEYSTORE_PASSWORD')
+                keyAlias 'radio-maroc'
+                keyPassword System.getenv('RADIO_MAROC_KEYSTORE_PASSWORD')
+            }
+        }
+    }
+    buildTypes {
+        release { signingConfig signingConfigs.release }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+kotlin { jvmToolchain(17) }
+
+dependencies {
+    implementation 'androidx.core:core-ktx:1.15.0'
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2'
+    testImplementation 'junit:junit:4.13.2'
+}

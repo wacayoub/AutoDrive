@@ -1,0 +1,9 @@
+<resources>
+    <style name="IncarDriveTheme" parent="android:style/Theme.Material.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:colorAccent">@color/home_accent</item>
+        <item name="android:windowBackground">@color/home_background_bottom</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
+</resources>

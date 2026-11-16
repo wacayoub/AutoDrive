@@ -1,0 +1,8 @@
+<!-- Incar Drive: a road running to the horizon under a mint sun, in the colours of Radio Maroc & Coran. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <path android:fillColor="#8EF5DF" android:pathData="M54,30m-9,0a9,9 0,1 1,18 0a9,9 0,1 1,-18 0" />
+    <path android:fillColor="#8EF5DF" android:pathData="M48,46 L60,46 L76,80 L32,80 Z" />
+    <path android:fillColor="#143A3C" android:pathData="M53,52 L55,52 L55.6,58 L52.4,58 Z" />
+    <path android:fillColor="#143A3C" android:pathData="M52.2,63 L55.8,63 L56.6,72 L51.4,72 Z" />
+</vector>
