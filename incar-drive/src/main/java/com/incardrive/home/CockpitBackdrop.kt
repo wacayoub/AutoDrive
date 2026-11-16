@@ -18,7 +18,7 @@ import android.graphics.drawable.Drawable
  */
 internal class CockpitBackdrop(
     private val top: Int, private val mid: Int, private val bottom: Int, private val accent: Int, private val grid: Int,
-    private val glowAlpha: Int, private val warm: Int,
+    private val glowAlpha: Int, private val warm: Int, private val sunX: Float = .12f, private val sunY: Float = .95f, private val sunSize: Float = .55f,
 ) : Drawable() {
     private val fill = Paint()
     private val glow = Paint(Paint.ANTI_ALIAS_FLAG)
@@ -30,7 +30,7 @@ internal class CockpitBackdrop(
         val h = bounds.height().toFloat()
         fill.shader = LinearGradient(0f, bounds.top.toFloat(), 0f, bounds.bottom.toFloat(), intArrayOf(top, mid, bottom),
             floatArrayOf(0f, .5f, 1f), Shader.TileMode.CLAMP)
-        sun.shader = RadialGradient(bounds.left + w * .12f, bounds.bottom - h * .05f, maxOf(w, h) * .55f,
+        sun.shader = RadialGradient(bounds.left + w * sunX, bounds.top + h * sunY, maxOf(w, h) * sunSize,
             intArrayOf(warm, Color.TRANSPARENT), null, Shader.TileMode.CLAMP)
         glow.shader = RadialGradient(bounds.left + w * .82f, bounds.top + h * .05f, maxOf(w, h) * .6f,
             intArrayOf(Color.argb(glowAlpha, Color.red(accent), Color.green(accent), Color.blue(accent)), Color.TRANSPARENT),

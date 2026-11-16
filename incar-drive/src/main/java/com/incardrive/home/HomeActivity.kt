@@ -330,6 +330,7 @@ class HomeActivity : Activity() {
                 else -> "Bonne nuit"
             }
             renderPrayer()
+            renderSky()
             handler.postDelayed(this, 60_000L - System.currentTimeMillis() % 60_000L)
         }
     }
@@ -808,16 +809,27 @@ class HomeActivity : Activity() {
     // ——— Live content ———
 
     /** The background for this season and the weather outside, behind the cards. */
+    private fun currentSky(): Sky {
+        val city = info.city.value
+        val sun = SunPosition.at(Instant.now(), city.latitude, city.longitude)
+        return SkyPalette.of(info.weather.value?.condition, LocalDate.now().month, night, sun)
+    }
+
     private fun skyBackdrop(): CockpitBackdrop {
-        val sky = SkyPalette.of(info.weather.value?.condition, LocalDate.now().month, night)
+        val sky = currentSky()
         shownSky = sky
-        return CockpitBackdrop(sky.top, sky.mid, sky.bottom, accent, getColor(R.color.home_grid), if (night) 0x26 else 0x30, sky.glow)
+        return CockpitBackdrop(sky.top, sky.mid, sky.bottom, accent, getColor(R.color.home_grid), if (night) 0x26 else 0x30,
+            sky.glow, sky.sunX, sky.sunY, sky.sunSize)
+    }
+
+    /** Called every minute and on new weather: the sun moves, so the sky follows it. */
+    private fun renderSky() {
+        if (::screenRoot.isInitialized && currentSky() != shownSky) screenRoot.background = skyBackdrop()
     }
 
     private fun renderWeather() {
         val weather = info.weather.value
-        if (::screenRoot.isInitialized &&
-            SkyPalette.of(weather?.condition, LocalDate.now().month, night) != shownSky) screenRoot.background = skyBackdrop()
+        renderSky()
         weatherIcon.bind(weather)
         weatherText.text = weather?.let { "${it.degrees}°" } ?: "—"
         weatherDetail.text = weather?.condition?.label ?: info.city.value.label
