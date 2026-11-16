@@ -356,6 +356,8 @@ class HomeActivity : Activity() {
 
     override fun onStart() {
         super.onStart()
+        HomeVisibility.shown = true
+        HomeVisibility.changed?.invoke()
         media.start()
         if (gps.permitted()) gps.start()
         // Weather where the car is, from the last known position until the GPS answers; the chosen city otherwise.
@@ -379,6 +381,8 @@ class HomeActivity : Activity() {
     }
 
     override fun onStop() {
+        HomeVisibility.shown = false
+        HomeVisibility.changed?.invoke()
         handler.removeCallbacks(tick)
         scope?.cancel()
         scope = null
@@ -797,7 +801,12 @@ class HomeActivity : Activity() {
                 addView(navTitle)
                 addView(navDetail, wrap().apply { topMargin = dp(2) })
             }, LinearLayout.LayoutParams(0, -2, 1f).apply { marginStart = dp(10) })
-            navEta = label("", 13, navColor, 700).apply { gravity = Gravity.END; visibility = View.GONE }
+            navEta = label("", 13, navColor, 700).apply {
+                gravity = Gravity.END
+                maxLines = 2
+                ellipsize = null
+                visibility = View.GONE
+            }
             addView(navEta, wrap().apply { marginStart = dp(6) })
             navChevron = ImageView(context).apply {
                 setImageResource(R.drawable.ic_home_chevron)
@@ -1681,6 +1690,31 @@ class HomeActivity : Activity() {
                     recreate()
                 }
             }, LinearLayout.LayoutParams(-1, dp(52)).apply { topMargin = dp(8) })
+            val bubbleOn = prefs.getBoolean(NavBubble.ENABLED, true) && Settings.canDrawOverlays(this@HomeActivity)
+            addView(row().apply {
+                background = pressable(GradientDrawable().apply {
+                    cornerRadius = dp(12).toFloat()
+                    setColor(getColor(R.color.home_chip))
+                    setStroke(dp(1), getColor(R.color.home_card_border))
+                }, 12)
+                setPadding(dp(14), 0, dp(14), 0)
+                addView(column().apply {
+                    addView(label("Bulle de guidage", 15, text, 700))
+                    addView(label("Flèche, distance et arrivée au-dessus des autres applis pendant un itinéraire", 11, muted)
+                        .apply { maxLines = 2 }, wrap().apply { topMargin = dp(2) })
+                }, LinearLayout.LayoutParams(0, -2, 1f))
+                addView(label(if (bubbleOn) "ON" else "OFF", 14, accent, 700), wrap().apply { marginStart = dp(12) })
+                setOnClickListener {
+                    if (!Settings.canDrawOverlays(this@HomeActivity)) {
+                        // Android's « display over other apps » for Incar Drive; the bubble starts once it is allowed.
+                        prefs.edit().putBoolean(NavBubble.ENABLED, true).apply()
+                        startSafely(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, android.net.Uri.parse("package:$packageName")))
+                    } else {
+                        prefs.edit().putBoolean(NavBubble.ENABLED, !bubbleOn).apply()
+                        showSettings()
+                    }
+                }
+            }, LinearLayout.LayoutParams(-1, dp(56)).apply { topMargin = dp(8) })
             addView(caps("Destinations"), wrap().apply { topMargin = dp(12) })
             Place.entries.forEach { place ->
                 addView(row().apply {

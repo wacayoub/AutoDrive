@@ -15,11 +15,18 @@ import java.util.Locale
  * left and the arrival on the Maps card. Nothing else is read or kept.
  */
 class MediaAccessService : NotificationListenerService() {
-    override fun onListenerConnected() = refresh(current())
+    private val bubble by lazy { NavBubble(this) }
+
+    override fun onListenerConnected() {
+        HomeVisibility.changed = { bubble.render(NavWatch.nav.value, NavWatch.source) }
+        refresh(current())
+    }
 
     override fun onListenerDisconnected() {
         CallWatch.clear()
         NavWatch.clear()
+        bubble.hide()
+        HomeVisibility.changed = null
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification) = refresh(current() ?: listOf(sbn))
@@ -31,6 +38,7 @@ class MediaAccessService : NotificationListenerService() {
     private fun refresh(active: List<StatusBarNotification>?) {
         CallWatch.refresh(active.orEmpty())
         NavWatch.refresh(active.orEmpty(), this)
+        bubble.render(NavWatch.nav.value, NavWatch.source)
     }
 }
 
@@ -116,6 +124,9 @@ internal data class NavInfo(
 internal object NavWatch {
     private val state = MutableStateFlow<NavInfo?>(null)
     val nav: StateFlow<NavInfo?> = state
+    /** The app that guides, to bring it back from the bubble. */
+    var source: String? = null
+        private set
     private val navigationApps = setOf("com.google.android.apps.maps", "com.waze")
 
     private val duration = Regex("""(?i)\b(\d{1,2}\s*h(?:\s*\d{1,2}\s*min)?|\d{1,3}\s*min)\b""")
@@ -123,7 +134,9 @@ internal object NavWatch {
     private val clock = Regex("""\b([01]?\d|2[0-3])[:h]([0-5]\d)\b""")
 
     fun refresh(active: List<StatusBarNotification>, context: android.content.Context? = null) {
-        state.value = active.asSequence().mapNotNull { read(it, context) }.firstOrNull()
+        val found = active.asSequence().mapNotNull { sbn -> read(sbn, context)?.let { it to sbn.packageName } }.firstOrNull()
+        source = found?.second
+        state.value = found?.first
     }
 
     fun clear() {
@@ -131,9 +144,12 @@ internal object NavWatch {
     }
 
     private fun read(sbn: StatusBarNotification, context: android.content.Context?): NavInfo? {
-        if (sbn.packageName !in navigationApps) return null
+        // Debug builds also take « adb shell cmd notification post nav-test… », to try the bubble without Maps.
+        val test = sbn.packageName == "com.android.shell" && sbn.tag?.startsWith("nav-test") == true &&
+            context != null && context.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0
+        if (sbn.packageName !in navigationApps && !test) return null
         val notification = sbn.notification ?: return null
-        val guiding = notification.category == Notification.CATEGORY_NAVIGATION || sbn.isOngoing
+        val guiding = notification.category == Notification.CATEGORY_NAVIGATION || sbn.isOngoing || test
         if (!guiding) return null
         val extras = notification.extras
         val texts = listOf(Notification.EXTRA_TITLE, Notification.EXTRA_TEXT, Notification.EXTRA_SUB_TEXT,
