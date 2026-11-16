@@ -1,15 +1,19 @@
-<!-- Incar Drive, Jour: a light silver cockpit with white panels. -->
+<!-- Incar Drive, Jour: a soft morning sky fading through white to warm sand, with white panels. -->
 <resources>
-    <color name="home_background_top">#F6F8FB</color>
-    <color name="home_background_bottom">#E2E7EE</color>
-    <color name="home_card">#FAFFFFFF</color>
-    <color name="home_card_border">#1A0F172A</color>
+    <color name="home_background_top">#D6E6FF</color>
+    <color name="home_background_mid">#F3F6FB</color>
+    <color name="home_background_bottom">#F1E3D1</color>
+    <!-- A warm low sun in the lower left corner. -->
+    <color name="home_background_glow">#59FFB45C</color>
+    <color name="home_sheet">#F7F9FC</color>
+    <color name="home_card">#E8FFFFFF</color>
+    <color name="home_card_border">#1F0F172A</color>
     <color name="home_text">#111722</color>
-    <color name="home_muted">#5A6576</color>
-    <color name="home_chip">#0F0F172A</color>
+    <color name="home_muted">#56627A</color>
+    <color name="home_chip">#0F1E3A6E</color>
     <color name="home_ripple">#1F0F172A</color>
-    <color name="home_gauge_track">#140F172A</color>
-    <color name="home_grid">#140F172A</color>
+    <color name="home_gauge_track">#171E3A6E</color>
+    <color name="home_grid">#1A8A6A3A</color>
     <!-- System widgets only; the screen itself uses the accent chosen in Réglages. -->
     <color name="home_accent">#1E242D</color>
 </resources>

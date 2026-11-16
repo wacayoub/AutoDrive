@@ -393,8 +393,9 @@ class HomeActivity : Activity() {
     // ——— Screen ———
 
     private fun screen(): View {
-        val backdrop = CockpitBackdrop(getColor(R.color.home_background_top), getColor(R.color.home_background_bottom),
-            accent, getColor(R.color.home_grid), if (night) 0x26 else 0x1C)
+        val backdrop = CockpitBackdrop(getColor(R.color.home_background_top), getColor(R.color.home_background_mid),
+            getColor(R.color.home_background_bottom), accent, getColor(R.color.home_grid), if (night) 0x26 else 0x30,
+            getColor(R.color.home_background_glow))
         val content = column().apply {
             addView(topBar(), LinearLayout.LayoutParams(-1, dp(62)))
             pager = SwipePager(context) { page -> markDots(page) }.apply {
@@ -1202,7 +1203,7 @@ class HomeActivity : Activity() {
 
     internal fun sheet(): Drawable = GradientDrawable().apply {
         cornerRadius = dp(18).toFloat()
-        setColor(getColor(R.color.home_background_bottom))
+        setColor(getColor(R.color.home_sheet))
         setStroke(dp(1), getColor(R.color.home_card_border))
     }
 

@@ -17,17 +17,21 @@ import android.graphics.drawable.Drawable
  * It is static, so it costs nothing while the screen is shown.
  */
 internal class CockpitBackdrop(
-    private val top: Int, private val bottom: Int, private val accent: Int, private val grid: Int,
-    private val glowAlpha: Int,
+    private val top: Int, private val mid: Int, private val bottom: Int, private val accent: Int, private val grid: Int,
+    private val glowAlpha: Int, private val warm: Int,
 ) : Drawable() {
     private val fill = Paint()
     private val glow = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val sun = Paint(Paint.ANTI_ALIAS_FLAG)
     private val lines = Paint(Paint.ANTI_ALIAS_FLAG).apply { strokeWidth = 1.5f }
 
     override fun onBoundsChange(bounds: Rect) {
         val w = bounds.width().toFloat()
         val h = bounds.height().toFloat()
-        fill.shader = LinearGradient(0f, bounds.top.toFloat(), 0f, bounds.bottom.toFloat(), top, bottom, Shader.TileMode.CLAMP)
+        fill.shader = LinearGradient(0f, bounds.top.toFloat(), 0f, bounds.bottom.toFloat(), intArrayOf(top, mid, bottom),
+            floatArrayOf(0f, .5f, 1f), Shader.TileMode.CLAMP)
+        sun.shader = RadialGradient(bounds.left + w * .12f, bounds.bottom - h * .05f, maxOf(w, h) * .55f,
+            intArrayOf(warm, Color.TRANSPARENT), null, Shader.TileMode.CLAMP)
         glow.shader = RadialGradient(bounds.left + w * .82f, bounds.top + h * .05f, maxOf(w, h) * .6f,
             intArrayOf(Color.argb(glowAlpha, Color.red(accent), Color.green(accent), Color.blue(accent)), Color.TRANSPARENT),
             null, Shader.TileMode.CLAMP)
@@ -40,6 +44,7 @@ internal class CockpitBackdrop(
         val b = bounds
         canvas.drawRect(b, fill)
         canvas.drawRect(b, glow)
+        if (Color.alpha(warm) > 0) canvas.drawRect(b, sun)
         val w = b.width().toFloat()
         val h = b.height().toFloat()
         val horizon = b.top + h * .55f
