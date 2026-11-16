@@ -479,7 +479,7 @@ class HomeActivity : Activity() {
             RadioMotion.pressScale(this, .92f)
         }, LinearLayout.LayoutParams(dp(50), dp(50)).apply { marginEnd = dp(8) })
         addView(chip {
-            weatherIcon = WeatherIcon(context, text)
+            weatherIcon = WeatherIcon(context, accent)
             addView(weatherIcon, LinearLayout.LayoutParams(dp(28), dp(28)))
             addView(column().apply {
                 weatherText = label("—", 17, text, 700)
@@ -603,34 +603,28 @@ class HomeActivity : Activity() {
 
     /** « Naviguer » opens Google Maps full screen; Maison and Travail start its guidance straight away. */
     private fun mapsCard() = column().apply {
-        // Neutral: a panel like the others. A colour: deep accent at night with white text, the bright accent by day.
-        val ink = if (neutral) text else if (night) Color.WHITE else onAccent
-        fun inked(alpha: Int) = Color.argb(alpha, Color.red(ink), Color.green(ink), Color.blue(ink))
-        background = if (neutral) glass() else GradientDrawable(GradientDrawable.Orientation.BL_TR,
-            if (night) intArrayOf(shade(accent, Color.BLACK, .45f), shade(accent, Color.BLACK, .1f))
-                else intArrayOf(shade(accent, Color.BLACK, .08f), shade(accent, Color.WHITE, .15f))).apply {
-            cornerRadius = dp(16).toFloat()
-        }
-        elevation = dp(4).toFloat()
+        // A panel like the others, so it reads well in every colour: the accent lights the icon, the chevron and the
+        // Maison / Travail icons, never large areas of text.
+        background = glass()
         setPadding(dp(8), dp(6), dp(8), dp(8))
         addView(row().apply {
             background = pressable(null, 12)
             setPadding(dp(8), 0, dp(4), 0)
             addView(FrameLayout(context).apply {
-                background = GradientDrawable().apply { cornerRadius = dp(12).toFloat(); setColor(inked(0x2E)) }
+                background = GradientDrawable().apply { cornerRadius = dp(12).toFloat(); setColor(accent) }
                 addView(ImageView(context).apply {
                     setImageResource(R.drawable.ic_home_navigation)
-                    imageTintList = ColorStateList.valueOf(ink)
+                    imageTintList = ColorStateList.valueOf(onAccent)
                     rotation = 45f
                 }, FrameLayout.LayoutParams(dp(22), dp(22), Gravity.CENTER))
             }, LinearLayout.LayoutParams(dp(40), dp(40)))
             addView(column().apply {
-                addView(label("Naviguer", 19, ink, 700, condensed = true))
-                addView(label("Google Maps", 12, inked(0xCC), 500), wrap().apply { topMargin = dp(2) })
+                addView(label("Naviguer", 19, text, 700, condensed = true))
+                addView(label("Google Maps", 12, muted, 500), wrap().apply { topMargin = dp(2) })
             }, LinearLayout.LayoutParams(0, -2, 1f).apply { marginStart = dp(12) })
             addView(ImageView(context).apply {
                 setImageResource(R.drawable.ic_home_chevron)
-                imageTintList = ColorStateList.valueOf(ink)
+                imageTintList = ColorStateList.valueOf(accent)
             }, LinearLayout.LayoutParams(dp(22), dp(22)))
             contentDescription = "Ouvrir Google Maps"
             setOnClickListener {
@@ -640,17 +634,21 @@ class HomeActivity : Activity() {
         }, LinearLayout.LayoutParams(-1, 0, 1f))
         addView(row().apply {
             Place.entries.forEachIndexed { index, place ->
+                val set = destination(place) != null
                 val chip = row().apply {
                     gravity = Gravity.CENTER
                     background = pressable(GradientDrawable().apply {
                         cornerRadius = dp(12).toFloat()
-                        setColor(inked(0x1F))
+                        setColor(getColor(R.color.home_chip))
+                        setStroke(dp(1), getColor(R.color.home_card_border))
                     }, 12)
                     addView(ImageView(context).apply {
-                        setImageResource(place.icon)
-                        imageTintList = ColorStateList.valueOf(ink)
+                        setImageResource(if (set) place.icon else R.drawable.ic_home_add)
+                        imageTintList = ColorStateList.valueOf(if (set) accent else muted)
+                        tag = "icon"
                     }, LinearLayout.LayoutParams(dp(18), dp(18)))
-                    addView(label(place.label, 14, ink, 700), wrap().apply { marginStart = dp(8) })
+                    addView(label(place.label, 14, if (set) text else muted, 700).apply { tag = "label" },
+                        wrap().apply { marginStart = dp(8) })
                     setOnClickListener { goTo(place) }
                     setOnLongClickListener { editPlace(place); true }
                     RadioMotion.pressScale(this, .94f)
@@ -664,11 +662,16 @@ class HomeActivity : Activity() {
 
     private fun destination(place: Place) = prefs.getString(place.key, null)?.takeIf { it.isNotBlank() }
 
-    /** A place without an address is shown faded and opens its editor. */
+    /** A place without an address shows « + » in muted grey and opens its editor. */
     private fun renderPlaces() {
         placeChips.forEach { (place, chip) ->
             val target = destination(place)
-            chip.alpha = if (target != null) 1f else .55f
+            // A place without an address shows « + » and muted text instead of being faded.
+            chip.findViewWithTag<ImageView>("icon")?.apply {
+                setImageResource(if (target != null) place.icon else R.drawable.ic_home_add)
+                imageTintList = ColorStateList.valueOf(if (target != null) accent else muted)
+            }
+            chip.findViewWithTag<TextView>("label")?.setTextColor(if (target != null) text else muted)
             chip.contentDescription = target?.let { "Aller à ${place.label}" } ?: "Choisir l’adresse ${place.label}"
         }
     }
