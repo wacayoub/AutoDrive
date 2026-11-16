@@ -33,9 +33,26 @@ internal class AppLinks(private val activity: Activity) {
     fun open(app: Launchable) = start(Intent.makeMainActivity(app.component)
         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED))
 
-    fun openMaps(): Boolean = (packages.getLaunchIntentForPackage(MAPS)
-        ?: Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0?q=")).takeIf { it.resolveActivity(packages) != null })
-        ?.let(::start) ?: false
+    /**
+     * Google Maps on its directions screen, ready to type where to go (documented Maps URL « dir/?api=1 » with no
+     * destination); Maps' own start screen if that is not available.
+     */
+    fun openMaps(): Boolean {
+        val directions = Intent(Intent.ACTION_VIEW, Uri.parse("https://www.google.com/maps/dir/?api=1&travelmode=driving"))
+            .setPackage(MAPS).takeIf { it.resolveActivity(packages) != null }
+        return (directions ?: packages.getLaunchIntentForPackage(MAPS)
+            ?: Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0?q=")).takeIf { it.resolveActivity(packages) != null })
+            ?.let(::start) ?: false
+    }
+
+    /**
+     * The Incarlink's own settings app, separate from Android's: the one the driver picked, else the only installed
+     * app whose name says settings (« Réglages », « Paramètres », « Settings », « 设置 »…), Android's own excepted.
+     */
+    fun oemSettingsCandidates(): List<Launchable> = apps().filter {
+        it.component.packageName != "com.android.settings" &&
+            Regex("(?i)(r[ée]glage|param[èe]tre|setting|设置|设定|car ?set)").containsMatchIn(it.label)
+    }
 
     /**
      * Starts Google Maps guidance to [destination], an address or « latitude,longitude », full screen. Without the

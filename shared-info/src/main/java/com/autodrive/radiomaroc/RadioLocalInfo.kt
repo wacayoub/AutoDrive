@@ -97,8 +97,12 @@ internal object RadioLocalInfo {
     const val HABOUS_SITE = "https://www.habous.gov.ma/"
     const val WEATHER_SITE = "https://open-meteo.com/"
 
-    fun weather(city: RadioCity): RadioWeather? {
-        val url = "https://api.open-meteo.com/v1/forecast?latitude=${city.latitude}&longitude=${city.longitude}" +
+    fun weather(city: RadioCity): RadioWeather? = weather(city.latitude, city.longitude)
+
+    /** The weather at any position, for example the car's GPS position. */
+    fun weather(latitude: Double, longitude: Double): RadioWeather? {
+        val url = "https://api.open-meteo.com/v1/forecast?latitude=${"%.3f".format(java.util.Locale.ROOT, latitude)}" +
+            "&longitude=${"%.3f".format(java.util.Locale.ROOT, longitude)}" +
             "&current=temperature_2m,weather_code,is_day&daily=temperature_2m_min,temperature_2m_max&forecast_days=1&timezone=GMT"
         return parseWeather(download(url, 32 * 1024))
     }

@@ -18,6 +18,22 @@ internal class LocalInfoFeed(city: RadioCity) {
     private val report = MutableStateFlow<RadioWeather?>(null)
     private val calendars = MutableStateFlow<Map<YearMonth, HabousCalendar>>(emptyMap())
     private var nextWeatherFetchAt = 0L
+    // A GPS position, when the app has one: the weather is then taken there instead of at the chosen city.
+    @Volatile private var position: Pair<Double, Double>? = null
+
+    /** Uses the weather at [latitude], [longitude], fetched again once the car has moved more than 5 km. */
+    fun usePosition(latitude: Double, longitude: Double) {
+        val last = position
+        val movedKm = last?.let {
+            val dLat = (latitude - it.first) * 111.2
+            val dLon = (longitude - it.second) * 111.2 * kotlin.math.cos(Math.toRadians(latitude))
+            kotlin.math.sqrt(dLat * dLat + dLon * dLon)
+        }
+        if (movedKm == null || movedKm > 5) {
+            position = latitude to longitude
+            nextWeatherFetchAt = 0L
+        }
+    }
 
     val city: StateFlow<RadioCity> = chosenCity.asStateFlow()
     val weather: StateFlow<RadioWeather?> = report.asStateFlow()
@@ -35,11 +51,15 @@ internal class LocalInfoFeed(city: RadioCity) {
     suspend fun refreshWeather(city: RadioCity) {
         while (true) {
             if (SystemClock.elapsedRealtime() >= nextWeatherFetchAt) {
-                val latest = withContext(Dispatchers.IO) { runCatching { RadioLocalInfo.weather(city) }.getOrNull() }
+                val at = position
+                val latest = withContext(Dispatchers.IO) {
+                    runCatching { if (at != null) RadioLocalInfo.weather(at.first, at.second) else RadioLocalInfo.weather(city) }.getOrNull()
+                }
                 report.value = latest
                 nextWeatherFetchAt = SystemClock.elapsedRealtime() + if (latest == null) 300_000L else 900_000L
             }
-            delay((nextWeatherFetchAt - SystemClock.elapsedRealtime()).coerceAtLeast(1L))
+            // Wake at least every 30 s, so a new position is taken into account soon.
+            delay((nextWeatherFetchAt - SystemClock.elapsedRealtime()).coerceIn(1L, 30_000L))
         }
     }
 

@@ -6,6 +6,7 @@ import android.animation.ValueAnimator
 import android.app.Activity
 import android.app.AlertDialog
 import android.app.PendingIntent
+import android.app.role.RoleManager
 import android.content.ActivityNotFoundException
 import android.content.ComponentName
 import android.content.Context
@@ -177,7 +178,6 @@ class HomeActivity : Activity() {
     private lateinit var trip: TripMeter
     private lateinit var pager: SwipePager
     private lateinit var dots: List<View>
-    private lateinit var headingText: TextView
     private lateinit var altitudeText: TextView
     private var shownPage = Page.HOME
     private lateinit var callBanner: FrameLayout
@@ -206,7 +206,15 @@ class HomeActivity : Activity() {
         media = MediaSessions(this, ::renderMedia).apply { followActive = true }
         gps = GpsMonitor(this, ::renderSpeed)
         trip = TripMeter(Trip.decode(prefs.getString(TRIP, null)))
+        // The head unit starts with the car: a trip from before this start is over; the new one starts when the car
+        // first moves, so its time counts the drive and not the minutes parked.
+        val bootAt = System.currentTimeMillis() - android.os.SystemClock.elapsedRealtime()
+        if (trip.trip.startedAt != 0L && trip.trip.lastMoveAt < bootAt) {
+            trip.reset(0)
+            prefs.edit().putString(TRIP, trip.trip.encode()).apply()
+        }
         gps.onFix = { fix, kmh ->
+            info.usePosition(fix.latitude, fix.longitude)
             if (roadMode()) followRoad(fix, kmh)
             trip.accept(System.currentTimeMillis(), fix.latitude, fix.longitude, fix.accuracy.takeIf { fix.hasAccuracy() }, kmh)
             if (System.currentTimeMillis() - lastTripSave > 30_000) saveTrip()
@@ -257,13 +265,53 @@ class HomeActivity : Activity() {
     @Deprecated("Deprecated in Java")
     @Suppress("DEPRECATION")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        if (requestCode == REQUEST_HOME_ROLE) {
+            renderHomeBadge()
+            if (!isDefaultHome()) startSafely(Intent(Settings.ACTION_HOME_SETTINGS))
+            return
+        }
         if (!widgets.onResult(requestCode, resultCode)) super.onActivityResult(requestCode, resultCode, data)
+    }
+
+    /** Whether Home opens Incar Drive. */
+    private fun isDefaultHome(): Boolean {
+        val roles = getSystemService(RoleManager::class.java)
+        if (roles != null && roles.isRoleAvailable(RoleManager.ROLE_HOME)) return roles.isRoleHeld(RoleManager.ROLE_HOME)
+        val home = packageManager.resolveActivity(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME),
+            PackageManager.MATCH_DEFAULT_ONLY)
+        return home?.activityInfo?.packageName == packageName
+    }
+
+    /**
+     * Android's own question « make Incar Drive the default home app? » (RoleManager), or the default-apps screen
+     * when this head unit does not offer it.
+     */
+    private fun askDefaultHome() {
+        val roles = getSystemService(RoleManager::class.java)
+        if (roles != null && roles.isRoleAvailable(RoleManager.ROLE_HOME) && !roles.isRoleHeld(RoleManager.ROLE_HOME)) {
+            try {
+                @Suppress("DEPRECATION")
+                startActivityForResult(roles.createRequestRoleIntent(RoleManager.ROLE_HOME), REQUEST_HOME_ROLE)
+                return
+            } catch (_: ActivityNotFoundException) {
+            }
+        }
+        startSafely(Intent(Settings.ACTION_HOME_SETTINGS))
+    }
+
+    private lateinit var homeBadge: TextView
+
+    /** A button in the top bar until Incar Drive is the default home screen. */
+    private fun renderHomeBadge() {
+        if (::homeBadge.isInitialized) homeBadge.visibility = if (isDefaultHome()) View.GONE else View.VISIBLE
     }
 
     override fun onStart() {
         super.onStart()
         media.start()
         if (gps.permitted()) gps.start()
+        // Weather where the car is, from the last known position until the GPS answers; the chosen city otherwise.
+        currentPosition()?.split(',')?.let { (lat, lon) -> info.usePosition(lat.toDouble(), lon.toDouble()) }
         val tasks = MainScope()
         scope = tasks
         tasks.launch { info.city.collect { city -> info.refreshWeather(city) } }
@@ -295,6 +343,12 @@ class HomeActivity : Activity() {
     override fun onResume() {
         super.onResume()
         tellRadio(visible = true)
+        renderHomeBadge()
+        // Ask once, on the first start, to become the screen Home opens.
+        if (!prefs.getBoolean(ASKED_HOME, false) && !isDefaultHome()) {
+            prefs.edit().putBoolean(ASKED_HOME, true).apply()
+            askDefaultHome()
+        }
         // Back from an Android settings screen: show the new Wi-Fi, Bluetooth and brightness states.
         if (shownPage == Page.QUICK) quick.show()
         phone.render()
@@ -485,6 +539,18 @@ class HomeActivity : Activity() {
             setPadding(dp(14), 0, dp(16), 0)
             content()
         }
+        homeBadge = label("Définir par défaut", 13, onAccent, 700).apply {
+            gravity = Gravity.CENTER
+            setPadding(dp(14), 0, dp(14), 0)
+            background = pressable(GradientDrawable().apply {
+                cornerRadius = dp(14).toFloat()
+                setColor(accent)
+            }, 14)
+            contentDescription = "Faire d’Incar Drive l’écran d’accueil par défaut"
+            setOnClickListener { askDefaultHome() }
+            visibility = View.GONE
+        }
+        addView(homeBadge, LinearLayout.LayoutParams(-2, dp(50)).apply { marginEnd = dp(8) })
         addView(ImageButton(context).apply {
             setImageResource(R.drawable.ic_home_tune)
             imageTintList = ColorStateList.valueOf(text)
@@ -596,12 +662,10 @@ class HomeActivity : Activity() {
             shade(accent, Color.WHITE, .3f), text, muted)
         gauge.limit = activeLimit()
         addView(gauge, FrameLayout.LayoutParams(-1, -1).apply { setMargins(dp(4), dp(4), dp(4), dp(20)) })
-        // Heading and altitude in the upper left corner, the limit as a road sign in the upper right.
+        // Altitude in the upper left corner, the limit as a road sign in the upper right.
         addView(column().apply {
-            headingText = caps("", text)
             altitudeText = label("", 11, muted, 600)
-            addView(headingText)
-            addView(altitudeText, wrap().apply { topMargin = dp(3) })
+            addView(altitudeText)
         }, FrameLayout.LayoutParams(-2, -2, Gravity.TOP or Gravity.START).apply { setMargins(dp(12), dp(10), 0, 0) })
         limitSign = LimitSign(context).apply { limit = activeLimit() }
         addView(limitSign,
@@ -648,7 +712,6 @@ class HomeActivity : Activity() {
         }, LinearLayout.LayoutParams(-1, 0, 1f))
         addView(row().apply {
             Place.entries.forEachIndexed { index, place ->
-                val set = destination(place) != null
                 val chip = row().apply {
                     gravity = Gravity.CENTER
                     background = pressable(GradientDrawable().apply {
@@ -657,11 +720,11 @@ class HomeActivity : Activity() {
                         setStroke(dp(1), getColor(R.color.home_card_border))
                     }, 12)
                     addView(ImageView(context).apply {
-                        setImageResource(if (set) place.icon else R.drawable.ic_home_add)
-                        imageTintList = ColorStateList.valueOf(if (set) navColor else muted)
+                        setImageResource(place.icon)
+                        imageTintList = ColorStateList.valueOf(navColor)
                         tag = "icon"
                     }, LinearLayout.LayoutParams(dp(18), dp(18)))
-                    addView(label(place.label, 14, if (set) text else muted, 700).apply { tag = "label" },
+                    addView(label(place.label, 14, text, 700).apply { tag = "label" },
                         wrap().apply { marginStart = dp(8) })
                     setOnClickListener { goTo(place) }
                     setOnLongClickListener { editPlace(place); true }
@@ -676,27 +739,27 @@ class HomeActivity : Activity() {
 
     private fun destination(place: Place) = prefs.getString(place.key, null)?.takeIf { it.isNotBlank() }
 
-    /** A place without an address shows « + » in muted grey and opens its editor. */
+    /** Both places always work: Incar Drive's own address if one was set (long press), else Google Maps' one. */
     private fun renderPlaces() {
-        placeChips.forEach { (place, chip) ->
-            val target = destination(place)
-            // A place without an address shows « + » and muted text instead of being faded.
-            chip.findViewWithTag<ImageView>("icon")?.apply {
-                setImageResource(if (target != null) place.icon else R.drawable.ic_home_add)
-                imageTintList = ColorStateList.valueOf(if (target != null) navColor else muted)
-            }
-            chip.findViewWithTag<TextView>("label")?.setTextColor(if (target != null) text else muted)
-            chip.contentDescription = target?.let { "Aller à ${place.label}" } ?: "Choisir l’adresse ${place.label}"
-        }
+        placeChips.forEach { (place, chip) -> chip.contentDescription = "Aller à ${place.label}" }
     }
 
+    /**
+     * Guidance to the address set in Incar Drive, or else to the place saved as Home or Work in the driver's Google
+     * Maps account, which Maps finds by its label.
+     */
     private fun goTo(place: Place) {
-        val target = destination(place) ?: return editPlace(place)
+        val target = destination(place) ?: mapsLabel(place)
         if (!links.navigate(target)) Toast.makeText(this, "Google Maps n’est pas installé.", Toast.LENGTH_LONG).show()
     }
 
+    private fun mapsLabel(place: Place) = when {
+        Locale.getDefault().language == "fr" -> if (place == Place.HOME) "Domicile" else "Travail"
+        else -> if (place == Place.HOME) "Home" else "Work"
+    }
+
     private fun describe(target: String?) = when {
-        target == null -> "Non définie"
+        target == null -> "Celle de Google Maps"
         COORDINATES.matches(target) -> "Position enregistrée ($target)"
         else -> target
     }
@@ -717,7 +780,7 @@ class HomeActivity : Activity() {
         }
         AlertDialog.Builder(this)
             .setTitle(place.label)
-            .setMessage("Google Maps lancera le guidage vers cette adresse.")
+            .setMessage("Laisser vide pour utiliser l’adresse ${place.label} enregistrée dans Google Maps.")
             .setView(FrameLayout(this).apply {
                 setPadding(dp(20), dp(4), dp(20), 0)
                 addView(field)
@@ -869,7 +932,6 @@ class HomeActivity : Activity() {
         }
         val state = gps.snapshot()
         gauge.setSpeed(state.speed.kmh)
-        headingText.text = state.bearing?.let { "${compassPoint(it)} ${it}°" }.orEmpty()
         altitudeText.text = state.altitude?.let { "≈ $it m" }.orEmpty()
         speedStatus.text = when (state.status) {
             "Precise location off" -> "Localisation précise désactivée"
@@ -991,10 +1053,11 @@ class HomeActivity : Activity() {
         return if (minutes < 60) "$minutes min" else "${minutes / 60} h ${(minutes % 60).toString().padStart(2, '0')}"
     }
 
+    /** Time since the trip started (the head unit starting with the car), then distance and average. */
     private fun tripSummary(): String {
         val current = trip.trip
-        if (current.meters < 50) return "Trajet : 0 km"
-        return listOfNotNull(kilometres(current.meters), hours(current.movingMs),
+        val elapsed = current.startedAt.takeIf { it > 0 }?.let { System.currentTimeMillis() - it }?.coerceAtLeast(0) ?: 0
+        return listOfNotNull("Trajet ${hours(elapsed)}", kilometres(current.meters),
             current.averageKmh?.let { "moy. $it km/h" }).joinToString(" · ")
     }
 
@@ -1037,7 +1100,7 @@ class HomeActivity : Activity() {
             })
             addView(statRow("Distance", "Temps de conduite", "Moyenne", "Maximum"),
                 LinearLayout.LayoutParams(-1, 0, 1f).apply { topMargin = dp(8) })
-            addView(statRow("Départ", "Cap", "Altitude"), LinearLayout.LayoutParams(-1, 0, 1f).apply { topMargin = dp(8) })
+            addView(statRow("Départ", "Durée du trajet", "Altitude"), LinearLayout.LayoutParams(-1, 0, 1f).apply { topMargin = dp(8) })
             addView(caps("Alerte de vitesse · Route = limite lue sur la carte"), wrap().apply { topMargin = dp(12) })
             val limits = listOf(ROAD_LIMIT, 0, 60, 80, 100, 120)
             addView(choices(limits, alertSetting(), { when (it) { ROAD_LIMIT -> "Route"; 0 -> "Non"; else -> "$it" } }, { null }) {
@@ -1054,7 +1117,8 @@ class HomeActivity : Activity() {
             values["Départ"]?.text = current.startedAt.takeIf { it > 0 }?.let {
                 Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("HH:mm"))
             } ?: "—"
-            values["Cap"]?.text = state.bearing?.let { "${compassPoint(it)} $it°" } ?: "—"
+            values["Durée du trajet"]?.text = current.startedAt.takeIf { it > 0 }
+                ?.let { hours((System.currentTimeMillis() - it).coerceAtLeast(0)) } ?: "—"
             values["Altitude"]?.text = state.altitude?.let { "≈ $it m" } ?: "—"
         }
         tripValues?.invoke()
@@ -1353,15 +1417,55 @@ class HomeActivity : Activity() {
                     setOnClickListener { editPlace(place) { showSettings() } }
                 }, LinearLayout.LayoutParams(-1, dp(46)).apply { topMargin = dp(8) })
             }
-            addView(label("Réglages Android  ›", 15, text, 700).apply {
-                gravity = Gravity.CENTER
-                background = pressable(GradientDrawable().apply {
-                    cornerRadius = dp(14).toFloat()
-                    setColor(getColor(R.color.home_chip))
-                }, 14)
-                setOnClickListener { startSafely(Intent(Settings.ACTION_SETTINGS)) }
-            }, LinearLayout.LayoutParams(-1, dp(48)).apply { topMargin = dp(16) })
+            addView(caps("Écran d’accueil"), wrap().apply { topMargin = dp(14) })
+            addView(label(if (isDefaultHome()) "Incar Drive est l’écran d’accueil par défaut" else "Définir Incar Drive par défaut  ›",
+                14, if (isDefaultHome()) muted else text, 700).apply {
+                setPadding(0, dp(10), 0, dp(6))
+                if (!isDefaultHome()) setOnClickListener { askDefaultHome() }
+            })
+            addView(row().apply {
+                gravity = Gravity.FILL
+                fun button(title: String, action: () -> Unit) = label(title, 15, text, 700).apply {
+                    gravity = Gravity.CENTER
+                    background = pressable(GradientDrawable().apply {
+                        cornerRadius = dp(14).toFloat()
+                        setColor(getColor(R.color.home_chip))
+                    }, 14)
+                    setOnClickListener { action() }
+                }
+                addView(button("Réglages Android  ›") { startSafely(Intent(Settings.ACTION_SETTINGS)) },
+                    LinearLayout.LayoutParams(0, -1, 1f))
+                addView(button("Réglages Incarlink  ›") { openOemSettings(choose = false) }.apply {
+                    setOnLongClickListener { openOemSettings(choose = true); true }
+                }, LinearLayout.LayoutParams(0, -1, 1f).apply { marginStart = dp(8) })
+            }, LinearLayout.LayoutParams(-1, dp(48)).apply { topMargin = dp(12) })
         }
+    }
+
+    /**
+     * The Incarlink's own settings app (its car settings, separate from Android's). The first time, or on a long press,
+     * the driver picks it among the installed apps; it is guessed when only one app's name says settings.
+     */
+    internal fun openOemSettings(choose: Boolean) {
+        val saved = prefs.getString(OEM_SETTINGS, null)?.let(ComponentName::unflattenFromString)
+        val apps = links.apps()
+        val chosen = apps.firstOrNull { it.component == saved }.takeIf { !choose }
+            ?: links.oemSettingsCandidates().singleOrNull().takeIf { !choose && saved == null }
+        if (chosen != null) {
+            prefs.edit().putString(OEM_SETTINGS, chosen.component.flattenToString()).apply()
+            links.open(chosen)
+            return
+        }
+        val candidates = links.oemSettingsCandidates()
+        val list = candidates + (apps - candidates.toSet())
+        AlertDialog.Builder(this)
+            .setTitle("Appli des réglages Incarlink")
+            .setItems(list.map { it.label }.toTypedArray()) { _, index ->
+                prefs.edit().putString(OEM_SETTINGS, list[index].component.flattenToString()).apply()
+                links.open(list[index])
+            }
+            .setNegativeButton("Annuler", null)
+            .show()
     }
 
     /** Every dashboard colour as a round swatch with its name; the chosen one is ringed. */
@@ -1429,6 +1533,9 @@ class HomeActivity : Activity() {
         const val TRIP = "trip"
         const val SPEED_LIMIT = "speed_limit"
         const val ROAD_LIMIT = -1
+        const val ASKED_HOME = "asked_home"
+        const val OEM_SETTINGS = "oem_settings"
+        const val REQUEST_HOME_ROLE = 7
         const val PREFS = "incar_drive_home"
         const val APPEARANCE = "appearance"
         const val ACCENT = "accent"

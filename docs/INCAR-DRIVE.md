@@ -19,6 +19,12 @@ Lanceur (écran d’accueil) pour l’Incarlink en 800 × 480, demandé le 16 no
   - **Téléphone** : le téléphone connecté en Bluetooth (profils documentés HEADSET et A2DP, et événements de connexion), les contacts favoris et derniers appels qu’Android connaît, et « Ouvrir Téléphone ». Android ne fournit pas d’API publique pour la batterie du téléphone : elle n’est pas affichée. Sur l’Incarlink, les contacts et appels peuvent rester dans l’appli Bluetooth du constructeur ; la carte le dit alors. Autorisations demandées au premier appui : Bluetooth, contacts, journal d’appels.
   - **Widgets** : jusqu’à trois widgets Android côte à côte, via l’API publique `AppWidgetHost`. La liste vient des applis installées ; Android demande une fois l’autorisation de créer des widgets ; un widget avec écran de configuration l’affiche. « Modifier » permet de les retirer.
 
+- **Écran d’accueil par défaut** : au premier lancement, Incar Drive demande à Android d’en faire l’écran d’accueil (`RoleManager.ROLE_HOME`, boîte de dialogue système) ; sinon l’écran Android des applis par défaut s’ouvre. Tant que ce n’est pas fait, un bouton « Définir par défaut » reste dans la barre du haut, et Réglages › Écran d’accueil l’indique.
+- **Réglages Incarlink** : à côté de « Réglages Android », et en tuile dans les réglages rapides, un bouton ouvre l’appli de réglages propre au boîtier. Incar Drive la devine quand une seule appli porte un nom de réglages ; sinon le conducteur la choisit une fois (appui long pour changer).
+- **Naviguer** ouvre Google Maps directement sur l’écran d’itinéraire, prêt à saisir la destination (URL Maps documentée `dir/?api=1`). **Maison** et **Travail** utilisent par défaut les adresses enregistrées dans le compte Google Maps (libellés « Domicile » / « Travail », ou « Home » / « Work » hors français) ; une adresse propre à Incar Drive reste possible par appui long. À vérifier sur le boîtier avec le compte Google du conducteur.
+- **Météo** : à la position GPS de la voiture (dernière position connue au démarrage), mise à jour après 5 km ; la ville choisie sert quand il n’y a pas de position. La salat reste celle de la ville choisie.
+- **Vitesse** : sans cap (N, E…). En bas du compteur, « Trajet » donne le temps depuis le départ : le trajet commence quand la voiture roule pour la première fois après le démarrage du boîtier.
+
 ## Thème
 
 L’accueil est l’interface principale du boîtier. Son thème « cockpit » lui donne une identité propre, distincte de Radio Maroc & Coran (16 novembre 2026) :

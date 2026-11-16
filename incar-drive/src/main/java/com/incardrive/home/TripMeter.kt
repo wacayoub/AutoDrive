@@ -40,6 +40,7 @@ internal class TripMeter(restored: Trip?) {
 
     private data class Fix(val at: Long, val latitude: Double, val longitude: Double)
 
+    /** A new trip: it starts at [now], or, with 0, at the car's first movement. */
     fun reset(now: Long) {
         trip = Trip(startedAt = now, lastMoveAt = now)
         anchor = null
@@ -50,7 +51,11 @@ internal class TripMeter(restored: Trip?) {
         if (accuracyMeters == null || accuracyMeters > MAX_ACCURACY) return
         val moving = (speedKmh ?: 0) >= MOVING_KMH
         if (moving && trip.lastMoveAt > 0 && now - trip.lastMoveAt > NEW_TRIP_AFTER_MS) reset(now)
-        if (trip.startedAt == 0L) trip = trip.copy(startedAt = now, lastMoveAt = now)
+        // A trip waiting to start begins when the car first moves.
+        if (trip.startedAt == 0L) {
+            if (!moving) return
+            trip = trip.copy(startedAt = now, lastMoveAt = now)
+        }
         val fix = Fix(now, latitude, longitude)
         val last = previous
         previous = fix

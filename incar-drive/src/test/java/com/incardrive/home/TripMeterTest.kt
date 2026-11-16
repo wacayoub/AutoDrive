@@ -60,6 +60,16 @@ class TripMeterTest {
     }
 
     @Test
+    fun aNewTripStartsWhenTheCarFirstMoves() {
+        val meter = TripMeter(null)
+        meter.reset(0)
+        meter.accept(10_000, 33.5, -7.6, 5f, 0)
+        assertEquals(0L, meter.trip.startedAt)
+        meter.accept(70_000, 33.5, -7.6, 5f, 20)
+        assertEquals(70_000L, meter.trip.startedAt)
+    }
+
+    @Test
     fun encodesAndDecodes() {
         val trip = Trip(1234.5, 60_000, 88, 10, 20)
         assertEquals(trip, Trip.decode(trip.encode()))
