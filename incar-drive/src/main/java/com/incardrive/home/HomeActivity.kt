@@ -880,7 +880,7 @@ class HomeActivity : Activity() {
     }
 
     /** Whether the live map replaces the favourites on the first page (Réglages › Navigation › Carte sur l’accueil). */
-    private fun mapOnHome() = prefs.getBoolean(MAP_ON_HOME, false)
+    private fun mapOnHome() = prefs.getBoolean(MAP_ON_HOME, true)
 
     private fun navMissing() = Toast.makeText(this, "${navigation.app().label} n’est pas installé.", Toast.LENGTH_LONG).show()
 
@@ -1772,7 +1772,7 @@ class HomeActivity : Activity() {
                 setPadding(dp(14), 0, dp(14), 0)
                 addView(column().apply {
                     addView(label("Carte sur l’accueil", 15, text, 700))
-                    addView(label("Widget Google Maps (trafic à proximité) ou Waze, à la place des favoris · désactivée par défaut", 11, muted),
+                    addView(label("Widget Google Maps (trafic à proximité) ou Waze à droite de l’accueil · les favoris passent en page 2", 11, muted),
                         wrap().apply { topMargin = dp(2) })
                 }, LinearLayout.LayoutParams(0, -2, 1f))
                 addView(label(if (mapOnHome()) "ON" else "OFF", 14, accent, 700), wrap().apply { marginStart = dp(12) })
