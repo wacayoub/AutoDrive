@@ -4,6 +4,7 @@ import android.Manifest
 import android.animation.ArgbEvaluator
 import android.animation.ValueAnimator
 import android.app.Activity
+import android.app.AlertDialog
 import android.content.ActivityNotFoundException
 import android.content.ComponentName
 import android.content.Context
@@ -20,6 +21,7 @@ import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.LayerDrawable
 import android.graphics.drawable.RippleDrawable
+import android.location.LocationManager
 import android.media.session.PlaybackState
 import android.os.Build
 import android.os.Bundle
@@ -34,13 +36,16 @@ import android.view.ViewGroup
 import android.view.ViewOutlineProvider
 import android.view.WindowInsets
 import android.view.WindowInsetsController
+import android.text.InputType
 import android.widget.BaseAdapter
+import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.GridView
 import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.PopupMenu
+import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 import android.window.OnBackInvokedDispatcher
@@ -75,6 +80,11 @@ class HomeActivity : Activity() {
     }
 
     private enum class Page { HOME, APPS, SETTINGS }
+
+    /** The two saved destinations: one tap starts Google Maps guidance there. */
+    private enum class Place(val label: String, val icon: Int, val key: String) {
+        HOME("Maison", R.drawable.ic_home_home, "place_home"), WORK("Travail", R.drawable.ic_home_work, "place_work")
+    }
 
     /**
      * The dashboard light: one colour for the speed arc, the play button, the dock and the labels. « Neutre », the
@@ -133,6 +143,7 @@ class HomeActivity : Activity() {
     private lateinit var favoritesGrid: LinearLayout
     private lateinit var panelHost: FrameLayout
     private val dockItems = mutableMapOf<Page, View>()
+    private val placeChips = mutableMapOf<Place, View>()
     private val iconColors = HashMap<ComponentName, Int?>()
 
     override fun attachBaseContext(newBase: Context) {
@@ -302,8 +313,8 @@ class HomeActivity : Activity() {
                 gravity = Gravity.FILL
                 addView(mediaCard(), LinearLayout.LayoutParams(0, -1, 1.4f))
                 addView(column().apply {
-                    addView(speedCard(), LinearLayout.LayoutParams(-1, 0, 1.3f))
-                    addView(mapsCard(), LinearLayout.LayoutParams(-1, 0, .7f).apply { topMargin = dp(10) })
+                    addView(speedCard(), LinearLayout.LayoutParams(-1, 0, 1.05f))
+                    addView(mapsCard(), LinearLayout.LayoutParams(-1, 0, .95f).apply { topMargin = dp(10) })
                 }, LinearLayout.LayoutParams(0, -1, 1f).apply { marginStart = dp(10); marginEnd = dp(10) })
                 addView(favoritesCard(), LinearLayout.LayoutParams(0, -1, 1.05f))
             }, LinearLayout.LayoutParams(-1, 0, 1f).apply { topMargin = dp(6); bottomMargin = dp(10) })
@@ -450,39 +461,135 @@ class HomeActivity : Activity() {
         }
     }
 
-    private fun mapsCard() = row().apply {
+    /** « Naviguer » opens Google Maps full screen; Maison and Travail start its guidance straight away. */
+    private fun mapsCard() = column().apply {
         // Neutral: a panel like the others. A colour: deep accent at night with white text, the bright accent by day.
         val ink = if (neutral) text else if (night) Color.WHITE else onAccent
-        background = pressable(if (neutral) glass() else GradientDrawable(GradientDrawable.Orientation.BL_TR,
+        fun inked(alpha: Int) = Color.argb(alpha, Color.red(ink), Color.green(ink), Color.blue(ink))
+        background = if (neutral) glass() else GradientDrawable(GradientDrawable.Orientation.BL_TR,
             if (night) intArrayOf(shade(accent, Color.BLACK, .45f), shade(accent, Color.BLACK, .1f))
                 else intArrayOf(shade(accent, Color.BLACK, .08f), shade(accent, Color.WHITE, .15f))).apply {
             cornerRadius = dp(16).toFloat()
-        })
-        elevation = dp(4).toFloat()
-        setPadding(dp(16), 0, dp(12), 0)
-        addView(FrameLayout(context).apply {
-            background = GradientDrawable().apply { cornerRadius = dp(12).toFloat(); setColor(Color.argb(0x2E, Color.red(ink),
-                Color.green(ink), Color.blue(ink))) }
-            addView(ImageView(context).apply {
-                setImageResource(R.drawable.ic_home_navigation)
-                imageTintList = ColorStateList.valueOf(ink)
-                rotation = 45f
-            }, FrameLayout.LayoutParams(dp(24), dp(24), Gravity.CENTER))
-        }, LinearLayout.LayoutParams(dp(44), dp(44)))
-        addView(column().apply {
-            addView(label("Naviguer", 19, ink, 700, condensed = true))
-            addView(label("Google Maps", 12, Color.argb(0xCC, Color.red(ink), Color.green(ink), Color.blue(ink)), 500),
-                wrap().apply { topMargin = dp(3) })
-        }, LinearLayout.LayoutParams(0, -2, 1f).apply { marginStart = dp(12) })
-        addView(ImageView(context).apply {
-            setImageResource(R.drawable.ic_home_chevron)
-            imageTintList = ColorStateList.valueOf(ink)
-        }, LinearLayout.LayoutParams(dp(22), dp(22)))
-        contentDescription = "Ouvrir Google Maps"
-        setOnClickListener {
-            if (!links.openMaps()) Toast.makeText(context, "Google Maps n’est pas installé.", Toast.LENGTH_LONG).show()
         }
-        RadioMotion.pressScale(this, .97f)
+        elevation = dp(4).toFloat()
+        setPadding(dp(8), dp(6), dp(8), dp(8))
+        addView(row().apply {
+            background = pressable(null, 12)
+            setPadding(dp(8), 0, dp(4), 0)
+            addView(FrameLayout(context).apply {
+                background = GradientDrawable().apply { cornerRadius = dp(12).toFloat(); setColor(inked(0x2E)) }
+                addView(ImageView(context).apply {
+                    setImageResource(R.drawable.ic_home_navigation)
+                    imageTintList = ColorStateList.valueOf(ink)
+                    rotation = 45f
+                }, FrameLayout.LayoutParams(dp(22), dp(22), Gravity.CENTER))
+            }, LinearLayout.LayoutParams(dp(40), dp(40)))
+            addView(column().apply {
+                addView(label("Naviguer", 19, ink, 700, condensed = true))
+                addView(label("Google Maps", 12, inked(0xCC), 500), wrap().apply { topMargin = dp(2) })
+            }, LinearLayout.LayoutParams(0, -2, 1f).apply { marginStart = dp(12) })
+            addView(ImageView(context).apply {
+                setImageResource(R.drawable.ic_home_chevron)
+                imageTintList = ColorStateList.valueOf(ink)
+            }, LinearLayout.LayoutParams(dp(22), dp(22)))
+            contentDescription = "Ouvrir Google Maps"
+            setOnClickListener {
+                if (!links.openMaps()) Toast.makeText(context, "Google Maps n’est pas installé.", Toast.LENGTH_LONG).show()
+            }
+            RadioMotion.pressScale(this, .97f)
+        }, LinearLayout.LayoutParams(-1, 0, 1f))
+        addView(row().apply {
+            Place.entries.forEachIndexed { index, place ->
+                val chip = row().apply {
+                    gravity = Gravity.CENTER
+                    background = pressable(GradientDrawable().apply {
+                        cornerRadius = dp(12).toFloat()
+                        setColor(inked(0x1F))
+                    }, 12)
+                    addView(ImageView(context).apply {
+                        setImageResource(place.icon)
+                        imageTintList = ColorStateList.valueOf(ink)
+                    }, LinearLayout.LayoutParams(dp(18), dp(18)))
+                    addView(label(place.label, 14, ink, 700), wrap().apply { marginStart = dp(8) })
+                    setOnClickListener { goTo(place) }
+                    setOnLongClickListener { editPlace(place); true }
+                    RadioMotion.pressScale(this, .94f)
+                }
+                placeChips[place] = chip
+                addView(chip, LinearLayout.LayoutParams(0, -1, 1f).apply { if (index == 0) marginEnd = dp(8) })
+            }
+        }, LinearLayout.LayoutParams(-1, dp(42)).apply { topMargin = dp(4) })
+        renderPlaces()
+    }
+
+    private fun destination(place: Place) = prefs.getString(place.key, null)?.takeIf { it.isNotBlank() }
+
+    /** A place without an address is shown faded and opens its editor. */
+    private fun renderPlaces() {
+        placeChips.forEach { (place, chip) ->
+            val target = destination(place)
+            chip.alpha = if (target != null) 1f else .55f
+            chip.contentDescription = target?.let { "Aller à ${place.label}" } ?: "Choisir l’adresse ${place.label}"
+        }
+    }
+
+    private fun goTo(place: Place) {
+        val target = destination(place) ?: return editPlace(place)
+        if (!links.navigate(target)) Toast.makeText(this, "Google Maps n’est pas installé.", Toast.LENGTH_LONG).show()
+    }
+
+    private fun describe(target: String?) = when {
+        target == null -> "Non définie"
+        COORDINATES.matches(target) -> "Position enregistrée ($target)"
+        else -> target
+    }
+
+    /** Type an address, or save where the car is now. An empty address removes the place. */
+    private fun editPlace(place: Place, after: () -> Unit = {}) {
+        val field = EditText(this).apply {
+            setText(destination(place).orEmpty())
+            hint = "Adresse, quartier ou lieu"
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_POSTAL_ADDRESS
+            setSingleLine()
+            selectAll()
+        }
+        fun save(value: String?) {
+            prefs.edit().putString(place.key, value?.trim()?.takeIf { it.isNotEmpty() }).apply()
+            renderPlaces()
+            after()
+        }
+        AlertDialog.Builder(this)
+            .setTitle(place.label)
+            .setMessage("Google Maps lancera le guidage vers cette adresse.")
+            .setView(FrameLayout(this).apply {
+                setPadding(dp(20), dp(4), dp(20), 0)
+                addView(field)
+            })
+            .setPositiveButton("Enregistrer") { _, _ -> save(field.text.toString()) }
+            .setNegativeButton("Annuler", null)
+            .setNeutralButton("Ma position") { _, _ ->
+                val here = currentPosition()
+                if (here == null) {
+                    Toast.makeText(this, if (gps.permitted()) "Position pas encore disponible : réessaie dans un instant."
+                        else "Autorise la localisation pour enregistrer ta position.", Toast.LENGTH_LONG).show()
+                    if (!gps.permitted()) requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION,
+                        Manifest.permission.ACCESS_COARSE_LOCATION), 1)
+                } else {
+                    save(here)
+                    Toast.makeText(this, "${place.label} : position enregistrée", Toast.LENGTH_SHORT).show()
+                }
+            }
+            .show()
+    }
+
+    /** The freshest last known fix of the device, as « latitude,longitude ». */
+    private fun currentPosition(): String? {
+        if (!gps.permitted()) return null
+        val manager = getSystemService(LocationManager::class.java) ?: return null
+        val fix = runCatching {
+            manager.getProviders(true).mapNotNull { manager.getLastKnownLocation(it) }.maxByOrNull { it.time }
+        }.getOrNull() ?: return null
+        return String.format(Locale.US, "%.6f,%.6f", fix.latitude, fix.longitude)
     }
 
     private fun favoritesCard() = column().apply {
@@ -819,11 +926,18 @@ class HomeActivity : Activity() {
     }
 
     private fun showSettings() {
+        val body = column()
         openPanel(Page.SETTINGS, column().apply {
             background = sheet()
-            setPadding(dp(18), dp(12), dp(18), dp(14))
+            setPadding(dp(18), dp(12), dp(18), dp(10))
             addView(panelHeader("Réglages", "Incar Drive"))
-            addView(caps("Thème"), wrap().apply { topMargin = dp(14) })
+            addView(ScrollView(context).apply {
+                isVerticalScrollBarEnabled = false
+                addView(body)
+            }, LinearLayout.LayoutParams(-1, 0, 1f))
+        })
+        body.apply {
+            addView(caps("Thème"), wrap().apply { topMargin = dp(10) })
             addView(choices(Appearance.entries, Appearance.restore(prefs), { it.label }, { null }) {
                 prefs.edit().putString(APPEARANCE, it.name).apply()
             }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
@@ -849,7 +963,25 @@ class HomeActivity : Activity() {
                     }.show()
                 }
             })
-            addView(View(context), LinearLayout.LayoutParams(-1, 0, 1f))
+            addView(caps("Destinations"), wrap().apply { topMargin = dp(6) })
+            Place.entries.forEach { place ->
+                addView(row().apply {
+                    background = pressable(GradientDrawable().apply {
+                        cornerRadius = dp(12).toFloat()
+                        setColor(getColor(R.color.home_chip))
+                        setStroke(dp(1), getColor(R.color.home_card_border))
+                    }, 12)
+                    setPadding(dp(14), 0, dp(14), 0)
+                    addView(ImageView(context).apply {
+                        setImageResource(place.icon)
+                        imageTintList = ColorStateList.valueOf(text)
+                    }, LinearLayout.LayoutParams(dp(20), dp(20)))
+                    addView(label(place.label, 15, text, 700), wrap().apply { marginStart = dp(12) })
+                    addView(label(describe(destination(place)) + "  ›", 14, muted, 500).apply { gravity = Gravity.END },
+                        LinearLayout.LayoutParams(0, -2, 1f).apply { marginStart = dp(16) })
+                    setOnClickListener { editPlace(place) { showSettings() } }
+                }, LinearLayout.LayoutParams(-1, dp(46)).apply { topMargin = dp(8) })
+            }
             addView(label("Réglages Android  ›", 15, text, 700).apply {
                 gravity = Gravity.CENTER
                 background = pressable(GradientDrawable().apply {
@@ -857,8 +989,8 @@ class HomeActivity : Activity() {
                     setColor(getColor(R.color.home_chip))
                 }, 14)
                 setOnClickListener { startSafely(Intent(Settings.ACTION_SETTINGS)) }
-            }, LinearLayout.LayoutParams(-1, dp(48)))
-        })
+            }, LinearLayout.LayoutParams(-1, dp(48)).apply { topMargin = dp(16) })
+        }
     }
 
     /** A row of segmented choices; picking one saves it and redraws the screen in it. */
@@ -893,6 +1025,7 @@ class HomeActivity : Activity() {
         const val PREFS = "incar_drive_home"
         const val APPEARANCE = "appearance"
         const val ACCENT = "accent"
+        val COORDINATES = Regex("""-?\d+(\.\d+)?,-?\d+(\.\d+)?""")
         const val CITY = "city"
         const val FAVORITES = "favorites"
         const val RADIO_PACKAGE = "com.autodrive.radiomaroc"

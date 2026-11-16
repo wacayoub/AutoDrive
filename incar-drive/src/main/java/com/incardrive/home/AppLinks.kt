@@ -37,6 +37,18 @@ internal class AppLinks(private val activity: Activity) {
         ?: Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0?q=")).takeIf { it.resolveActivity(packages) != null })
         ?.let(::start) ?: false
 
+    /**
+     * Starts Google Maps guidance to [destination], an address or « latitude,longitude », full screen. Without the
+     * Maps app, any app that shows a `geo:` search for it.
+     */
+    fun navigate(destination: String): Boolean {
+        val guidance = Intent(Intent.ACTION_VIEW, Uri.parse("google.navigation:q=" + Uri.encode(destination))).setPackage(MAPS)
+            .takeIf { it.resolveActivity(packages) != null }
+        val search = Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0?q=" + Uri.encode(destination)))
+            .takeIf { it.resolveActivity(packages) != null }
+        return (guidance ?: search)?.let(::start) ?: false
+    }
+
     /** The Incarlink's Bluetooth phone app when present, otherwise the device's dialer. */
     fun openPhone(): Boolean {
         val oem = Intent.makeMainActivity(OEM_PHONE).takeIf { it.resolveActivity(packages) != null }
