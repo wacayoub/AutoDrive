@@ -441,4 +441,12 @@ class StationsTest {
         assertEquals("مشاري راشد العفاسي · أذكار الصباح والمساء", readings.first().name)
         assertEquals(ReciterPortraits.forStation(murattal.first()), ReciterPortraits.forStation(readings.first()))
     }
+
+    @Test fun placeholderStreamTitlesAreIgnored() {
+        assertTrue(BroadcastProgrammes.isPlaceholder("Unknown - Unknown"))
+        assertTrue(BroadcastProgrammes.isPlaceholder(" - "))
+        assertTrue(BroadcastProgrammes.isPlaceholder("Inconnu – Inconnu"))
+        assertFalse(BroadcastProgrammes.isPlaceholder("Saad Lamjarred - Lm3allem"))
+        assertFalse(BroadcastProgrammes.isPlaceholder("أخبار الصباح"))
+    }
 }

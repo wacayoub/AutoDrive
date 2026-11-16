@@ -61,5 +61,12 @@ internal object BroadcastProgrammes {
         cleanTitle(title?.toString())?.takeUnless { it.equals(station.name, ignoreCase = true) }
             ?.let { BroadcastProgramme(it, "Info du flux") }
 
-    private fun cleanTitle(value: String?): String? = value?.trim()?.takeIf { it.isNotBlank() && it.length <= 160 }
+    private fun cleanTitle(value: String?): String? =
+        value?.trim()?.takeIf { it.isNotBlank() && it.length <= 160 && !isPlaceholder(it) }
+
+    /** Stream titles that say nothing, such as « Unknown - Unknown » sent by some encoders. */
+    fun isPlaceholder(value: String): Boolean =
+        value.lowercase().replace(placeholderParts, "").isEmpty()
+
+    private val placeholderParts = Regex("unknown|inconnu|untitled|n/a|[-–—:|\\s]")
 }

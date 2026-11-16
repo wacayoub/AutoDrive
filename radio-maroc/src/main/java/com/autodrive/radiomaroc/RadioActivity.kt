@@ -358,6 +358,7 @@ class RadioActivity : ComponentActivity() {
         startupDeadline = savedInstanceState?.getLong("startup_deadline") ?: 0L
         query = savedInstanceState?.getString("query").orEmpty()
         displayLayout = DisplayLayout.restore(savedInstanceState?.getString("display_screen") ?: prefs.getString(DISPLAY_LAYOUT, null))
+        ensureMiniMode()
         radioFavoritesOnly = !television && !carScreen && savedInstanceState?.getBoolean("radio_favorites_only") == true
         catalogueLayout = DisplayLayout.restore(prefs.getString(CATALOGUE_LAYOUT, null))
             .takeUnless { it == DisplayLayout.LISTENING } ?: DisplayLayout.GUIDE
@@ -820,7 +821,31 @@ class RadioActivity : ComponentActivity() {
         else CompanionApp.entries.map { app ->
             transportButton(app.icon, "Ouvrir ${app.label}") { openCompanion(app) }
         }
-    private val miniPlayerEnabled get() = miniPlayerSupported && prefs.getBoolean(MINI_PLAYER, true)
+    private val miniMode get() = MiniPlayerMode.restore(prefs)
+    // Android's own picture-in-picture window, when the listener chose it and the system offers it.
+    private val miniPlayerEnabled get() = miniPlayerSupported && miniMode == MiniPlayerMode.WINDOW
+
+    /**
+     * The head unit's choice between the floating bubble (drawn by PlaybackService, works on every system) and
+     * Android's picture-in-picture window, which some head units do not show. Earlier versions only had the window.
+     */
+    private fun ensureMiniMode() {
+        if (!carScreen || television || prefs.contains(MiniPlayerMode.KEY)) return
+        val mode = if (prefs.getBoolean(MINI_PLAYER, true)) MiniPlayerMode.BUBBLE else MiniPlayerMode.OFF
+        prefs.edit().putString(MiniPlayerMode.KEY, mode.name).apply()
+    }
+
+    private val canFloat get() = Settings.canDrawOverlays(this)
+
+    /** Android's « display over other apps » page for this app, where the listener allows the bubble. */
+    private fun askOverlayPermission() {
+        try {
+            startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, "package:$packageName".toUri()))
+        } catch (_: ActivityNotFoundException) {
+            Toast.makeText(this, "Autorise « Afficher par-dessus d’autres applis » pour la radio dans les réglages d’Android.",
+                Toast.LENGTH_LONG).show()
+        }
+    }
     private var miniPlaying: Boolean? = null
     private var miniReceiverRegistered = false
     private var miniArtwork: StationArtwork? = null
@@ -958,6 +983,25 @@ class RadioActivity : ComponentActivity() {
             Toast.makeText(this, "${app.label} n’est pas installé sur cet appareil.", Toast.LENGTH_LONG).show()
             return
         }
+        if (miniMode == MiniPlayerMode.BUBBLE && !canFloat && !isInMultiWindowMode) {
+            // The bubble needs one permission from Android first; the app can still open without it.
+            val sheet = RadioSheet(this, "Bulle flottante", "Pour garder la radio visible au-dessus de ${app.label}")
+            sheet.option("Autoriser la bulle", "Android ouvre « Afficher par-dessus d’autres applis » : active la radio",
+                R.drawable.ic_app_maps, chevron = true) {
+                sheet.dismiss()
+                askOverlayPermission()
+            }
+            sheet.option("Ouvrir ${app.label} sans bulle", "La radio continue en arrière-plan", app.icon) {
+                sheet.dismiss()
+                launchCompanion(app, intent)
+            }
+            sheet.show()
+            return
+        }
+        launchCompanion(app, intent)
+    }
+
+    private fun launchCompanion(app: CompanionApp, intent: Intent) {
         if (isInMultiWindowMode) {
             intent.addFlags(Intent.FLAG_ACTIVITY_LAUNCH_ADJACENT)
         } else if (miniPlayerEnabled) {
@@ -971,13 +1015,22 @@ class RadioActivity : ComponentActivity() {
     }
 
     private fun showMiniPlayerSettings() {
-        val options = listOf(true, false)
-        showChoiceSheet("Mini-lecteur", listOf("Activé", "Désactivé"), options.indexOf(miniPlayerEnabled),
-            details = listOf("La radio reste visible en petite fenêtre au-dessus de Maps, YouTube ou de l’accueil",
-                "La radio continue en arrière-plan, sans fenêtre")) { index ->
-            prefs.edit().putBoolean(MINI_PLAYER, options[index]).apply()
+        val options = MiniPlayerMode.entries.filter { it != MiniPlayerMode.WINDOW || miniPlayerSupported }
+        val details = options.map {
+            when (it) {
+                MiniPlayerMode.BUBBLE -> "Une bulle transparente au-dessus de Maps, YouTube ou de l’accueil" +
+                    if (canFloat) "" else " · autorisation Android à donner"
+                MiniPlayerMode.WINDOW -> "La petite fenêtre d’Android, si le boîtier l’affiche"
+                MiniPlayerMode.OFF -> "La radio continue en arrière-plan, sans fenêtre"
+            }
+        }
+        showChoiceSheet("Mini-lecteur", options.map { it.label }, options.indexOf(miniMode), details = details,
+            repeatable = { options[it] == MiniPlayerMode.BUBBLE && !canFloat }) { index ->
+            val mode = options[index]
+            prefs.edit().putString(MiniPlayerMode.KEY, mode.name).apply()
             miniPlaying = null
             renderPlayer()
+            if (mode == MiniPlayerMode.BUBBLE && !canFloat) askOverlayPermission()
         }
     }
 
@@ -996,8 +1049,9 @@ class RadioActivity : ComponentActivity() {
                 ::showWheelSettings))
             add(Entry(R.drawable.ic_settings_scores, "Scores en direct", "FotMob", ::showLiveScores))
             add(Entry(R.drawable.ic_settings_popup, "Pop-up des stations", "Notifications Android", ::configureStationPopup))
-            if (miniPlayerSupported) add(Entry(R.drawable.ic_app_maps, "Mini-lecteur",
-                if (miniPlayerEnabled) "Activé en quittant la radio" else "Désactivé", ::showMiniPlayerSettings))
+            if (carScreen && !television) add(Entry(R.drawable.ic_app_maps, "Mini-lecteur",
+                miniMode.label + if (miniMode == MiniPlayerMode.BUBBLE && !canFloat) " · à autoriser" else "",
+                ::showMiniPlayerSettings))
             add(Entry(R.drawable.ic_radio_update, "Mises à jour", version?.let { "Version $it" }, radioUpdates::show))
         }
         val sheet = RadioSheet(this, "Réglages", getString(R.string.app_name))

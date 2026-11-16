@@ -80,7 +80,13 @@ internal class PlaybackService : MediaLibraryService() {
         val LUXE_PAUSE = SessionCommand("com.autodrive.radiomaroc.LUXE_PAUSE", Bundle.EMPTY)
         // The activity and service share a process. Keep the latest view's order when listening in the background.
         private val visibleStations = MutableStateFlow<List<RadioStation>?>(null)
+        // The radio's screen is in front; the floating bubble shows only while it is away.
         var radioScreenActive = false
+            set(value) {
+                field = value
+                screenListener?.invoke(value)
+            }
+        private var screenListener: ((Boolean) -> Unit)? = null
 
         fun setVisibleStations(stations: List<RadioStation>) {
             visibleStations.value = stations.filter { it != Stations.luxe }
@@ -105,6 +111,7 @@ internal class PlaybackService : MediaLibraryService() {
     }
     private var carQueue: List<RadioStation>? = null
     private lateinit var sessionPlayer: RadioSessionPlayer
+    private lateinit var floating: FloatingPlayer
     private lateinit var artwork: RadioArtwork
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var logoWork: Job? = null
@@ -176,7 +183,7 @@ internal class PlaybackService : MediaLibraryService() {
 
         override fun onMetadata(metadata: Metadata) {
             val icy = (0 until metadata.length()).firstNotNullOfOrNull { metadata[it] as? IcyInfo } ?: return
-            val title = icy.title?.trim()?.takeIf { it.isNotEmpty() && it.length <= 160 }
+            val title = icy.title?.trim()?.takeIf { it.isNotEmpty() && it.length <= 160 && !BroadcastProgrammes.isPlaceholder(it) }
             if (activeItem?.mediaId != engine.currentMediaItem?.mediaId || icyTitle == title) return
             icyTitle = title
             publishPresentation()
@@ -204,6 +211,7 @@ internal class PlaybackService : MediaLibraryService() {
         }
 
         override fun onEvents(player: Player, events: Player.Events) {
+            if (events.contains(Player.EVENT_PLAY_WHEN_READY_CHANGED)) refreshFloating()
             if (events.contains(Player.EVENT_PLAYBACK_STATE_CHANGED) && player.isPlaying) retryAfterOutage = false
             if (player.isPlaying) {
                 retryAttempt = 0
@@ -272,6 +280,15 @@ internal class PlaybackService : MediaLibraryService() {
         radioPreferences.registerOnSharedPreferenceChangeListener(preferenceListener)
         applySoundProfile()
         sessionPlayer = RadioSessionPlayer(engine, { stationQueue().size > 1 }, ::changeStation)
+        floating = FloatingPlayer(this, radioPreferences,
+            onPrevious = { changeStation(-1) },
+            onToggle = { if (engine.playWhenReady) sessionPlayer.pause() else sessionPlayer.play() },
+            onNext = { changeStation(1) },
+            onOpen = {
+                startActivity(Intent(this, RadioActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or
+                    Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT))
+            })
+        screenListener = { active -> if (active) floating.screenShown() else refreshFloating() }
         val reopen = PendingIntent.getActivity(this, 0, Intent(this, RadioActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
         session = MediaLibrarySession.Builder(this, sessionPlayer, object : MediaLibrarySession.Callback {
                 override fun onConnect(session: MediaSession, controller: MediaSession.ControllerInfo): MediaSession.ConnectionResult {
@@ -605,6 +622,16 @@ internal class PlaybackService : MediaLibraryService() {
         }
         sessionPlayer.present(item?.mediaId, metadata)
         session?.setSessionExtras(sessionExtras())
+        refreshFloating()
+    }
+
+    /** The bubble over other apps: the station, what plays now and the play state, while the radio's screen is away. */
+    private fun refreshFloating() {
+        if (!::floating.isInitialized) return
+        val item = activeItem ?: engine.currentMediaItem
+        val base = item?.mediaMetadata
+        val now = (programme?.title ?: icyTitle)?.takeUnless { it == base?.title?.toString() } ?: base?.subtitle
+        floating.render(!radioScreenActive && item != null, base?.title, now, activeLogo, engine.playWhenReady)
     }
 
     private fun setNetworkUnavailable(unavailable: Boolean) {
@@ -706,6 +733,8 @@ internal class PlaybackService : MediaLibraryService() {
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibrarySession? = session
 
     override fun onDestroy() {
+        screenListener = null
+        if (::floating.isInitialized) floating.hide()
         stationPopup.dismiss()
         retryHandler.removeCallbacks(retryStream)
         connectivity.unregisterNetworkCallback(networkCallback)
