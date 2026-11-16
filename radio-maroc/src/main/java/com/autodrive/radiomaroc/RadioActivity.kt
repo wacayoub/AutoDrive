@@ -2297,7 +2297,9 @@ class RadioActivity : ComponentActivity() {
                 isAccessibilityHeading = true
             }).apply {
                 text = item.title
-                layoutDirection = if (item.rightAligned) View.LAYOUT_DIRECTION_RTL else View.LAYOUT_DIRECTION_LTR
+                // Headings line up on the left like the stations, Arabic ones included.
+                layoutDirection = View.LAYOUT_DIRECTION_LTR
+                textAlignment = View.TEXT_ALIGNMENT_VIEW_START
             }
             is ListEntry.Station -> (recycled as? StationLine ?: StationLine(parent.context)).apply {
                 bind(item.radio, item.number)
@@ -2395,6 +2397,8 @@ class RadioActivity : ComponentActivity() {
             else -> 15
         }, textColor, bold = true).apply {
             gravity = if (tvGuide) Gravity.START or Gravity.CENTER_VERTICAL else Gravity.CENTER
+            // Left-aligned in the lists, Arabic names included (they otherwise start on the right).
+            if (tvGuide) textAlignment = View.TEXT_ALIGNMENT_VIEW_START
             includeFontPadding = false
             // One line in every guide: a second line pushed the subtitle out of the fixed-height row.
             maxLines = 1
@@ -2407,6 +2411,7 @@ class RadioActivity : ComponentActivity() {
             else -> 12
         }, muted).apply {
             gravity = if (tvGuide) Gravity.START else Gravity.CENTER
+            if (tvGuide) textAlignment = View.TEXT_ALIGNMENT_VIEW_START
             includeFontPadding = false
             maxLines = 1
             ellipsize = TextUtils.TruncateAt.END
@@ -2488,7 +2493,7 @@ class RadioActivity : ComponentActivity() {
             val playbackState = if (playing) "En écoute" else if (selected) "Sélectionnée" else null
             stateDescription = if (favorite) listOfNotNull(playbackState, "Favori").joinToString(" · ") else playbackState
             favoriteMark?.visibility = if (favorite) View.VISIBLE else View.GONE
-            if (tvGuide) layoutDirection = directionOf(station.name)
+            if (tvGuide) layoutDirection = View.LAYOUT_DIRECTION_LTR
             if (rowStyle) paintLights(tileColor)
             logo.bind(station)
             name.text = station.name
@@ -2597,7 +2602,8 @@ class RadioActivity : ComponentActivity() {
             val playing = selected && highlighted?.second == true
             val rowBackground = if (selected) selectedBackground else idleBackground
             if (background !== rowBackground) background = rowBackground
-            layoutDirection = directionOf(station.name)
+            // Every station reads left to right, logo first, Arabic names included, so the list lines up.
+            layoutDirection = View.LAYOUT_DIRECTION_LTR
             if (lit && boundUrl != station.url) {
                 boundUrl = station.url
                 rowColor = logoColors[station.url]
@@ -3131,7 +3137,8 @@ class RadioActivity : ComponentActivity() {
                 line.findViewWithTag<StationArtwork>("art").bind(station)
                 line.findViewWithTag<TextView>("name").apply {
                     text = station.name
-                    layoutDirection = directionOf(station.name)
+                    layoutDirection = View.LAYOUT_DIRECTION_LTR
+                    textAlignment = View.TEXT_ALIGNMENT_VIEW_START
                 }
                 line.findViewWithTag<View>("up").apply {
                     enable(this, position > 0)
