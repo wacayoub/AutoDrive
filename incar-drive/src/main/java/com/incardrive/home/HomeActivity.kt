@@ -480,7 +480,7 @@ class HomeActivity : Activity() {
     private fun screen(): View {
         val backdrop = skyBackdrop()
         val content = column().apply {
-            addView(topBar(), LinearLayout.LayoutParams(-1, dp(62)))
+            addView(topBar(), LinearLayout.LayoutParams(-1, dp(54)))
             pager = SwipePager(context) { page -> markDots(page) }.apply {
                 clipChildren = true
                 addPage(row().apply {
@@ -510,7 +510,7 @@ class HomeActivity : Activity() {
                 }
                 markDots(0)
             }, LinearLayout.LayoutParams(-1, dp(14)))
-            addView(dock(), LinearLayout.LayoutParams(-1, dp(58)))
+            addView(dock(), LinearLayout.LayoutParams(-1, dp(44)))
         }
         panelHost = FrameLayout(this).apply { visibility = View.GONE }
         callBanner = FrameLayout(this).apply { visibility = View.GONE }
@@ -523,7 +523,7 @@ class HomeActivity : Activity() {
             setOnApplyWindowInsetsListener { _, insets ->
                 val bars = insets.getInsets(WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout())
                 content.setPadding(bars.left + dp(14), bars.top + dp(8), bars.right + dp(14), bars.bottom + dp(10))
-                panelHost.setPadding(bars.left + dp(14), bars.top + dp(8), bars.right + dp(14), bars.bottom + dp(78))
+                panelHost.setPadding(bars.left + dp(14), bars.top + dp(8), bars.right + dp(14), bars.bottom + dp(62))
                 callBanner.setPadding(bars.left + dp(14), bars.top + dp(8), bars.right + dp(14), 0)
                 insets
             }
@@ -558,7 +558,7 @@ class HomeActivity : Activity() {
             })
             addView(row().apply {
                 gravity = Gravity.BOTTOM
-                clock = label("--:--", 44, text, 300, condensed = true)
+                clock = label("--:--", 38, text, 300, condensed = true)
                 addView(clock)
                 date = label("", 14, muted, 500)
                 addView(date, wrap().apply { marginStart = dp(12); bottomMargin = dp(6) })
@@ -580,7 +580,7 @@ class HomeActivity : Activity() {
             setOnClickListener { askDefaultHome() }
             visibility = View.GONE
         }
-        addView(homeBadge, LinearLayout.LayoutParams(-2, dp(50)).apply { marginEnd = dp(8) })
+        addView(homeBadge, LinearLayout.LayoutParams(-2, dp(44)).apply { marginEnd = dp(8) })
         addView(ImageButton(context).apply {
             setImageResource(R.drawable.ic_home_tune)
             imageTintList = ColorStateList.valueOf(text)
@@ -588,7 +588,7 @@ class HomeActivity : Activity() {
             contentDescription = "Réglages rapides"
             setOnClickListener { quick.show() }
             RadioMotion.pressScale(this, .92f)
-        }, LinearLayout.LayoutParams(dp(50), dp(50)).apply { marginEnd = dp(8) })
+        }, LinearLayout.LayoutParams(dp(44), dp(44)).apply { marginEnd = dp(8) })
         addView(chip {
             weatherIcon = WeatherIcon(context, weatherColor)
             addView(weatherIcon, LinearLayout.LayoutParams(dp(28), dp(28)))
@@ -599,7 +599,7 @@ class HomeActivity : Activity() {
                 addView(weatherDetail, wrap().apply { topMargin = dp(2) })
             }, wrap().apply { marginStart = dp(10) })
             contentDescription = "Météo"
-        }, LinearLayout.LayoutParams(-2, dp(50)).apply { marginEnd = dp(8) })
+        }, LinearLayout.LayoutParams(-2, dp(44)).apply { marginEnd = dp(8) })
         addView(chip {
             addView(column().apply {
                 prayerText = label("Salat", 16, text, 700)
@@ -607,7 +607,7 @@ class HomeActivity : Activity() {
                 addView(prayerText, wrap())
                 addView(prayerDetail, wrap().apply { topMargin = dp(2) })
             })
-        }, LinearLayout.LayoutParams(-2, dp(50)))
+        }, LinearLayout.LayoutParams(-2, dp(44)))
     }
 
     private fun mediaCard(): View {
@@ -877,7 +877,7 @@ class HomeActivity : Activity() {
     private fun dock() = row().apply {
         background = glass(18)
         elevation = dp(6).toFloat()
-        setPadding(dp(6), dp(6), dp(6), dp(6))
+        setPadding(dp(5), dp(4), dp(5), dp(4))
         fun item(page: Page?, icon: Int, title: String, color: Int, action: () -> Unit) = row().apply {
             gravity = Gravity.CENTER
             tag = color
@@ -885,8 +885,8 @@ class HomeActivity : Activity() {
                 setImageResource(icon)
                 imageTintList = ColorStateList.valueOf(color)
                 tag = "icon"
-            }, LinearLayout.LayoutParams(dp(22), dp(22)))
-            addView(label(title, 15, text, 600).apply { tag = "label" }, wrap().apply { marginStart = dp(10) })
+            }, LinearLayout.LayoutParams(dp(19), dp(19)))
+            addView(label(title, 14, text, 600).apply { tag = "label" }, wrap().apply { marginStart = dp(8) })
             contentDescription = title
             setOnClickListener { action() }
             page?.let { dockItems[it] = this }

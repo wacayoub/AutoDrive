@@ -1,22 +1,23 @@
-Incar Drive 1.0.0 — premier écran d’accueil pour l’Incarlink (Android 11 à 13, conçu pour 800 × 480).
+Incar Drive 1.0.1 — écran d’accueil pour l’Incarlink (Android 11 à 13, conçu pour 800 × 480).
 
-**Installer**
-1. Sur le boîtier, télécharger `IncarDrive.apk` ci-dessous et l’ouvrir. Android demande d’autoriser l’installation depuis le navigateur ou le gestionnaire de fichiers.
-2. Appuyer sur Home, puis choisir **Incar Drive** et « Toujours » pour en faire l’écran d’accueil. On peut revenir à l’ancien accueil dans Paramètres › Applications › Applications par défaut.
-3. Au premier usage, Incar Drive demande l’accès aux notifications (carte média et bandeau d’appel), la position (vitesse, trajet, limite de la route), et, sur appui, Bluetooth, contacts et journal d’appels. La luminosité demande « Modifier les paramètres système ».
+**Installer ou mettre à jour**
+- Depuis la 1.0.0 : télécharger `IncarDrive.apk` ci-dessous sur le boîtier et l’ouvrir (installation par-dessus, réglages conservés). La 1.0.0 n’avait pas de mise à jour en ligne : c’est la dernière installation à la main.
+- À partir de la 1.0.1 : Réglages › Mises à jour, ou la proposition automatique (une vérification par jour). Le téléchargement est vérifié (empreinte et signature), puis Android demande de confirmer.
+- Au premier lancement, Android propose de faire d’Incar Drive l’écran d’accueil par défaut ; sinon, le bouton « Définir par défaut » en haut.
 
-**Contenu**
-- Accueil : heure, météo et prochaine prière ; média en cours (radio, YouTube, Spotify…) avec commandes ; compteur de vitesse GPS avec cap, altitude, trajet et alerte ; Naviguer, Maison et Travail vers Google Maps ; six favoris.
-- Limite de vitesse de la route lue sur OpenStreetMap (données © contributeurs OpenStreetMap, ODbL), alerte rouge et bip au dépassement. Nécessite Internet ; les serveurs publics peuvent être lents.
-- Deuxième page : téléphone connecté, numéros enregistrés, favoris et appels récents connus d’Android, et jusqu’à trois widgets Android.
-- Téléphone : clavier et numéros enregistrés, transmis à l’appli téléphone de l’Incarlink ; bandeau d’appel entrant avec les boutons Répondre / Refuser de sa notification.
-- Réglages rapides : luminosité, volume, Wi-Fi, Bluetooth, position, Jour / Nuit.
-- Thème : Jour, Nuit ou Système ; neuf couleurs ; ciel qui suit la saison, la météo et le soleil, étoiles la nuit.
+**Nouveautés**
+- Plein écran : la barre d’Android est masquée ; Wi-Fi, signal mobile (4G / 5G après autorisation) et Bluetooth sont affichés en haut d’Incar Drive. Barre du bas et barre du haut affinées pour agrandir les cartes.
+- Mises à jour en ligne depuis GitHub.
+- Carte média au style de Radio Maroc & Coran quand la radio joue : grand logo, LIVE, boutons ronds, Maps et YouTube.
+- Naviguer ouvre directement l’itinéraire de Google Maps ; Maison et Travail utilisent les adresses enregistrées dans Google Maps (appui long pour une autre adresse).
+- Météo à la position GPS de la voiture.
+- Vitesse sans cap, avec le temps du trajet depuis le départ.
+- Réglages Incarlink : bouton vers l’appli de réglages du boîtier (Réglages et réglages rapides).
 
 **Limites connues**
 - Google Maps et YouTube s’ouvrent en plein écran : les héberger dans l’accueil reste bloqué sur ce boîtier.
-- Incar Drive ne passe pas d’appel Bluetooth lui-même ; si l’appli téléphone de l’Incarlink n’accepte pas les numéros d’autres applis, le numéro est copié et l’appli s’ouvre.
-- La bulle flottante de Radio Maroc & Coran ne se masque automatiquement sur l’accueil qu’à partir d’une prochaine version de la radio.
-- Pas encore vérifié sur l’Incarlink : GPS du boîtier, appli téléphone Bluetooth, widgets disponibles.
+- Incar Drive ne passe pas d’appel Bluetooth lui-même ; il transmet le numéro à l’appli téléphone de l’Incarlink.
+- La bulle de Radio Maroc & Coran ne se masque sur l’accueil qu’avec une prochaine version de la radio.
+- À vérifier sur le boîtier : GPS, appli téléphone Bluetooth, appli de réglages Incarlink, Maison / Travail du compte Google, icône 4G.
 
 Signée avec la même clé que Radio Maroc & Coran.
