@@ -44,7 +44,6 @@ import android.widget.PopupMenu
 import android.widget.TextView
 import android.widget.Toast
 import android.window.OnBackInvokedDispatcher
-import com.autodrive.radiomaroc.AmbientBackdrop
 import com.autodrive.radiomaroc.EqualizerBars
 import com.autodrive.radiomaroc.LocalInfoFeed
 import com.autodrive.radiomaroc.RadioCity
@@ -61,9 +60,9 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 /**
- * Incar Drive, the home screen for the Incarlink head unit: greeting, time, weather and the next prayer, the media
- * playing in any app lit in its own colour, a speed dial, a Maps card and favourite apps tinted with their icons,
- * over a slowly drifting backdrop. Maps opens full screen: showing it inside this screen is blocked on the Incarlink
+ * Incar Drive, the home screen for the Incarlink head unit, styled like a dashboard: graphite by night, silver by
+ * day, one accent colour the driver picks (amber, cyan or red), a road grid on the horizon, a graduated speed dial,
+ * the media playing in any app, a Maps card and favourite apps tinted with their icons. Maps opens full screen: showing it inside this screen is blocked on the Incarlink
  * firmware (NATIVE-PANELS-AUDIT.md).
  */
 class HomeActivity : Activity() {
@@ -77,6 +76,17 @@ class HomeActivity : Activity() {
 
     private enum class Page { HOME, APPS, SETTINGS }
 
+    /** The dashboard light: one colour for the speed arc, the play button, the dock and the labels. */
+    private enum class Accent(val label: String, val night: Int, val day: Int, val darkInk: Boolean) {
+        AMBER("Ambre", 0xFFFFB020.toInt(), 0xFFE07010.toInt(), true),
+        CYAN("Cyan", 0xFF3DD6F5.toInt(), 0xFF0A8FB5.toInt(), true),
+        RED("Rouge", 0xFFFF4D5E.toInt(), 0xFFD42A42.toInt(), false);
+
+        companion object {
+            fun restore(prefs: SharedPreferences) = entries.firstOrNull { it.name == prefs.getString(ACCENT, null) } ?: AMBER
+        }
+    }
+
     private lateinit var prefs: SharedPreferences
     private lateinit var links: AppLinks
     private lateinit var media: MediaSessions
@@ -87,7 +97,9 @@ class HomeActivity : Activity() {
 
     private val text by lazy { getColor(R.color.home_text) }
     private val muted by lazy { getColor(R.color.home_muted) }
-    private val accent by lazy { getColor(R.color.home_accent) }
+    private val accentChoice by lazy { Accent.restore(prefs) }
+    private val accent by lazy { if (night) accentChoice.night else accentChoice.day }
+    private val onAccent by lazy { if (accentChoice.darkInk) 0xFF0B0D12.toInt() else Color.WHITE }
     private val night get() = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES
 
     private lateinit var greeting: TextView
@@ -219,38 +231,47 @@ class HomeActivity : Activity() {
 
     private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
 
-    private fun label(value: String, size: Int, color: Int, weight: Int = 400) = TextView(this).apply {
+    private fun label(value: String, size: Int, color: Int, weight: Int = 400, condensed: Boolean = false) = TextView(this).apply {
         text = value
         setTextColor(color)
         setTextSize(TypedValue.COMPLEX_UNIT_SP, size.toFloat())
-        typeface = Typeface.create(Typeface.DEFAULT, weight, false)
+        typeface = Typeface.create(if (condensed) Typeface.create("sans-serif-condensed", Typeface.NORMAL) else Typeface.DEFAULT,
+            weight, false)
         maxLines = 1
         ellipsize = TextUtils.TruncateAt.END
         includeFontPadding = false
+    }
+
+    /** A dashboard caption: small, spaced capitals in the accent colour. */
+    private fun caps(value: String, color: Int = accent) = label(value, 11, color, 700).apply {
+        isAllCaps = true
+        letterSpacing = .14f
     }
 
     private fun column() = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
     private fun row() = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
     private fun wrap() = LinearLayout.LayoutParams(-2, -2)
 
-    /** A frosted glass card. */
-    private fun glass(radius: Int = 24): GradientDrawable = GradientDrawable().apply {
+    /** A dashboard panel: near opaque, square-ish corners, a hairline edge. */
+    private fun glass(radius: Int = 16): GradientDrawable = GradientDrawable().apply {
         cornerRadius = dp(radius).toFloat()
         setColor(getColor(R.color.home_card))
         setStroke(dp(1), getColor(R.color.home_card_border))
     }
 
-    private fun pressable(base: Drawable?, radius: Int = 24) = RippleDrawable(
+    private fun pressable(base: Drawable?, radius: Int = 16) = RippleDrawable(
         ColorStateList.valueOf(getColor(R.color.home_ripple)), base,
         GradientDrawable().apply { cornerRadius = dp(radius).toFloat(); setColor(Color.WHITE) })
 
     private fun round(icon: Int, description: String, primary: Boolean = false, action: () -> Unit) = ImageButton(this).apply {
         setImageResource(icon)
-        imageTintList = ColorStateList.valueOf(if (primary) getColor(R.color.home_on_primary) else text)
+        imageTintList = ColorStateList.valueOf(if (primary) onAccent else text)
+        // Rounded squares like hardware keys, not the radio's round buttons.
         background = pressable(GradientDrawable().apply {
-            shape = GradientDrawable.OVAL
-            setColor(if (primary) getColor(R.color.home_primary) else getColor(R.color.home_chip))
-        }, 40)
+            cornerRadius = dp(14).toFloat()
+            setColor(if (primary) accent else getColor(R.color.home_chip))
+            if (!primary) setStroke(dp(1), getColor(R.color.home_card_border))
+        }, 14)
         if (primary) elevation = dp(6).toFloat()
         contentDescription = description
         setOnClickListener { action() }
@@ -268,11 +289,8 @@ class HomeActivity : Activity() {
     // ——— Screen ———
 
     private fun screen(): View {
-        val base = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-            intArrayOf(getColor(R.color.home_background_top), getColor(R.color.home_background_bottom)))
-        // Slow patches of colour behind the glass: warm and bright by day, deep and quiet at night.
-        val backdrop = if (night) AmbientBackdrop(base, intArrayOf(0x4D1F9E7E, 0x33C98A3A, 0x3D3A6E8F))
-            else AmbientBackdrop(base, intArrayOf(0x8A2BB58A.toInt(), 0x99F2B45A.toInt(), 0x80EB8A78.toInt()))
+        val backdrop = CockpitBackdrop(getColor(R.color.home_background_top), getColor(R.color.home_background_bottom),
+            accent, getColor(R.color.home_grid), if (night) 0x38 else 0x2E)
         val content = column().apply {
             addView(topBar(), LinearLayout.LayoutParams(-1, dp(62)))
             addView(row().apply {
@@ -302,18 +320,18 @@ class HomeActivity : Activity() {
 
     private fun topBar() = row().apply {
         addView(column().apply {
-            greeting = label("", 12, accent, 700)
+            greeting = caps("")
             addView(greeting)
             addView(row().apply {
                 gravity = Gravity.BOTTOM
-                clock = label("--:--", 40, text, 300)
+                clock = label("--:--", 44, text, 300, condensed = true)
                 addView(clock)
                 date = label("", 14, muted, 500)
                 addView(date, wrap().apply { marginStart = dp(12); bottomMargin = dp(6) })
             }, wrap().apply { topMargin = dp(2) })
         }, LinearLayout.LayoutParams(0, -2, 1f))
         fun chip(content: LinearLayout.() -> Unit) = row().apply {
-            background = glass(22)
+            background = glass(14)
             setPadding(dp(14), 0, dp(16), 0)
             content()
         }
@@ -331,7 +349,7 @@ class HomeActivity : Activity() {
         addView(chip {
             addView(column().apply {
                 prayerText = label("Salat", 16, text, 700)
-                prayerDetail = label("", 11, accent, 600)
+                prayerDetail = caps("")
                 addView(prayerText, wrap())
                 addView(prayerDetail, wrap().apply { topMargin = dp(2) })
             })
@@ -340,7 +358,7 @@ class HomeActivity : Activity() {
 
     private fun mediaCard(): View {
         mediaWash = GradientDrawable(GradientDrawable.Orientation.TL_BR, intArrayOf(Color.TRANSPARENT, Color.TRANSPARENT)).apply {
-            cornerRadius = dp(24).toFloat()
+            cornerRadius = dp(16).toFloat()
         }
         return column().apply {
             background = pressable(LayerDrawable(arrayOf(glass(), mediaWash)))
@@ -349,7 +367,7 @@ class HomeActivity : Activity() {
             addView(row().apply {
                 gravity = Gravity.TOP
                 val art = FrameLayout(context).apply {
-                    roundedClip(this, 20)
+                    roundedClip(this, 12)
                     background = GradientDrawable().apply { setColor(getColor(R.color.home_chip)) }
                     elevation = dp(8).toFloat()
                     mediaInitial = label("♪", 38, text, 700).apply { gravity = Gravity.CENTER }
@@ -360,12 +378,12 @@ class HomeActivity : Activity() {
                 addView(art, LinearLayout.LayoutParams(dp(112), dp(112)))
                 addView(column().apply {
                     addView(row().apply {
-                        mediaApp = label("MÉDIA", 11, accent, 700)
+                        mediaApp = caps("Média")
                         addView(mediaApp, LinearLayout.LayoutParams(0, -2, 1f))
                         mediaBars = EqualizerBars(context, accent)
                         addView(mediaBars, LinearLayout.LayoutParams(dp(16), dp(12)))
                     })
-                    mediaTitle = label("Rien en lecture", 22, text, 700).apply { maxLines = 2 }
+                    mediaTitle = label("Rien en lecture", 23, text, 700, condensed = true).apply { maxLines = 2 }
                     mediaSubtitle = label("", 13, muted).apply { maxLines = 2 }
                     addView(mediaTitle, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
                     addView(mediaSubtitle, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(6) })
@@ -384,12 +402,12 @@ class HomeActivity : Activity() {
                     LinearLayout.LayoutParams(dp(50), dp(50)))
             }
             addView(mediaControls, LinearLayout.LayoutParams(-1, -2))
-            mediaAction = label("", 15, getColor(R.color.home_on_primary), 700).apply {
+            mediaAction = label("", 15, onAccent, 700).apply {
                 gravity = Gravity.CENTER
                 background = pressable(GradientDrawable().apply {
-                    cornerRadius = dp(26).toFloat()
-                    setColor(getColor(R.color.home_primary))
-                }, 26)
+                    cornerRadius = dp(14).toFloat()
+                    setColor(accent)
+                }, 14)
                 visibility = View.GONE
             }
             addView(mediaAction, LinearLayout.LayoutParams(-1, dp(52)))
@@ -416,8 +434,8 @@ class HomeActivity : Activity() {
 
     private fun speedCard() = FrameLayout(this).apply {
         background = pressable(glass())
-        gauge = SpeedGauge(context, getColor(R.color.home_gauge_track), getColor(R.color.home_gauge_from),
-            getColor(R.color.home_gauge_to), text, muted)
+        gauge = SpeedGauge(context, getColor(R.color.home_gauge_track), shade(accent, Color.BLACK, .25f),
+            shade(accent, Color.WHITE, .3f), text, muted)
         addView(gauge, FrameLayout.LayoutParams(-1, -1).apply { setMargins(dp(8), dp(8), dp(8), dp(18)) })
         speedStatus = label("", 10, muted, 500).apply { gravity = Gravity.CENTER }
         addView(speedStatus, FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM).apply { bottomMargin = dp(10) })
@@ -429,26 +447,28 @@ class HomeActivity : Activity() {
 
     private fun mapsCard() = row().apply {
         background = pressable(GradientDrawable(GradientDrawable.Orientation.BL_TR,
-            intArrayOf(getColor(R.color.home_maps_from), getColor(R.color.home_maps_to))).apply {
-            cornerRadius = dp(24).toFloat()
+            intArrayOf(shade(accent, Color.BLACK, .18f), shade(accent, Color.WHITE, .12f))).apply {
+            cornerRadius = dp(16).toFloat()
         })
         elevation = dp(4).toFloat()
         setPadding(dp(16), 0, dp(12), 0)
         addView(FrameLayout(context).apply {
-            background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(0x33FFFFFF) }
+            background = GradientDrawable().apply { cornerRadius = dp(12).toFloat(); setColor(Color.argb(0x2E, Color.red(onAccent),
+                Color.green(onAccent), Color.blue(onAccent))) }
             addView(ImageView(context).apply {
                 setImageResource(R.drawable.ic_home_navigation)
-                imageTintList = ColorStateList.valueOf(Color.WHITE)
+                imageTintList = ColorStateList.valueOf(onAccent)
                 rotation = 45f
             }, FrameLayout.LayoutParams(dp(24), dp(24), Gravity.CENTER))
         }, LinearLayout.LayoutParams(dp(44), dp(44)))
         addView(column().apply {
-            addView(label("Naviguer", 18, Color.WHITE, 700))
-            addView(label("Google Maps", 12, 0xD9FFFFFF.toInt(), 500), wrap().apply { topMargin = dp(3) })
+            addView(label("Naviguer", 19, onAccent, 700, condensed = true))
+            addView(label("Google Maps", 12, Color.argb(0xCC, Color.red(onAccent), Color.green(onAccent), Color.blue(onAccent)), 500),
+                wrap().apply { topMargin = dp(3) })
         }, LinearLayout.LayoutParams(0, -2, 1f).apply { marginStart = dp(12) })
         addView(ImageView(context).apply {
             setImageResource(R.drawable.ic_home_chevron)
-            imageTintList = ColorStateList.valueOf(0xCCFFFFFF.toInt())
+            imageTintList = ColorStateList.valueOf(onAccent)
         }, LinearLayout.LayoutParams(dp(22), dp(22)))
         contentDescription = "Ouvrir Google Maps"
         setOnClickListener {
@@ -461,7 +481,7 @@ class HomeActivity : Activity() {
         background = glass()
         setPadding(dp(10), dp(12), dp(10), dp(10))
         addView(row().apply {
-            addView(label("FAVORIS", 11, accent, 700), LinearLayout.LayoutParams(0, -2, 1f).apply { marginStart = dp(6) })
+            addView(caps("Favoris"), LinearLayout.LayoutParams(0, -2, 1f).apply { marginStart = dp(6) })
             addView(label("Modifier", 12, muted, 600).apply {
                 setPadding(dp(8), dp(4), dp(6), dp(4))
                 setOnClickListener { showApps(editing = true) }
@@ -472,7 +492,7 @@ class HomeActivity : Activity() {
     }
 
     private fun dock() = row().apply {
-        background = glass(29).apply { setColor(getColor(R.color.home_card)) }
+        background = glass(18)
         elevation = dp(6).toFloat()
         setPadding(dp(6), dp(6), dp(6), dp(6))
         fun item(page: Page?, icon: Int, title: String, action: () -> Unit) = row().apply {
@@ -498,14 +518,14 @@ class HomeActivity : Activity() {
 
     /** The current page's dock item sits in a filled pill. */
     private fun markDock(current: Page) {
-        val activeFill = getColor(R.color.home_dock_active)
-        val onActive = if (night) text else getColor(R.color.home_on_primary)
+        val activeFill = accent
+        val onActive = onAccent
         dockItems.forEach { (page, view) ->
             val active = page == current
             view.background = pressable(GradientDrawable().apply {
-                cornerRadius = dp(23).toFloat()
+                cornerRadius = dp(12).toFloat()
                 setColor(if (active) activeFill else Color.TRANSPARENT)
-            }, 23)
+            }, 12)
             val tint = if (active) onActive else text
             (view.findViewWithTag<ImageView>("icon"))?.imageTintList = ColorStateList.valueOf(tint)
             (view.findViewWithTag<TextView>("label"))?.setTextColor(tint)
@@ -666,9 +686,9 @@ class HomeActivity : Activity() {
         val icon = links.icon(app)
         val tint = iconColor(app, icon) ?: accent
         background = pressable(GradientDrawable().apply {
-            cornerRadius = dp(18).toFloat()
+            cornerRadius = dp(12).toFloat()
             setColor(Color.argb(if (night) 0x2E else 0x26, Color.red(tint), Color.green(tint), Color.blue(tint)))
-        }, 18)
+        }, 12)
         setPadding(dp(4), dp(6), dp(4), dp(6))
         addView(ImageView(context).apply { setImageDrawable(icon) },
             LinearLayout.LayoutParams(dp(if (compact) 38 else 48), dp(if (compact) 38 else 48)))
@@ -683,10 +703,10 @@ class HomeActivity : Activity() {
     private fun addTile() = column().apply {
         gravity = Gravity.CENTER
         background = pressable(GradientDrawable().apply {
-            cornerRadius = dp(18).toFloat()
+            cornerRadius = dp(12).toFloat()
             setStroke(dp(1), getColor(R.color.home_card_border), dp(6).toFloat(), dp(4).toFloat())
             setColor(getColor(R.color.home_chip))
-        }, 18)
+        }, 12)
         addView(ImageView(context).apply {
             setImageResource(R.drawable.ic_home_add)
             imageTintList = ColorStateList.valueOf(muted)
@@ -720,7 +740,7 @@ class HomeActivity : Activity() {
     // ——— Pages over the home screen ———
 
     private fun sheet(): Drawable = GradientDrawable().apply {
-        cornerRadius = dp(26).toFloat()
+        cornerRadius = dp(18).toFloat()
         setColor(getColor(R.color.home_background_bottom))
         setStroke(dp(1), getColor(R.color.home_card_border))
     }
@@ -747,7 +767,7 @@ class HomeActivity : Activity() {
 
     private fun panelHeader(title: String, subtitle: String?) = row().apply {
         addView(column().apply {
-            addView(label(title, 21, text, 700))
+            addView(label(title, 22, text, 700, condensed = true))
             subtitle?.let { addView(label(it, 12, muted), wrap().apply { topMargin = dp(4) }) }
         }, LinearLayout.LayoutParams(0, -2, 1f))
         addView(round(R.drawable.ic_home_close, "Fermer") { closePanel() }, LinearLayout.LayoutParams(dp(44), dp(44)))
@@ -792,25 +812,15 @@ class HomeActivity : Activity() {
             background = sheet()
             setPadding(dp(18), dp(12), dp(18), dp(14))
             addView(panelHeader("Réglages", "Incar Drive"))
-            addView(label("THÈME", 11, accent, 700), wrap().apply { topMargin = dp(14) })
-            addView(row().apply {
-                val current = Appearance.restore(prefs)
-                Appearance.entries.forEach { choice ->
-                    val selected = choice == current
-                    addView(label(choice.label, 15, if (selected) getColor(R.color.home_on_primary) else text, 700).apply {
-                        gravity = Gravity.CENTER
-                        background = pressable(GradientDrawable().apply {
-                            cornerRadius = dp(22).toFloat()
-                            setColor(if (selected) getColor(R.color.home_primary) else getColor(R.color.home_chip))
-                        }, 22)
-                        setOnClickListener {
-                            prefs.edit().putString(APPEARANCE, choice.name).apply()
-                            recreate()
-                        }
-                    }, LinearLayout.LayoutParams(0, dp(46), 1f).apply { marginEnd = dp(8) })
-                }
+            addView(caps("Thème"), wrap().apply { topMargin = dp(14) })
+            addView(choices(Appearance.entries, Appearance.restore(prefs), { it.label }, { null }) {
+                prefs.edit().putString(APPEARANCE, it.name).apply()
             }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
-            addView(label("VILLE (MÉTÉO ET SALAT)", 11, accent, 700), wrap().apply { topMargin = dp(16) })
+            addView(caps("Couleur du tableau de bord"), wrap().apply { topMargin = dp(14) })
+            addView(choices(Accent.entries, accentChoice, { it.label }, { if (night) it.night else it.day }) {
+                prefs.edit().putString(ACCENT, it.name).apply()
+            }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+            addView(caps("Ville (météo et salat)"), wrap().apply { topMargin = dp(14) })
             addView(label(info.city.value.label + "  ›", 17, text, 700).apply {
                 setPadding(0, dp(10), 0, dp(10))
                 setOnClickListener { anchor ->
@@ -832,17 +842,46 @@ class HomeActivity : Activity() {
             addView(label("Réglages Android  ›", 15, text, 700).apply {
                 gravity = Gravity.CENTER
                 background = pressable(GradientDrawable().apply {
-                    cornerRadius = dp(22).toFloat()
+                    cornerRadius = dp(14).toFloat()
                     setColor(getColor(R.color.home_chip))
-                }, 22)
+                }, 14)
                 setOnClickListener { startSafely(Intent(Settings.ACTION_SETTINGS)) }
             }, LinearLayout.LayoutParams(-1, dp(48)))
         })
     }
 
+    /** A row of segmented choices; picking one saves it and redraws the screen in it. */
+    private fun <T> choices(all: List<T>, current: T, name: (T) -> String, swatch: (T) -> Int?, pick: (T) -> Unit) = row().apply {
+        all.forEach { choice ->
+            val selected = choice == current
+            addView(row().apply {
+                gravity = Gravity.CENTER
+                background = pressable(GradientDrawable().apply {
+                    cornerRadius = dp(12).toFloat()
+                    setColor(if (selected) accent else getColor(R.color.home_chip))
+                    if (!selected) setStroke(dp(1), getColor(R.color.home_card_border))
+                }, 12)
+                swatch(choice)?.let { color ->
+                    addView(View(context).apply {
+                        background = GradientDrawable().apply {
+                            cornerRadius = dp(5).toFloat()
+                            setColor(color)
+                            if (selected) setStroke(dp(2), onAccent)
+                        }
+                    }, LinearLayout.LayoutParams(dp(18), dp(18)).apply { marginEnd = dp(10) })
+                }
+                addView(label(name(choice), 15, if (selected) onAccent else text, 700))
+                setOnClickListener { pick(choice); recreate() }
+            }, LinearLayout.LayoutParams(0, dp(46), 1f).apply { marginEnd = dp(8) })
+        }
+    }
+
+    private fun shade(color: Int, toward: Int, amount: Float) = ArgbEvaluator().evaluate(amount, color, toward) as Int
+
     private companion object {
         const val PREFS = "incar_drive_home"
         const val APPEARANCE = "appearance"
+        const val ACCENT = "accent"
         const val CITY = "city"
         const val FAVORITES = "favorites"
         const val RADIO_PACKAGE = "com.autodrive.radiomaroc"

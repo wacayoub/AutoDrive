@@ -1,20 +1,15 @@
-<!-- Incar Drive, Nuit: deep teal night, smoked glass cards and the mint accent of Radio Maroc & Coran. -->
+<!-- Incar Drive, Nuit: a graphite cockpit. The accent colour (ambre, cyan or rouge) is chosen in Réglages. -->
 <resources>
-    <color name="home_background_top">#0F1D22</color>
-    <color name="home_background_bottom">#070C0F</color>
-    <color name="home_card">#991A2A2F</color>
-    <color name="home_card_border">#26FFFFFF</color>
-    <color name="home_text">#F2F5F5</color>
-    <color name="home_muted">#93A4A8</color>
-    <color name="home_accent">#5FD8B6</color>
-    <color name="home_primary">#5FD8B6</color>
-    <color name="home_on_primary">#0E2A22</color>
-    <color name="home_chip">#1FFFFFFF</color>
+    <color name="home_background_top">#121720</color>
+    <color name="home_background_bottom">#06080C</color>
+    <color name="home_card">#E6131820</color>
+    <color name="home_card_border">#1FFFFFFF</color>
+    <color name="home_text">#EEF2F7</color>
+    <color name="home_muted">#8792A2</color>
+    <color name="home_chip">#14FFFFFF</color>
     <color name="home_ripple">#33FFFFFF</color>
     <color name="home_gauge_track">#1AFFFFFF</color>
-    <color name="home_gauge_from">#5FD8B6</color>
-    <color name="home_gauge_to">#F2B45A</color>
-    <color name="home_maps_from">#14585E</color>
-    <color name="home_maps_to">#2BB58A</color>
-    <color name="home_dock_active">#2E5FD8B6</color>
+    <color name="home_grid">#22FFFFFF</color>
+    <!-- System widgets only; the screen itself uses the accent chosen in Réglages. -->
+    <color name="home_accent">#FFB020</color>
 </resources>

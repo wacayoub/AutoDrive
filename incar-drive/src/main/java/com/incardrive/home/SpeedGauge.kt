@@ -34,12 +34,18 @@ internal class SpeedGauge(context: Context, private val track: Int, private val 
     private val valuePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = textColor
         textAlign = Paint.Align.CENTER
-        typeface = Typeface.create(Typeface.DEFAULT, 700, false)
+        typeface = Typeface.create(Typeface.create("sans-serif-condensed", Typeface.NORMAL), 700, false)
     }
     private val unitPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = mutedColor
         textAlign = Paint.Align.CENTER
         typeface = Typeface.create(Typeface.DEFAULT, 500, false)
+    }
+    private val tickPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        strokeWidth = 1.5f * density
+        strokeCap = Paint.Cap.ROUND
+        color = mutedColor
+        alpha = 110
     }
     private val box = RectF()
     private var shown = 0f
@@ -79,6 +85,19 @@ internal class SpeedGauge(context: Context, private val track: Int, private val 
             shown <= 120 -> 140f
             shown <= 180 -> 200f
             else -> 260f
+        }
+        // Graduations inside the arc, like a speedometer: a long tick every 20 km/h, a short one every 10.
+        val radius = box.width() / 2
+        val cx0 = box.centerX()
+        val cy0 = box.centerY()
+        var mark = 0
+        while (mark <= scale) {
+            val angle = Math.toRadians((150 + mark / scale * 240).toDouble())
+            val outer = radius - stroke * 1.1f
+            val inner = outer - (if (mark % 20 == 0) 7f else 3.5f) * density
+            canvas.drawLine(cx0 + (outer * Math.cos(angle)).toFloat(), cy0 + (outer * Math.sin(angle)).toFloat(),
+                cx0 + (inner * Math.cos(angle)).toFloat(), cy0 + (inner * Math.sin(angle)).toFloat(), tickPaint)
+            mark += 10
         }
         val sweep = (shown / scale).coerceIn(0f, 1f) * 240f
         if (sweep > .5f) canvas.drawArc(box, 150f, sweep, false, arcPaint)

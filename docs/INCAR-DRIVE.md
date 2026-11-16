@@ -9,20 +9,22 @@ Lanceur (écran d’accueil) pour l’Incarlink en 800 × 480, demandé le 16 no
 - **Vitesse** : vitesse GPS en km/h (`GpsMonitor`), après autorisation de la localisation précise.
 - **Maps** : ouvre Google Maps en plein écran.
 - **Favoris** : six applications au plus, réglées depuis « Modifier » ou par appui long dans la grille. Au départ : Radio Maroc & Coran, YouTube, Waze, Spotify, YouTube Music et Chrome, s’ils sont installés.
-- **Dock** : Accueil, Téléphone (application Bluetooth de l’Incarlink, sinon le composeur), Applis (grille de toutes les applications) et Réglages (Jour / Nuit / Système, ville, réglages Android).
-- **Style** : palettes Jour et Nuit (`home_colors.xml`), cartes en verre et fond animé en Jour (`AmbientBackdrop`). `RadioMotion`, `LocalInfoFeed`, `RadioLocalInfo`, `WeatherIcon` et `SystemNight` se trouvent dans `shared-info`, compilé par Incar Drive et Radio Maroc & Coran. `MediaSessions`, `GpsMonitor` et `SpeedFilter` sont des copies adaptées de celles d’AutoDrive, compatibles avec Android 11.
+- **Dock** : Accueil, Téléphone (application Bluetooth de l’Incarlink, sinon le composeur), Applis (grille de toutes les applications) et Réglages (Jour / Nuit / Système, couleur du tableau de bord, ville, réglages Android).
+- **Style** : palettes Jour et Nuit (`home_colors.xml`), panneaux presque opaques et fond `CockpitBackdrop`. `RadioMotion`, `LocalInfoFeed`, `RadioLocalInfo`, `WeatherIcon` et `SystemNight` se trouvent dans `shared-info`, compilé par Incar Drive et Radio Maroc & Coran. `MediaSessions`, `GpsMonitor` et `SpeedFilter` sont des copies adaptées de celles d’AutoDrive, compatibles avec Android 11.
 
 ## Thème
 
-L’accueil est l’interface principale du boîtier ; le thème a donc été poussé plus loin le 16 novembre 2026 :
+L’accueil est l’interface principale du boîtier. Son thème « cockpit » lui donne une identité propre, distincte de Radio Maroc & Coran (16 novembre 2026) :
 
-- **Bandeau** : salutation selon l’heure (« Bonjour », « Bon après-midi », « Bonsoir », « Bonne nuit »), horloge fine en 40 sp et date. La météo affiche la température et l’état du ciel, la salat la prochaine prière et un compte à rebours (« dans 25 min »).
+- **Couleurs** : graphite la nuit, argent le jour, et une seule couleur d’accent choisie dans Réglages : Ambre (par défaut), Cyan ou Rouge. Elle colore l’arc de vitesse, le bouton lecture, la carte Maps, le dock et les légendes.
+
+- **Bandeau** : salutation selon l’heure (« Bonjour », « Bon après-midi », « Bonsoir », « Bonne nuit »), horloge condensée fine en 44 sp et date. Les légendes sont en petites capitales espacées. La météo affiche la température et l’état du ciel, la salat la prochaine prière et un compte à rebours (« dans 25 min »).
 - **Média** : la carte entière se teinte d’un dégradé de la couleur du logo, en fondu d’une station à l’autre, avec un logo plus grand, ombré, et l’égaliseur animé pendant la lecture.
-- **Vitesse** : `SpeedGauge`, un cadran de 240° dont l’arc dégradé (émeraude vers ambre) glisse vers la vitesse GPS. L’échelle passe à 200, puis à 260 km/h, pour ne jamais buter.
-- **Maps** : carte au dégradé émeraude, avec une flèche de navigation, « Naviguer » et un chevron.
+- **Vitesse** : `SpeedGauge`, un cadran de 240° dont l’arc dégradé dans la couleur d’accent, gradué tous les 10 km/h, glisse vers la vitesse GPS. L’échelle passe à 200, puis à 260 km/h, pour ne jamais buter.
+- **Maps** : carte au dégradé de la couleur d’accent, avec une flèche de navigation, « Naviguer » et un chevron.
 - **Favoris** : trois rangées de deux tuiles, chacune teintée de la couleur dominante de son icône ; les places libres montrent un « + » en pointillés qui ouvre le choix des favoris.
-- **Dock** : barre flottante, avec la page en cours dans une pilule pleine. Les pages Applis et Réglages glissent au-dessus de l’accueil.
-- **Fond** : dérive lente de couleurs en Jour comme en Nuit, avec des teintes sombres la nuit.
+- **Dock** : barre flottante, avec la page en cours sur fond d’accent. Les boutons sont des carrés arrondis, comme des touches de tableau de bord. Les pages Applis et Réglages glissent au-dessus de l’accueil.
+- **Fond** : `CockpitBackdrop`, statique : un dégradé, une lueur de la couleur d’accent en haut à droite et une grille de route en perspective vers l’horizon.
 
 ## Bulle de la radio
 

@@ -1,20 +1,15 @@
-<!-- Incar Drive, Jour: warm ivory, frosted white cards, ink-black controls and an emerald accent (no blue). -->
+<!-- Incar Drive, Jour: a light silver cockpit with white panels. -->
 <resources>
-    <color name="home_background_top">#F8F6F2</color>
-    <color name="home_background_bottom">#EAE5DD</color>
-    <color name="home_card">#B8FFFFFF</color>
-    <color name="home_card_border">#B8FFFFFF</color>
-    <color name="home_text">#16171A</color>
-    <color name="home_muted">#6A645D</color>
-    <color name="home_accent">#0B7A58</color>
-    <color name="home_primary">#16171A</color>
-    <color name="home_on_primary">#FFFFFF</color>
-    <color name="home_chip">#99FFFFFF</color>
-    <color name="home_ripple">#2016171A</color>
-    <color name="home_gauge_track">#1416171A</color>
-    <color name="home_gauge_from">#0B7A58</color>
-    <color name="home_gauge_to">#D9822B</color>
-    <color name="home_maps_from">#0B6B4F</color>
-    <color name="home_maps_to">#1FA67A</color>
-    <color name="home_dock_active">#16171A</color>
+    <color name="home_background_top">#F3F5F8</color>
+    <color name="home_background_bottom">#DCE1E8</color>
+    <color name="home_card">#F2FFFFFF</color>
+    <color name="home_card_border">#1A0F172A</color>
+    <color name="home_text">#111722</color>
+    <color name="home_muted">#5A6576</color>
+    <color name="home_chip">#0F0F172A</color>
+    <color name="home_ripple">#1F0F172A</color>
+    <color name="home_gauge_track">#140F172A</color>
+    <color name="home_grid">#140F172A</color>
+    <!-- System widgets only; the screen itself uses the accent chosen in Réglages. -->
+    <color name="home_accent">#E07010</color>
 </resources>
