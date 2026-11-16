@@ -23,8 +23,13 @@ internal interface UpdateSource {
 internal class GitHubUpdates(private val context: Context) : UpdateSource {
     private val packages = context.packageManager
     private val isRadio = context.packageName == UpdatePolicy.RADIO_PACKAGE
-    private val filePrefix = if (isRadio) "RadioMaroc" else "AutoDrive"
-    private val manifestName = if (isRadio) UpdatePolicy.RADIO_MANIFEST else "autodrive-update.json"
+    private val isIncar = context.packageName == UpdatePolicy.INCAR_PACKAGE
+    private val filePrefix = when { isRadio -> "RadioMaroc"; isIncar -> "IncarDrive"; else -> "AutoDrive" }
+    private val manifestName = when {
+        isRadio -> UpdatePolicy.RADIO_MANIFEST
+        isIncar -> UpdatePolicy.INCAR_MANIFEST
+        else -> "autodrive-update.json"
+    }
     @Suppress("DEPRECATION")
     private fun installedPackage(flags: Int = 0) = packages.getPackageInfo(context.packageName, flags)
     override val versionCode get() = installedPackage().longVersionCode
@@ -35,11 +40,16 @@ internal class GitHubUpdates(private val context: Context) : UpdateSource {
             val code = Regex("$filePrefix-(\\d+)\\.apk").matchEntire(file.name)?.groupValues?.get(1)?.toLongOrNull()
             if (code != null && code <= versionCode) file.delete()
         }
-        val manifestUrl = if (isRadio) radioManifestUrl() else {
-            val release = JSONObject(read(UpdatePolicy.LATEST_API, 1024 * 1024))
-            require(!release.optBoolean("draft") && !release.optBoolean("prerelease")) { "Aucune version stable disponible" }
-            manifestAsset(release)?.optString("browser_download_url")
-        } ?: throw IOException("Cette version ne propose pas encore de mise à jour intégrée")
+        val manifestUrl = when {
+            isRadio -> taggedManifestUrl("radio-maroc-v")
+            isIncar -> taggedManifestUrl(UpdatePolicy.INCAR_TAG)
+            else -> {
+                val release = JSONObject(read(UpdatePolicy.LATEST_API, 1024 * 1024))
+                require(!release.optBoolean("draft") && !release.optBoolean("prerelease")) { "Aucune version stable disponible" }
+                manifestAsset(release)?.optString("browser_download_url")
+            }
+        } ?: if (isRadio || isIncar) throw IllegalArgumentException("Aucune mise à jour publiée pour le moment")
+            else throw IOException("Cette version ne propose pas encore de mise à jour intégrée")
         require(UpdatePolicy.releaseAsset(manifestUrl, manifestName)) { "Source de mise à jour incorrecte" }
         val manifest = JSONObject(read(manifestUrl, 64 * 1024))
         require(manifest.getInt("schema") == 1) { "Format de mise à jour incompatible" }
@@ -48,8 +58,9 @@ internal class GitHubUpdates(private val context: Context) : UpdateSource {
             manifest.getString("sha256"), manifest.getLong("size")).also { verifyChannel(it) }
     }
 
-    private fun radioManifestUrl(): String? {
-        // The radio uses its own published prereleases. AutoDrive's stable latest stays independent.
+    /** The manifest of the newest published release tagged « [prefix]x.y.z » (the radio's and Incar Drive's channels). */
+    private fun taggedManifestUrl(prefix: String): String? {
+        // The radio and Incar Drive use their own tagged releases. AutoDrive's stable latest stays independent.
         val pageSize = 25
         var newestVersion = -1L
         var newestUrl: String? = null
@@ -59,7 +70,7 @@ internal class GitHubUpdates(private val context: Context) : UpdateSource {
                 val release = releases.getJSONObject(index)
                 val tag = release.optString("tag_name")
                 if (release.optBoolean("draft")) continue
-                val version = UpdatePolicy.radioVersionOrder(tag) ?: continue
+                val version = UpdatePolicy.versionOrder(prefix, tag) ?: continue
                 if (version <= newestVersion) continue
                 val asset = manifestAsset(release) ?: continue
                 val url = asset.optString("browser_download_url")

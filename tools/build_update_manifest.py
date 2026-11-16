@@ -8,7 +8,7 @@ import re
 import subprocess
 
 
-def build(apk, repository, output, aapt=None, radio_maroc=False):
+def build(apk, repository, output, aapt=None, radio_maroc=False, incar_drive=False):
     apk = Path(apk).resolve()
     output = Path(output)
     assert re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository)
@@ -20,12 +20,15 @@ def build(apk, repository, output, aapt=None, radio_maroc=False):
     minimum = re.search(r"^sdkVersion:'(\d+)'", badging, re.M)
     assert package and minimum, "APK metadata missing"
     name, code, version = package.groups()
-    expected_package = "com.autodrive.radiomaroc" if radio_maroc else "com.autodrive.launcher"
+    expected_package = "com.autodrive.radiomaroc" if radio_maroc else "com.incardrive.home" if incar_drive else "com.autodrive.launcher"
     assert name == expected_package, "APK package does not match the release channel"
     assert re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", version), "Publish a stable semantic version"
-    tag = f"radio-maroc-v{version}" if radio_maroc else f"v{version}"
-    asset = f"Radio-Maroc-Coran-{version}.apk" if radio_maroc else "AutoDrive.apk"
-    manifest_name = "radio-maroc-update.json" if radio_maroc else "autodrive-update.json"
+    if radio_maroc:
+        tag, asset, manifest_name = f"radio-maroc-v{version}", f"Radio-Maroc-Coran-{version}.apk", "radio-maroc-update.json"
+    elif incar_drive:
+        tag, asset, manifest_name = f"incar-drive-v{version}", "IncarDrive.apk", "incar-drive-update.json"
+    else:
+        tag, asset, manifest_name = f"v{version}", "AutoDrive.apk", "autodrive-update.json"
     with apk.open("rb") as source:
         digest = hashlib.file_digest(source, "sha256").hexdigest()
     metadata = dict(schema=1, packageName=name, versionCode=int(code), versionName=version,
@@ -44,6 +47,8 @@ if __name__ == "__main__":
     parser.add_argument("--output", required=True)
     parser.add_argument("--aapt")
     parser.add_argument("--radio-maroc", action="store_true", help="Prepare metadata for the standalone radio")
+    parser.add_argument("--incar-drive", action="store_true", help="Prepare metadata for the Incar Drive home screen")
     arguments = parser.parse_args()
-    metadata = build(arguments.apk, arguments.repository, arguments.output, arguments.aapt, arguments.radio_maroc)
+    metadata = build(arguments.apk, arguments.repository, arguments.output, arguments.aapt, arguments.radio_maroc,
+                     arguments.incar_drive)
     print(f"Prepared version {metadata['versionName']} ({metadata['versionCode']}), SHA256 {metadata['sha256']}")

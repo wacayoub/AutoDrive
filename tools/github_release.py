@@ -94,13 +94,15 @@ class GitHub:
                 print("Stored encrypted signing secret", name)
         return repo
 
-    def publish(self, apk, output, commit, aapt=None, notes=None, radio_maroc=False):
-        metadata = build(apk, self.repository, output, aapt, radio_maroc)
-        if radio_maroc:
+    def publish(self, apk, output, commit, aapt=None, notes=None, radio_maroc=False, incar_drive=False):
+        metadata = build(apk, self.repository, output, aapt, radio_maroc, incar_drive)
+        if radio_maroc or incar_drive:
+            # Incar Drive is signed with the radio's key.
             verify_radio_signer(apk, aapt)
-        tag = ("radio-maroc-v" if radio_maroc else "v") + metadata["versionName"]
-        product = "Radio Maroc & Coran" if radio_maroc else "AutoDrive"
-        manifest_name = "radio-maroc-update.json" if radio_maroc else "autodrive-update.json"
+        tag = ("radio-maroc-v" if radio_maroc else "incar-drive-v" if incar_drive else "v") + metadata["versionName"]
+        product = "Radio Maroc & Coran" if radio_maroc else "Incar Drive" if incar_drive else "AutoDrive"
+        manifest_name = ("radio-maroc-update.json" if radio_maroc else "incar-drive-update.json" if incar_drive
+                         else "autodrive-update.json")
         if radio_maroc and not notes:
             notes = "Mise à jour depuis le menu Mises à jour de Radio Maroc & Coran."
         try:
@@ -122,7 +124,8 @@ class GitHub:
             self.call(upload + "?name=" + urllib.parse.quote(name), "POST", binary=file)
             print("Uploaded", name)
         result = self.call(f"/repos/{self.repository}/releases/{release['id']}", "PATCH",
-                           dict(draft=False, prerelease=radio_maroc, make_latest="false" if radio_maroc else "true"))
+                           dict(draft=False, prerelease=radio_maroc,
+                                make_latest="false" if radio_maroc or incar_drive else "true"))
         print("Published", result["html_url"])
 
 
@@ -136,6 +139,7 @@ if __name__ == "__main__":
     parser.add_argument("--commit", default="main")
     parser.add_argument("--aapt")
     parser.add_argument("--radio-maroc", action="store_true", help="Publish in the standalone Radio Maroc channel")
+    parser.add_argument("--incar-drive", action="store_true", help="Publish in the Incar Drive home screen channel")
     parser.add_argument("--notes-file", help="UTF-8 release description, with actual newlines")
     args = parser.parse_args()
     try:
@@ -144,7 +148,7 @@ if __name__ == "__main__":
             github.setup(args.signing_keystore)
         if args.apk:
             notes = Path(args.notes_file).read_text(encoding="utf-8") if args.notes_file else None
-            github.publish(args.apk, args.output, args.commit, args.aapt, notes, args.radio_maroc)
+            github.publish(args.apk, args.output, args.commit, args.aapt, notes, args.radio_maroc, args.incar_drive)
     except Exception as error:
         print(f"GitHub operation failed: {type(error).__name__}: {error}", file=sys.stderr)
         sys.exit(1)

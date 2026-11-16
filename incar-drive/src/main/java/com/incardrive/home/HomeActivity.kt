@@ -223,6 +223,8 @@ class HomeActivity : Activity() {
         dialer = Dialer(this)
         widgets = WidgetBoard(this)
         phone = PhoneLink(this)
+        updatesUi = IncarUpdates(this)
+        status = StatusIcons(this)
         info = LocalInfoFeed(RadioCity.restore(prefs.getString(CITY, null)))
         window.setDecorFitsSystemWindows(false)
         window.statusBarColor = Color.TRANSPARENT
@@ -231,10 +233,30 @@ class HomeActivity : Activity() {
         window.insetsController?.setSystemBarsAppearance(
             if (night) 0 else WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS or WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS,
             WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS or WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS)
+        hideStatusBar()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             onBackInvokedDispatcher.registerOnBackInvokedCallback(OnBackInvokedDispatcher.PRIORITY_DEFAULT) { goBack() }
         }
     }
+
+    /**
+     * Android's status bar is hidden so the home screen uses the whole display; Incar Drive shows the time, Wi-Fi,
+     * mobile and Bluetooth itself. A swipe down from the top edge still shows Android's bar for a moment.
+     */
+    private fun hideStatusBar() {
+        window.insetsController?.apply {
+            hide(WindowInsets.Type.statusBars())
+            systemBarsBehavior = WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        }
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) hideStatusBar()
+    }
+
+    private lateinit var updatesUi: IncarUpdates
+    private lateinit var status: StatusIcons
 
     // Before Android 13, Back reaches the activity here; a home screen never closes itself.
     @Deprecated("Deprecated in Java")
@@ -319,6 +341,7 @@ class HomeActivity : Activity() {
         tasks.launch { info.weather.collect { renderWeather() } }
         tasks.launch { info.prayerCalendars.collect { renderPrayer() } }
         tasks.launch { CallWatch.call.collect { renderCall(it) } }
+        updatesUi.follow(tasks)
         widgets.start()
         phone.start()
         tick.run()
@@ -344,6 +367,8 @@ class HomeActivity : Activity() {
         super.onResume()
         tellRadio(visible = true)
         renderHomeBadge()
+        status.render()
+        scope?.let(updatesUi::onResume)
         // Ask once, on the first start, to become the screen Home opens.
         if (!prefs.getBoolean(ASKED_HOME, false) && !isDefaultHome()) {
             prefs.edit().putBoolean(ASKED_HOME, true).apply()
@@ -368,6 +393,7 @@ class HomeActivity : Activity() {
         if (gps.permitted()) gps.start()
         renderSpeed()
         if (requestCode == REQUEST_BLUETOOTH) phone.start()
+        status.render()
         phone.render()
     }
 
@@ -385,6 +411,7 @@ class HomeActivity : Activity() {
             }
             renderPrayer()
             renderSky()
+            status.render()
             handler.postDelayed(this, 60_000L - System.currentTimeMillis() % 60_000L)
         }
     }
@@ -525,7 +552,10 @@ class HomeActivity : Activity() {
     private fun topBar() = row().apply {
         addView(column().apply {
             greeting = caps("")
-            addView(greeting)
+            addView(row().apply {
+                addView(greeting)
+                addView(status.view(), wrap().apply { marginStart = dp(14) })
+            })
             addView(row().apply {
                 gravity = Gravity.BOTTOM
                 clock = label("--:--", 44, text, 300, condensed = true)
@@ -1336,6 +1366,7 @@ class HomeActivity : Activity() {
         markDock(Page.HOME)
         shownPage = Page.HOME
         tripValues = null
+        if (::updatesUi.isInitialized) updatesUi.observe(null)
         if (panelHost.visibility != View.VISIBLE) return
         panelHost.animate().alpha(0f).translationY(dp(12).toFloat()).setDuration(150).withEndAction {
             panelHost.visibility = View.GONE
@@ -1440,6 +1471,29 @@ class HomeActivity : Activity() {
                     setOnClickListener { editPlace(place) { showSettings() } }
                 }, LinearLayout.LayoutParams(-1, dp(46)).apply { topMargin = dp(8) })
             }
+            addView(caps("Mises à jour"), wrap().apply { topMargin = dp(14) })
+            addView(row().apply {
+                val message = label("", 14, text, 600).apply { maxLines = 2 }
+                val action = label("", 14, onAccent, 700).apply {
+                    gravity = Gravity.CENTER
+                    setPadding(dp(16), 0, dp(16), 0)
+                    background = pressable(GradientDrawable().apply {
+                        cornerRadius = dp(12).toFloat()
+                        setColor(accent)
+                    }, 12)
+                    setOnClickListener { scope?.let(updatesUi::primaryAction) }
+                }
+                addView(column().apply {
+                    addView(message)
+                    addView(label("Version installée ${updatesUi.installedVersion} · vérifiée et signée, via GitHub", 11, muted),
+                        wrap().apply { topMargin = dp(2) })
+                }, LinearLayout.LayoutParams(0, -2, 1f))
+                addView(action, LinearLayout.LayoutParams(-2, dp(40)).apply { marginStart = dp(10) })
+                updatesUi.observe { state ->
+                    message.text = state.message
+                    action.text = updatesUi.actionLabel(state)
+                }
+            }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
             addView(caps("Écran d’accueil"), wrap().apply { topMargin = dp(14) })
             addView(label(if (isDefaultHome()) "Incar Drive est l’écran d’accueil par défaut" else "Définir Incar Drive par défaut  ›",
                 14, if (isDefaultHome()) muted else text, 700).apply {
@@ -1559,6 +1613,7 @@ class HomeActivity : Activity() {
         const val ASKED_HOME = "asked_home"
         const val OEM_SETTINGS = "oem_settings"
         const val REQUEST_HOME_ROLE = 7
+        const val REQUEST_PHONE_STATE = 8
         const val PREFS = "incar_drive_home"
         const val APPEARANCE = "appearance"
         const val ACCENT = "accent"

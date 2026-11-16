@@ -13,16 +13,19 @@ internal data class UpdateRelease(
     val size: Long
 ) {
     fun validate() {
-        require(packageName == UpdatePolicy.LAUNCHER_PACKAGE || packageName == UpdatePolicy.RADIO_PACKAGE) {
+        require(packageName in setOf(UpdatePolicy.LAUNCHER_PACKAGE, UpdatePolicy.RADIO_PACKAGE, UpdatePolicy.INCAR_PACKAGE)) {
             "Application de mise à jour incorrecte"
         }
         require(versionCode > 0 && versionName.isNotBlank() && versionName.length <= 64) { "Version de mise à jour incorrecte" }
         require(minSdk >= 1 && size in 1..UpdatePolicy.MAX_APK_BYTES) { "Taille ou compatibilité de mise à jour incorrecte" }
         require(Regex("[a-fA-F0-9]{64}").matches(sha256)) { "Empreinte de mise à jour absente ou incorrecte" }
-        val validAddress = if (packageName == UpdatePolicy.RADIO_PACKAGE) {
-            UpdatePolicy.radioTag("radio-maroc-v$versionName") &&
+        val validAddress = when (packageName) {
+            UpdatePolicy.RADIO_PACKAGE -> UpdatePolicy.radioTag("radio-maroc-v$versionName") &&
                 apkUrl == "${UpdatePolicy.REPO_URL}/releases/download/radio-maroc-v$versionName/Radio-Maroc-Coran-$versionName.apk"
-        } else UpdatePolicy.releaseAsset(apkUrl, "AutoDrive.apk")
+            UpdatePolicy.INCAR_PACKAGE -> UpdatePolicy.versionOrder(UpdatePolicy.INCAR_TAG, "${UpdatePolicy.INCAR_TAG}$versionName") != null &&
+                apkUrl == "${UpdatePolicy.REPO_URL}/releases/download/${UpdatePolicy.INCAR_TAG}$versionName/IncarDrive.apk"
+            else -> UpdatePolicy.releaseAsset(apkUrl, "AutoDrive.apk")
+        }
         require(validAddress) { "Adresse de mise à jour non autorisée" }
     }
 }
@@ -35,15 +38,22 @@ internal object UpdatePolicy {
     const val LAUNCHER_PACKAGE = "com.autodrive.launcher"
     const val RADIO_PACKAGE = "com.autodrive.radiomaroc"
     const val RADIO_MANIFEST = "radio-maroc-update.json"
+    // Incar Drive, the home screen, publishes in its own tagged releases, like the radio.
+    const val INCAR_PACKAGE = "com.incardrive.home"
+    const val INCAR_MANIFEST = "incar-drive-update.json"
+    const val INCAR_TAG = "incar-drive-v"
     const val MAX_APK_BYTES = 128L * 1024 * 1024
 
     private val radioTagPattern = Regex("radio-maroc-v([0-9]{1,6})\\.([0-9]{1,6})\\.([0-9]{1,6})")
 
     fun radioTag(tag: String) = radioTagPattern.matches(tag)
 
-    fun radioVersionOrder(tag: String): Long? = radioTagPattern.matchEntire(tag)?.destructured?.let { (major, minor, patch) ->
-        major.toLong() * 1_000_000_000_000L + minor.toLong() * 1_000_000L + patch.toLong()
-    }
+    fun radioVersionOrder(tag: String): Long? = versionOrder("radio-maroc-v", tag)
+
+    /** A comparable number for « prefix1.2.3 » tags, or null for any other tag. */
+    fun versionOrder(prefix: String, tag: String): Long? =
+        Regex(Regex.escape(prefix) + "([0-9]{1,6})\\.([0-9]{1,6})\\.([0-9]{1,6})").matchEntire(tag)?.destructured
+            ?.let { (major, minor, patch) -> major.toLong() * 1_000_000_000_000L + minor.toLong() * 1_000_000L + patch.toLong() }
 
     fun releaseAsset(url: String, name: String): Boolean {
         val uri = runCatching { URI(url) }.getOrNull() ?: return false
