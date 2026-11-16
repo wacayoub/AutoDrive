@@ -1,19 +1,17 @@
-Incar Drive 1.0.2 — écran d’accueil pour l’Incarlink (Android 11 à 13, conçu pour 800 × 480).
+Incar Drive 1.0.3 — écran d’accueil pour l’Incarlink (Android 11 à 13, conçu pour 800 × 480).
 
-**Mettre à jour**
-- Depuis la 1.0.1 : Réglages › Mises à jour, ou la proposition automatique.
-- Depuis la 1.0.0 : télécharger `IncarDrive.apk` ci-dessous sur le boîtier et l’ouvrir.
+**Mettre à jour** : Réglages › Mises à jour, ou la proposition automatique. Depuis la 1.0.0 : télécharger `IncarDrive.apk` ci-dessous.
 
-**Nouveautés**
-- Effets sonores comme Radio Maroc & Coran : clics de l’interface, égaliseur Normal / Basses / Voix pour tout le son du boîtier, et Dolby quand le boîtier le propose.
-- Guidage Google Maps : la carte Maps affiche le temps restant, l’heure d’arrivée, la distance et la prochaine indication pendant un itinéraire.
-- Réglages Incarlink ouvre directement l’appli de réglages du boîtier, sans liste d’applis.
-- Carte Radio Maroc : l’indicateur de niveau coloré de la radio sous le logo ; les boutons Maps et YouTube y sont retirés.
-- Liste des applications : seulement les logos et les noms, sans carrés.
+**Nouveautés de la carte navigation**
+- Google Maps ou Waze, au choix dans Réglages › Navigation, pour Naviguer, Maison, Travail, tes lieux et les recherches.
+- Tes lieux : Réglages › Destinations › Ajouter un lieu (Mosquée, famille, salle de sport…), un appui pour y aller.
+- Recherches rapides autour de la voiture : Station, Parking, Mosquée, Café.
+- Guidage visible pendant un itinéraire : flèche de la prochaine direction, distance au virage, indication, temps restant et heure d’arrivée.
+- Rue actuelle sous « Naviguer », et alerte radar (badge rouge et double bip à moins de 500 m) d’après OpenStreetMap.
 
 **Limites connues**
-- Maison et Travail : Google Maps ne communique pas les adresses enregistrées aux autres applis ; Incar Drive lui demande « Domicile » / « Travail », que Maps retrouve dans le compte.
-- Si le boîtier n’autorise pas l’égaliseur global, Incar Drive l’indique et reste en Normal.
-- À vérifier sur le boîtier : notification de guidage de Maps, égaliseur, réglages Incarlink.
+- Radars et rue viennent d’OpenStreetMap : couverture partielle au Maroc, Internet nécessaire, serveurs publics parfois lents.
+- Le guidage visible lit la notification de Google Maps ou Waze : à vérifier sur le boîtier.
+- Google Maps ne communique pas les adresses Maison / Travail aux autres applis : Incar Drive lui demande « Domicile » / « Travail ».
 
 Signée avec la même clé que Radio Maroc & Coran.

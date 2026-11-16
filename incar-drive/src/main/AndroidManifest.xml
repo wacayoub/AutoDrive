@@ -46,6 +46,8 @@
             <data android:scheme="tel" />
         </intent>
         <package android:name="com.google.android.apps.maps" />
+        <!-- Waze, when chosen as the navigation app. -->
+        <package android:name="com.waze" />
         <package android:name="com.carsyso.bluetooth" />
         <!-- The Incarlink's own settings app (firmware SudingSettings.apk). -->
         <package android:name="com.suding.settings" />

@@ -51,4 +51,30 @@ class RoadLimitsTest {
         assertEquals("Boulevard Zerktouni", RoadLimits.match(roads, 33.5850, -7.62003, 0)?.name)
         assertEquals("Rue Ibnou Sina", RoadLimits.match(roads, 33.58497, -7.6200, 90)?.name)
     }
+
+    private val withCameras = """
+        {"elements":[
+          {"type":"node","lat":33.5900,"lon":-7.6200,"tags":{"highway":"speed_camera","maxspeed":"60"}},
+          {"type":"node","lat":33.5700,"lon":-7.6200,"tags":{"highway":"speed_camera"}},
+          {"type":"node","lat":33.5800,"lon":-7.6300,"tags":{"amenity":"cafe"}}
+        ]}
+    """.trimIndent()
+
+    @Test
+    fun readsSpeedCameras() {
+        val cameras = RoadLimits.parseCameras(withCameras)
+        assertEquals(2, cameras.size)
+        assertEquals(60, cameras[0].limit)
+    }
+
+    @Test
+    fun warnsOnlyForACameraAhead() {
+        val cameras = RoadLimits.parseCameras(withCameras)
+        // 300 m south of the first camera, driving north: it is ahead.
+        val ahead = RoadLimits.cameraAhead(cameras, 33.5873, -7.6200, 0)
+        assertEquals(cameras[0], ahead?.first)
+        assertEquals(300.0, ahead!!.second.toDouble(), 10.0)
+        // Driving south, away from it: no warning.
+        assertNull(RoadLimits.cameraAhead(cameras, 33.5873, -7.6200, 180))
+    }
 }

@@ -170,9 +170,9 @@ class HomeActivity : Activity() {
     private lateinit var favoritesGrid: LinearLayout
     private lateinit var panelHost: FrameLayout
     private val dockItems = mutableMapOf<Page, View>()
-    private val placeChips = mutableMapOf<Place, View>()
     private lateinit var quick: QuickSettings
     internal lateinit var dialer: Dialer
+    private lateinit var navigation: Navigation
     private lateinit var widgets: WidgetBoard
     private lateinit var phone: PhoneLink
     private lateinit var trip: TripMeter
@@ -215,12 +215,13 @@ class HomeActivity : Activity() {
         }
         gps.onFix = { fix, kmh ->
             info.usePosition(fix.latitude, fix.longitude)
-            if (roadMode()) followRoad(fix, kmh)
+            followRoad(fix, kmh)
             trip.accept(System.currentTimeMillis(), fix.latitude, fix.longitude, fix.accuracy.takeIf { fix.hasAccuracy() }, kmh)
             if (System.currentTimeMillis() - lastTripSave > 30_000) saveTrip()
         }
         quick = QuickSettings(this)
         dialer = Dialer(this)
+        navigation = Navigation(this, prefs)
         widgets = WidgetBoard(this)
         phone = PhoneLink(this)
         updatesUi = IncarUpdates(this)
@@ -739,6 +740,18 @@ class HomeActivity : Activity() {
         limitSign = LimitSign(context).apply { limit = activeLimit() }
         addView(limitSign,
             FrameLayout.LayoutParams(dp(34), dp(34), Gravity.TOP or Gravity.END).apply { setMargins(0, dp(8), dp(10), 0) })
+        cameraBadge = label("", 12, Color.WHITE, 700).apply {
+            gravity = Gravity.CENTER
+            setPadding(dp(8), dp(2), dp(8), dp(2))
+            background = GradientDrawable().apply { cornerRadius = dp(8).toFloat(); setColor(0xFFE5262E.toInt()) }
+            setCompoundDrawablesRelativeWithIntrinsicBounds(getDrawable(R.drawable.ic_home_camera)?.mutate()?.apply {
+                setTint(Color.WHITE)
+                setBounds(0, 0, dp(14), dp(14))
+            }, null, null, null)
+            compoundDrawablePadding = dp(4)
+            visibility = View.GONE
+        }
+        addView(cameraBadge, FrameLayout.LayoutParams(-2, -2, Gravity.TOP or Gravity.CENTER_HORIZONTAL).apply { topMargin = dp(8) })
         speedStatus = label("", 11, muted, 600).apply { gravity = Gravity.CENTER }
         addView(speedStatus, FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM).apply { bottomMargin = dp(8) })
         contentDescription = "Vitesse et trajet"
@@ -749,9 +762,12 @@ class HomeActivity : Activity() {
         }
     }
 
-    /** « Naviguer » opens Google Maps full screen; Maison and Travail start its guidance straight away. */
+    /**
+     * The navigation card: « Naviguer » in the chosen app (Google Maps or Waze), then one scrolling row of places
+     * (Maison, Travail, the driver's own) and quick searches around the car. While the app guides, the card shows the
+     * guidance instead: the turn arrow, the distance to the turn, the instruction, the time left and the arrival.
+     */
     private fun mapsCard() = column().apply {
-        // A panel like the others, in navigation blue: the icon, the chevron and the Maison / Travail icons.
         background = glass()
         setPadding(dp(8), dp(6), dp(8), dp(8))
         addView(row().apply {
@@ -759,101 +775,182 @@ class HomeActivity : Activity() {
             setPadding(dp(8), 0, dp(4), 0)
             addView(FrameLayout(context).apply {
                 background = GradientDrawable().apply { cornerRadius = dp(12).toFloat(); setColor(tint(navColor, 0x33)) }
-                addView(ImageView(context).apply {
+                navIcon = ImageView(context).apply {
                     setImageResource(R.drawable.ic_home_navigation)
                     imageTintList = ColorStateList.valueOf(navColor)
                     rotation = 45f
-                }, FrameLayout.LayoutParams(dp(22), dp(22), Gravity.CENTER))
-            }, LinearLayout.LayoutParams(dp(40), dp(40)))
+                }
+                addView(navIcon, FrameLayout.LayoutParams(dp(24), dp(24), Gravity.CENTER))
+            }, LinearLayout.LayoutParams(dp(42), dp(42)))
             addView(column().apply {
                 navTitle = label("Naviguer", 19, text, 700, condensed = true)
-                navDetail = label("Google Maps", 12, muted, 500)
+                navDetail = label(navigation.app().label, 12, muted, 500)
                 addView(navTitle)
                 addView(navDetail, wrap().apply { topMargin = dp(2) })
-            }, LinearLayout.LayoutParams(0, -2, 1f).apply { marginStart = dp(12) })
-            addView(ImageView(context).apply {
+            }, LinearLayout.LayoutParams(0, -2, 1f).apply { marginStart = dp(10) })
+            navEta = label("", 13, navColor, 700).apply { gravity = Gravity.END; visibility = View.GONE }
+            addView(navEta, wrap().apply { marginStart = dp(6) })
+            navChevron = ImageView(context).apply {
                 setImageResource(R.drawable.ic_home_chevron)
                 imageTintList = ColorStateList.valueOf(navColor)
-            }, LinearLayout.LayoutParams(dp(22), dp(22)))
-            contentDescription = "Ouvrir Google Maps"
+            }
+            addView(navChevron, LinearLayout.LayoutParams(dp(22), dp(22)))
+            contentDescription = "Naviguer"
             setOnClickListener {
                 // While guiding, back to the guidance; otherwise straight to choosing a destination.
-                val opened = if (NavWatch.nav.value != null) packageManager.getLaunchIntentForPackage(AppLinks.MAPS)
-                    ?.let { startSafely(it); true } ?: false else links.openMaps()
-                if (!opened) Toast.makeText(context, "Google Maps n’est pas installé.", Toast.LENGTH_LONG).show()
+                val opened = if (NavWatch.nav.value != null) navigation.resume() else navigation.open()
+                if (!opened) Toast.makeText(context, "${navigation.app().label} n’est pas installé.", Toast.LENGTH_LONG).show()
             }
             RadioMotion.pressScale(this, .97f)
         }, LinearLayout.LayoutParams(-1, 0, 1f))
-        addView(row().apply {
-            Place.entries.forEachIndexed { index, place ->
-                val chip = row().apply {
-                    gravity = Gravity.CENTER
-                    background = pressable(GradientDrawable().apply {
-                        cornerRadius = dp(12).toFloat()
-                        setColor(getColor(R.color.home_chip))
-                        setStroke(dp(1), getColor(R.color.home_card_border))
-                    }, 12)
-                    addView(ImageView(context).apply {
-                        setImageResource(place.icon)
-                        imageTintList = ColorStateList.valueOf(navColor)
-                        tag = "icon"
-                    }, LinearLayout.LayoutParams(dp(18), dp(18)))
-                    addView(label(place.label, 14, text, 700).apply { tag = "label" },
-                        wrap().apply { marginStart = dp(8) })
-                    setOnClickListener { goTo(place) }
-                    setOnLongClickListener { editPlace(place); true }
-                    RadioMotion.pressScale(this, .94f)
-                }
-                placeChips[place] = chip
-                addView(chip, LinearLayout.LayoutParams(0, -1, 1f).apply { if (index == 0) marginEnd = dp(8) })
-            }
-        }, LinearLayout.LayoutParams(-1, dp(42)).apply { topMargin = dp(4) })
+        placesRow = android.widget.HorizontalScrollView(context).apply {
+            isHorizontalScrollBarEnabled = false
+            addView(row().also { placesStrip = it })
+        }
+        addView(placesRow, LinearLayout.LayoutParams(-1, dp(42)).apply { topMargin = dp(4) })
         renderPlaces()
+    }
+
+    private lateinit var navIcon: ImageView
+    private lateinit var navEta: TextView
+    private lateinit var navChevron: ImageView
+    private lateinit var placesRow: View
+    private lateinit var placesStrip: LinearLayout
+
+    private fun chip(icon: Int, title: String, iconColor: Int, action: () -> Unit, long: (() -> Unit)? = null) = row().apply {
+        gravity = Gravity.CENTER
+        background = pressable(GradientDrawable().apply {
+            cornerRadius = dp(12).toFloat()
+            setColor(getColor(R.color.home_chip))
+            setStroke(dp(1), getColor(R.color.home_card_border))
+        }, 12)
+        setPadding(dp(12), 0, dp(14), 0)
+        addView(ImageView(context).apply {
+            setImageResource(icon)
+            imageTintList = ColorStateList.valueOf(iconColor)
+        }, LinearLayout.LayoutParams(dp(18), dp(18)))
+        addView(label(title, 14, text, 700), wrap().apply { marginStart = dp(7) })
+        contentDescription = title
+        setOnClickListener { action() }
+        long?.let { handler -> setOnLongClickListener { handler(); true } }
+        RadioMotion.pressScale(this, .94f)
+    }
+
+    /** Maison, Travail, the driver's places, then the quick searches, in one row that scrolls sideways. */
+    private fun renderPlaces() {
+        if (!::placesStrip.isInitialized) return
+        placesStrip.removeAllViews()
+        fun add(view: View) = placesStrip.addView(view, LinearLayout.LayoutParams(-2, -1).apply {
+            if (placesStrip.childCount > 0) marginStart = dp(6)
+        })
+        Place.entries.forEach { place -> add(chip(place.icon, place.label, navColor, { goTo(place) }, { editPlace(place) })) }
+        myPlaces().forEach { saved ->
+            add(chip(R.drawable.ic_home_location, saved.name, navColor, {
+                if (!navigation.goTo(saved.number)) navMissing()
+            }, { editMyPlace(saved) }))
+        }
+        QuickSearch.entries.forEach { search ->
+            add(chip(search.icon, search.label, weatherColor, { if (!navigation.search(search.query)) navMissing() }))
+        }
+    }
+
+    private fun navMissing() = Toast.makeText(this, "${navigation.app().label} n’est pas installé.", Toast.LENGTH_LONG).show()
+
+    // The driver's own places, stored like the saved phone numbers: a name and an address or position.
+    private fun myPlaces(): List<SavedNumber> = SavedNumber.decode(prefs.getString(MY_PLACES, null))
+
+    private fun saveMyPlaces(list: List<SavedNumber>) = prefs.edit().putString(MY_PLACES, SavedNumber.encode(list)).apply()
+
+    /** Adds a place, or renames, moves or removes one (an empty address removes it). */
+    private fun editMyPlace(existing: SavedNumber?, after: () -> Unit = {}) {
+        val name = EditText(this).apply {
+            hint = "Nom (Mosquée, Famille…)"
+            setText(existing?.name.orEmpty())
+            setSingleLine()
+        }
+        val address = EditText(this).apply {
+            hint = "Adresse ou lieu"
+            setText(existing?.number.orEmpty())
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_POSTAL_ADDRESS
+            setSingleLine()
+        }
+        fun store(value: String?) {
+            val list = myPlaces().filter { it != existing }.toMutableList()
+            val target = value?.trim().orEmpty()
+            if (target.isNotEmpty()) list += SavedNumber(name.text.toString().trim().ifEmpty { target }, target)
+            saveMyPlaces(list)
+            renderPlaces()
+            after()
+        }
+        val dialog = AlertDialog.Builder(this)
+            .setTitle(existing?.name ?: "Nouveau lieu")
+            .setView(column().apply {
+                setPadding(dp(20), dp(4), dp(20), 0)
+                addView(name)
+                addView(address)
+            })
+            .setPositiveButton("Enregistrer") { _, _ -> store(address.text.toString()) }
+            .setNegativeButton("Annuler", null)
+            .setNeutralButton(if (existing != null) "Supprimer" else "Ma position") { _, _ ->
+                if (existing != null) store(null)
+                else currentPosition()?.let(::store)
+                    ?: Toast.makeText(this, "Position pas encore disponible.", Toast.LENGTH_LONG).show()
+            }
+        dialog.show()
     }
 
     private lateinit var navTitle: TextView
     private lateinit var navDetail: TextView
 
     /**
-     * While Google Maps guides, the Maps card shows the trip as Maps reports it: time left and arrival in large, then
-     * the distance left and the next instruction.
+     * While the navigation app guides, the card shows its guidance: the turn arrow and the distance to the turn in
+     * large, the instruction, and the time left with the arrival on the right. The places row makes way for it.
      */
     private fun renderNav(nav: NavInfo?) {
         if (!::navTitle.isInitialized) return
         if (nav == null) {
+            navIcon.setImageResource(R.drawable.ic_home_navigation)
+            navIcon.imageTintList = ColorStateList.valueOf(navColor)
+            navIcon.rotation = 45f
             navTitle.text = "Naviguer"
-            navDetail.text = "Google Maps"
+            navTitle.maxLines = 1
+            navDetail.text = currentStreet ?: navigation.app().label
+            navDetail.maxLines = 1
             navDetail.setTextColor(muted)
+            navEta.visibility = View.GONE
+            navChevron.visibility = View.VISIBLE
+            placesRow.visibility = View.VISIBLE
             return
         }
-        navTitle.text = listOfNotNull(nav.remaining, nav.arrival?.let { "arrivée $it" }).joinToString(" · ")
-        navDetail.text = listOfNotNull(nav.distance, nav.instruction).joinToString(" · ").ifEmpty { "Guidage en cours" }
-        navDetail.setTextColor(navColor)
+        if (nav.arrow != null) {
+            navIcon.setImageDrawable(nav.arrow)
+            navIcon.rotation = 0f
+        }
+        navTitle.text = nav.step ?: nav.remaining ?: "Guidage"
+        navDetail.text = nav.instruction ?: listOfNotNull(nav.distance, "restants").joinToString(" ")
+        navDetail.maxLines = 2
+        navDetail.setTextColor(text)
+        navEta.text = listOfNotNull(nav.remaining, nav.arrival).joinToString("\n")
+        navEta.visibility = if (navEta.text.isNullOrEmpty()) View.GONE else View.VISIBLE
+        navChevron.visibility = View.GONE
+        placesRow.visibility = View.GONE
     }
 
     private fun destination(place: Place) = prefs.getString(place.key, null)?.takeIf { it.isNotBlank() }
 
-    /** Both places always work: Incar Drive's own address if one was set (long press), else Google Maps' one. */
-    private fun renderPlaces() {
-        placeChips.forEach { (place, chip) -> chip.contentDescription = "Aller à ${place.label}" }
-    }
 
     /**
      * Guidance to the address set in Incar Drive, or else to the place saved as Home or Work in the driver's Google
      * Maps account, which Maps finds by its label.
      */
     private fun goTo(place: Place) {
-        val target = destination(place) ?: mapsLabel(place)
-        if (!links.navigate(target)) Toast.makeText(this, "Google Maps n’est pas installé.", Toast.LENGTH_LONG).show()
-    }
-
-    private fun mapsLabel(place: Place) = when {
-        Locale.getDefault().language == "fr" -> if (place == Place.HOME) "Domicile" else "Travail"
-        else -> if (place == Place.HOME) "Home" else "Work"
+        val own = destination(place)
+        val opened = if (own != null) navigation.goTo(own) else navigation.goToSaved(work = place == Place.WORK)
+        if (!opened) navMissing()
     }
 
     private fun describe(target: String?) = when {
-        target == null -> "Celle de Google Maps"
+        target == null -> "Celle de ${navigation.app().label}"
         COORDINATES.matches(target) -> "Position enregistrée ($target)"
         else -> target
     }
@@ -1131,11 +1228,39 @@ class HomeActivity : Activity() {
             } ?: run { fetchingRoads = false }
         }
         val bearing = if ((kmh ?: 0) >= 5 && fix.hasBearing()) fix.bearing.toInt() else null
-        val limit = roadLimits.limitAt(fix.latitude, fix.longitude, bearing)?.limit
+        val road = roadLimits.limitAt(fix.latitude, fix.longitude, bearing)
+        // The street under the car, shown on the navigation card when not guiding.
+        if (road?.name != currentStreet) {
+            currentStreet = road?.name
+            if (NavWatch.nav.value == null) renderNav(null)
+        }
+        renderCamera(roadLimits.cameraAhead(fix.latitude, fix.longitude, bearing), kmh)
+        val limit = road?.limit.takeIf { roadMode() }
         if (limit != roadLimit) {
             roadLimit = limit
             if (::gauge.isInitialized) gauge.limit = limit
             if (::limitSign.isInitialized) limitSign.limit = limit
+        }
+    }
+
+    private var currentStreet: String? = null
+    private var warnedCamera: Camera? = null
+    private lateinit var cameraBadge: TextView
+
+    /** A red « Radar 350 m » badge on the speed card, with one double beep per camera, while one is ahead. */
+    private fun renderCamera(ahead: Pair<Camera, Int>?, kmh: Int?) {
+        if (!::cameraBadge.isInitialized) return
+        if (ahead == null || (kmh ?: 0) < 10) {
+            cameraBadge.visibility = View.GONE
+            if (ahead == null) warnedCamera = null
+            return
+        }
+        val (camera, meters) = ahead
+        cameraBadge.text = listOfNotNull("Radar ${(meters / 10) * 10} m", camera.limit?.let { "$it" }).joinToString(" · ")
+        cameraBadge.visibility = View.VISIBLE
+        if (warnedCamera != camera) {
+            warnedCamera = camera
+            runCatching { ToneGenerator(AudioManager.STREAM_NOTIFICATION, 90).startTone(ToneGenerator.TONE_PROP_BEEP2, 600) }
         }
     }
 
@@ -1500,7 +1625,33 @@ class HomeActivity : Activity() {
                     }.show()
                 }
             })
-            addView(caps("Destinations"), wrap().apply { topMargin = dp(6) })
+            addView(caps("Navigation"), wrap().apply { topMargin = dp(6) })
+            addView(row().apply {
+                gravity = Gravity.FILL
+                val current = navigation.app()
+                NavApp.entries.forEachIndexed { index, app ->
+                    val selected = app == current
+                    addView(label(app.label, 15, if (selected) onAccent else text, 700).apply {
+                        gravity = Gravity.CENTER
+                        background = pressable(GradientDrawable().apply {
+                            cornerRadius = dp(12).toFloat()
+                            setColor(if (selected) accent else getColor(R.color.home_chip))
+                            if (!selected) setStroke(dp(1), getColor(R.color.home_card_border))
+                        }, 12)
+                        setOnClickListener {
+                            if (packageManager.getLaunchIntentForPackage(app.packageName) == null) {
+                                Toast.makeText(this@HomeActivity, "${app.label} n’est pas installé.", Toast.LENGTH_LONG).show()
+                            } else {
+                                navigation.choose(app)
+                                renderNav(NavWatch.nav.value)
+                                renderPlaces()
+                                showSettings()
+                            }
+                        }
+                    }, LinearLayout.LayoutParams(0, dp(46), 1f).apply { if (index > 0) marginStart = dp(8) })
+                }
+            }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+            addView(caps("Destinations"), wrap().apply { topMargin = dp(12) })
             Place.entries.forEach { place ->
                 addView(row().apply {
                     background = pressable(GradientDrawable().apply {
@@ -1517,6 +1668,24 @@ class HomeActivity : Activity() {
                     addView(label(describe(destination(place)) + "  ›", 14, muted, 500).apply { gravity = Gravity.END },
                         LinearLayout.LayoutParams(0, -2, 1f).apply { marginStart = dp(16) })
                     setOnClickListener { editPlace(place) { showSettings() } }
+                }, LinearLayout.LayoutParams(-1, dp(46)).apply { topMargin = dp(8) })
+            }
+            (myPlaces().map { it } + listOf<SavedNumber?>(null)).forEach { saved ->
+                addView(row().apply {
+                    background = pressable(GradientDrawable().apply {
+                        cornerRadius = dp(12).toFloat()
+                        setColor(getColor(R.color.home_chip))
+                        setStroke(dp(1), getColor(R.color.home_card_border))
+                    }, 12)
+                    setPadding(dp(14), 0, dp(14), 0)
+                    addView(ImageView(context).apply {
+                        setImageResource(if (saved == null) R.drawable.ic_home_add else R.drawable.ic_home_location)
+                        imageTintList = ColorStateList.valueOf(text)
+                    }, LinearLayout.LayoutParams(dp(20), dp(20)))
+                    addView(label(saved?.name ?: "Ajouter un lieu", 15, text, 700), wrap().apply { marginStart = dp(12) })
+                    addView(label((saved?.let { describe(it.number) } ?: "Mosquée, famille, salle de sport…") + "  ›", 14, muted, 500)
+                        .apply { gravity = Gravity.END }, LinearLayout.LayoutParams(0, -2, 1f).apply { marginStart = dp(16) })
+                    setOnClickListener { editMyPlace(saved) { showSettings() } }
                 }, LinearLayout.LayoutParams(-1, dp(46)).apply { topMargin = dp(8) })
             }
             addView(caps("Effets sonores"), wrap().apply { topMargin = dp(14) })
@@ -1716,6 +1885,7 @@ class HomeActivity : Activity() {
         const val REQUEST_PHONE_STATE = 8
         const val CLICKS = "interface_clicks"
         const val SOUND_PROFILE = "sound_profile"
+        const val MY_PLACES = "my_places"
         const val PREFS = "incar_drive_home"
         const val APPEARANCE = "appearance"
         const val ACCENT = "accent"

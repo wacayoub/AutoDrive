@@ -14,6 +14,9 @@ import kotlin.math.sqrt
 /** A road around the car: its speed limit (null when the map has none) and its shape. */
 internal data class Road(val limit: Int?, val name: String?, val points: List<Pair<Double, Double>>)
 
+/** A fixed speed camera from OpenStreetMap (`highway=speed_camera`), with its limit when tagged. */
+internal data class Camera(val latitude: Double, val longitude: Double, val limit: Int?)
+
 /**
  * The legal speed limit of the road the car is on, from OpenStreetMap's `maxspeed` tags through the public Overpass
  * API. Roads within 800 m are fetched once and matched locally to each GPS fix; they are fetched again after 450 m.
@@ -22,6 +25,7 @@ internal data class Road(val limit: Int?, val name: String?, val points: List<Pa
  */
 internal class RoadLimits {
     private var roads: List<Road> = emptyList()
+    private var cameras: List<Camera> = emptyList()
     private var center: Pair<Double, Double>? = null
     private var lastAttempt = 0L
     private var failures = 0
@@ -39,9 +43,9 @@ internal class RoadLimits {
     fun refresh(latitude: Double, longitude: Double, now: Long) {
         lastAttempt = now
         // The public Overpass servers are often busy: try each in turn.
-        var result: Result<List<Road>> = Result.failure(IOException("No server"))
+        var result: Result<Pair<List<Road>, List<Camera>>> = Result.failure(IOException("No server"))
         for (server in SERVERS) {
-            result = runCatching { parse(download(server, query(latitude, longitude))) }
+            result = runCatching { download(server, query(latitude, longitude)).let { parse(it) to parseCameras(it) } }
             if (result.isSuccess) break
             android.util.Log.d(TAG, "$server: ${result.exceptionOrNull()?.message}")
         }
@@ -52,16 +56,23 @@ internal class RoadLimits {
             return
         }
         failures = 0
-        android.util.Log.i(TAG, "${fetched.size} roads around the car, ${fetched.count { it.limit != null }} with a limit")
-        roads = fetched
+        android.util.Log.i(TAG, "${fetched.first.size} roads around the car, ${fetched.first.count { it.limit != null }} with a limit, " +
+            "${fetched.second.size} speed cameras")
+        roads = fetched.first
+        cameras = fetched.second
         center = latitude to longitude
     }
 
     /** The limit of the road the car is on, or null when unknown. */
     fun limitAt(latitude: Double, longitude: Double, bearing: Int?): Road? = match(roads, latitude, longitude, bearing)
 
+    /** The nearest speed camera ahead of the car, and its distance in metres. */
+    fun cameraAhead(latitude: Double, longitude: Double, bearing: Int?): Pair<Camera, Int>? =
+        cameraAhead(cameras, latitude, longitude, bearing)
+
     private fun query(latitude: Double, longitude: Double) =
-        "[out:json][timeout:30];way(around:$RADIUS,$latitude,$longitude)[highway~\"^($ROAD_TYPES)$\"];out tags geom;"
+        "[out:json][timeout:30];(way(around:$RADIUS,$latitude,$longitude)[highway~\"^($ROAD_TYPES)$\"];" +
+            "node(around:$CAMERA_RADIUS,$latitude,$longitude)[highway=speed_camera];);out tags geom;"
 
     private fun download(server: String, query: String): String {
         val url = URI("$server?data=" + URLEncoder.encode(query, "UTF-8")).toURL()
@@ -94,6 +105,8 @@ internal class RoadLimits {
         val SERVERS = listOf("https://overpass-api.de/api/interpreter", "https://overpass.kumi.systems/api/interpreter",
             "https://overpass.private.coffee/api/interpreter")
         const val RADIUS = 800
+        const val CAMERA_RADIUS = 2000
+        const val CAMERA_WARNING_METERS = 500
         const val REFRESH_METERS = 450.0
         const val RETRY_MS = 20_000L
         const val MATCH_METERS = 30.0
@@ -114,6 +127,34 @@ internal class RoadLimits {
             val kmh = if (number.groupValues[2] == "mph") (speed * 1.609).roundToInt() else speed
             return kmh.takeIf { it in 5..150 }
         }
+
+        fun parseCameras(json: String): List<Camera> {
+            val elements = JSONObject(json).optJSONArray("elements") ?: return emptyList()
+            return (0 until elements.length()).mapNotNull { index ->
+                val node = elements.optJSONObject(index)?.takeIf { it.optString("type") == "node" } ?: return@mapNotNull null
+                val tags = node.optJSONObject("tags")
+                if (tags?.optString("highway") != "speed_camera") return@mapNotNull null
+                Camera(node.optDouble("lat"), node.optDouble("lon"), parseMaxspeed(tags.optString("maxspeed").ifEmpty { null }))
+                    .takeIf { !it.latitude.isNaN() && !it.longitude.isNaN() }
+            }
+        }
+
+        /**
+         * The closest camera within [CAMERA_WARNING_METERS] that lies ahead: within 35° of the heading when it is
+         * known, otherwise within 200 m in any direction.
+         */
+        fun cameraAhead(cameras: List<Camera>, latitude: Double, longitude: Double, bearing: Int?): Pair<Camera, Int>? =
+            cameras.mapNotNull { camera ->
+                val meters = TripMeter.distanceMeters(latitude, longitude, camera.latitude, camera.longitude)
+                if (meters > CAMERA_WARNING_METERS) return@mapNotNull null
+                if (bearing == null) return@mapNotNull (camera to meters.toInt()).takeIf { meters <= 200 }
+                val dy = camera.latitude - latitude
+                val dx = (camera.longitude - longitude) * cos(Math.toRadians(latitude))
+                val toward = (Math.toDegrees(atan2(dx, dy)) + 360) % 360
+                var diff = abs(toward - bearing) % 360
+                if (diff > 180) diff = 360 - diff
+                (camera to meters.toInt()).takeIf { diff <= 35 || meters < 40 }
+            }.minByOrNull { it.second }
 
         fun parse(json: String): List<Road> {
             val elements = JSONObject(json).optJSONArray("elements") ?: return emptyList()

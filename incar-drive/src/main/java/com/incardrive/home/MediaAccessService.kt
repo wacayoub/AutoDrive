@@ -30,7 +30,7 @@ class MediaAccessService : NotificationListenerService() {
 
     private fun refresh(active: List<StatusBarNotification>?) {
         CallWatch.refresh(active.orEmpty())
-        NavWatch.refresh(active.orEmpty())
+        NavWatch.refresh(active.orEmpty(), this)
     }
 }
 
@@ -104,7 +104,13 @@ internal object CallWatch {
 }
 
 /** What Google Maps (or Waze) shows while guiding: time left, distance left, arrival time and the next step. */
-internal data class NavInfo(val remaining: String?, val distance: String?, val arrival: String?, val instruction: String?)
+internal data class NavInfo(
+    val remaining: String?, val distance: String?, val arrival: String?, val instruction: String?,
+    /** Distance to the next turn, when the instruction gives it (« 300 m »). */
+    val step: String? = null,
+    /** The turn arrow Maps draws in its notification. */
+    val arrow: android.graphics.drawable.Drawable? = null,
+)
 
 /** The guidance notification of the navigation app, read like the call notification. */
 internal object NavWatch {
@@ -116,15 +122,15 @@ internal object NavWatch {
     private val distance = Regex("""(?i)\b(\d+(?:[.,]\d+)?\s*(?:km|m))\b""")
     private val clock = Regex("""\b([01]?\d|2[0-3])[:h]([0-5]\d)\b""")
 
-    fun refresh(active: List<StatusBarNotification>) {
-        state.value = active.asSequence().mapNotNull(::read).firstOrNull()
+    fun refresh(active: List<StatusBarNotification>, context: android.content.Context? = null) {
+        state.value = active.asSequence().mapNotNull { read(it, context) }.firstOrNull()
     }
 
     fun clear() {
         state.value = null
     }
 
-    private fun read(sbn: StatusBarNotification): NavInfo? {
+    private fun read(sbn: StatusBarNotification, context: android.content.Context?): NavInfo? {
         if (sbn.packageName !in navigationApps) return null
         val notification = sbn.notification ?: return null
         val guiding = notification.category == Notification.CATEGORY_NAVIGATION || sbn.isOngoing
@@ -133,7 +139,8 @@ internal object NavWatch {
         val texts = listOf(Notification.EXTRA_TITLE, Notification.EXTRA_TEXT, Notification.EXTRA_SUB_TEXT,
             Notification.EXTRA_BIG_TEXT, Notification.EXTRA_INFO_TEXT)
             .mapNotNull { extras.getCharSequence(it)?.toString()?.trim()?.takeIf(String::isNotEmpty) }
-        return parse(texts)
+        val arrow = context?.let { runCatching { notification.getLargeIcon()?.loadDrawable(it) }.getOrNull() }
+        return parse(texts)?.copy(arrow = arrow)
     }
 
     /**
@@ -147,6 +154,7 @@ internal object NavWatch {
         val arrival = (clock.find(summary) ?: texts.firstNotNullOfOrNull { clock.find(it) })
             ?.let { "${it.groupValues[1].padStart(2, '0')}:${it.groupValues[2]}" }
         val instruction = texts.firstOrNull { it != summary && !duration.containsMatchIn(it) }
-        return NavInfo(remaining, left, arrival, instruction)
+        val step = instruction?.let { line -> distance.find(line)?.value?.replace(Regex("""\s+"""), " ") }
+        return NavInfo(remaining, left, arrival, instruction, step)
     }
 }

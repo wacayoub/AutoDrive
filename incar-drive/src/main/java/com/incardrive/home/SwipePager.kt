@@ -23,6 +23,17 @@ internal class SwipePager(context: Context, private val changed: (Int) -> Unit) 
     private var dragging = false
     private var offset = 0f
     private var velocity: VelocityTracker? = null
+    // A sideways-scrolling row under the finger (the places on the navigation card) keeps its own swipes.
+    private var childScrolls = false
+
+    private fun scrollsSideways(view: View, x: Int, y: Int): Boolean {
+        if (view.visibility != View.VISIBLE) return false
+        val location = IntArray(2)
+        view.getLocationOnScreen(location)
+        if (x < location[0] || y < location[1] || x >= location[0] + view.width || y >= location[1] + view.height) return false
+        if (view.canScrollHorizontally(1) || view.canScrollHorizontally(-1)) return true
+        return view is android.view.ViewGroup && (0 until view.childCount).any { scrollsSideways(view.getChildAt(it), x, y) }
+    }
 
     var page = 0
         private set
@@ -69,6 +80,7 @@ internal class SwipePager(context: Context, private val changed: (Int) -> Unit) 
                 downX = event.x
                 downY = event.y
                 dragging = false
+                childScrolls = pages.getOrNull(page)?.let { scrollsSideways(it, event.rawX.toInt(), event.rawY.toInt()) } == true
                 velocity?.recycle()
                 velocity = VelocityTracker.obtain().apply { addMovement(event) }
             }
@@ -76,7 +88,7 @@ internal class SwipePager(context: Context, private val changed: (Int) -> Unit) 
                 velocity?.addMovement(event)
                 val dx = event.x - downX
                 val dy = event.y - downY
-                if (pages.size > 1 && abs(dx) > slop * 2 && abs(dx) > abs(dy) * 1.5f) {
+                if (!childScrolls && pages.size > 1 && abs(dx) > slop * 2 && abs(dx) > abs(dy) * 1.5f) {
                     dragging = true
                     parent?.requestDisallowInterceptTouchEvent(true)
                 }
