@@ -16,6 +16,8 @@
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
     <queries>
         <package android:name="app.luxeradio.ma" />
+        <!-- The Incar Drive home screen, which may start the radio (same signing key). -->
+        <package android:name="com.incardrive.home" />
         <!-- Installed apps, to choose those the floating bubble appears over. -->
         <intent>
             <action android:name="android.intent.action.MAIN" />

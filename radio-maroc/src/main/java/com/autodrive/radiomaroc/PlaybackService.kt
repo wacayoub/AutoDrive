@@ -89,6 +89,7 @@ internal class PlaybackService : MediaLibraryService() {
         private var screenListener: ((Boolean) -> Unit)? = null
         // Sent by the AutoDrive home screen when it comes to the front or leaves (a hint only: it hides the bubble).
         const val HOME_VISIBLE = "com.autodrive.radiomaroc.HOME_VISIBLE"
+        const val HOME_SCREEN = "com.incardrive.home"
 
         fun setVisibleStations(stations: List<RadioStation>) {
             visibleStations.value = stations.filter { it != Stations.luxe }
@@ -299,7 +300,8 @@ internal class PlaybackService : MediaLibraryService() {
                 override fun onConnect(session: MediaSession, controller: MediaSession.ControllerInfo): MediaSession.ConnectionResult {
                     if (!isOwnController(controller)) {
                         return if (controller.isTrusted || session.isMediaNotificationController(controller) ||
-                            session.isAutomotiveController(controller) || session.isAutoCompanionController(controller))
+                            session.isAutomotiveController(controller) || session.isAutoCompanionController(controller) ||
+                            isHomeScreen(controller))
                             super.onConnect(session, controller)
                         else MediaSession.ConnectionResult.reject()
                     }
@@ -463,6 +465,16 @@ internal class PlaybackService : MediaLibraryService() {
 
     private fun isOwnController(controller: MediaSession.ControllerInfo): Boolean =
         controller.uid == applicationInfo.uid && controller.packageName == packageName
+
+    /**
+     * The Incar Drive home screen, signed with this app's own key: it may start and control the radio, for example to
+     * resume the last station when the car starts.
+     */
+    private fun isHomeScreen(controller: MediaSession.ControllerInfo): Boolean = controller.packageName == HOME_SCREEN &&
+        runCatching {
+            packageManager.getPackageUid(HOME_SCREEN, 0) == controller.uid &&
+                packageManager.checkSignatures(packageName, HOME_SCREEN) == android.content.pm.PackageManager.SIGNATURE_MATCH
+        }.getOrDefault(false)
 
     /**
      * Luxe Radio plays in its own app. Stop it before another station starts, also when this service was

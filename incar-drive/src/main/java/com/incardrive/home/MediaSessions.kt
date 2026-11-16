@@ -51,6 +51,9 @@ internal class MediaSessions(context: Context, private val changed: () -> Unit) 
         changed()
     }
 
+    /** Every media session Android lists now, for resuming one app's playback. */
+    fun live(): List<MediaController> = available
+
     fun hasAccess() = notifications.isNotificationListenerAccessGranted(listenerComponent)
 
     fun start() {

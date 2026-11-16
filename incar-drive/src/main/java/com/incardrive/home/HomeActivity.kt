@@ -174,6 +174,7 @@ class HomeActivity : Activity() {
     internal lateinit var dialer: Dialer
     private lateinit var navigation: Navigation
     private lateinit var mapWidget: MapWidget
+    private lateinit var mediaResume: MediaResume
     private lateinit var widgets: WidgetBoard
     private lateinit var phone: PhoneLink
     private lateinit var trip: TripMeter
@@ -224,6 +225,7 @@ class HomeActivity : Activity() {
         dialer = Dialer(this)
         navigation = Navigation(this, prefs)
         mapWidget = MapWidget(this)
+        mediaResume = MediaResume(this)
         widgets = WidgetBoard(this)
         phone = PhoneLink(this)
         updatesUi = IncarUpdates(this)
@@ -270,6 +272,7 @@ class HomeActivity : Activity() {
     }
 
     override fun onDestroy() {
+        if (::mediaResume.isInitialized) mediaResume.release()
         if (::clicks.isInitialized) clicks.release()
         super.onDestroy()
     }
@@ -359,6 +362,8 @@ class HomeActivity : Activity() {
         HomeVisibility.shown = true
         HomeVisibility.changed?.invoke()
         media.start()
+        // When the car (and the head unit) starts: play the last app again, without a tap.
+        mediaResume.onHomeShown({ media.live().any { it.playbackState?.state == PlaybackState.STATE_PLAYING } }, media::live)
         if (gps.permitted()) gps.start()
         // Weather where the car is, from the last known position until the GPS answers; the chosen city otherwise.
         currentPosition()?.split(',')?.let { (lat, lon) -> info.usePosition(lat.toDouble(), lon.toDouble()) }
@@ -1374,6 +1379,7 @@ class HomeActivity : Activity() {
         radioBody.visibility = if (radio) View.VISIBLE else View.GONE
         mediaBody.visibility = if (radio) View.GONE else View.VISIBLE
         if (radio) radioCard.bind(state)
+        if (state.playing) state.source?.takeIf { it != packageName }?.let(mediaResume::remember)
         mediaControls.visibility = if (hasMedia) View.VISIBLE else View.GONE
         mediaAction.visibility = if (hasMedia) View.GONE else View.VISIBLE
         when {
@@ -1388,9 +1394,14 @@ class HomeActivity : Activity() {
                 mediaApp.text = "MÉDIA"
                 mediaTitle.text = "Rien en lecture"
                 mediaSubtitle.text = "Lance une radio ou une vidéo"
-                val radio = packageManager.getLaunchIntentForPackage(RADIO_PACKAGE)
-                mediaAction.text = if (radio != null) "Ouvrir Radio Maroc & Coran" else "Ouvrir les applis"
-                mediaAction.setOnClickListener { if (radio != null) startSafely(radio) else showApps(editing = false) }
+                // One tap plays the last app again (the radio at first), straight away, without opening it.
+                val last = mediaResume.last?.takeIf { packageManager.getLaunchIntentForPackage(it) != null }
+                    ?: RADIO_PACKAGE.takeIf { packageManager.getLaunchIntentForPackage(it) != null }
+                mediaAction.text = last?.let { "Écouter ${appLabel(it)}" } ?: "Ouvrir les applis"
+                mediaAction.setOnClickListener {
+                    if (last == null) showApps(editing = false)
+                    else if (!mediaResume.play(last, media.live())) packageManager.getLaunchIntentForPackage(last)?.let(::startSafely)
+                }
             }
             else -> {
                 mediaApp.text = appLabel(state.source).uppercase(Locale.FRENCH)
@@ -1780,6 +1791,26 @@ class HomeActivity : Activity() {
                     setOnClickListener { editMyPlace(saved) { showSettings() } }
                 }, LinearLayout.LayoutParams(-1, dp(46)).apply { topMargin = dp(8) })
             }
+            addView(caps("Média"), wrap().apply { topMargin = dp(14) })
+            addView(row().apply {
+                background = pressable(GradientDrawable().apply {
+                    cornerRadius = dp(12).toFloat()
+                    setColor(getColor(R.color.home_chip))
+                    setStroke(dp(1), getColor(R.color.home_card_border))
+                }, 12)
+                setPadding(dp(14), 0, dp(14), 0)
+                addView(column().apply {
+                    addView(label("Reprise au démarrage", 15, text, 700))
+                    addView(label("Relance la dernière appli écoutée (${mediaResume.last?.let(::appLabel) ?: "Radio Maroc"}) quand le " +
+                        "boîtier démarre, sans appuyer sur Lecture", 11, muted).apply { maxLines = 2 }, wrap().apply { topMargin = dp(2) })
+                }, LinearLayout.LayoutParams(0, -2, 1f))
+                val state = label(if (mediaResume.enabled) "ON" else "OFF", 14, accent, 700)
+                addView(state, wrap().apply { marginStart = dp(12) })
+                setOnClickListener {
+                    mediaResume.enabled = !mediaResume.enabled
+                    state.text = if (mediaResume.enabled) "ON" else "OFF"
+                }
+            }, LinearLayout.LayoutParams(-1, dp(56)).apply { topMargin = dp(8) })
             addView(caps("Effets sonores"), wrap().apply { topMargin = dp(14) })
             fun settingRow(title: String, detail: String, value: String, action: (TextView) -> Unit) = row().apply {
                 background = pressable(GradientDrawable().apply {
