@@ -56,6 +56,7 @@ import android.window.OnBackInvokedDispatcher
 import com.autodrive.radiomaroc.EqualizerBars
 import com.autodrive.radiomaroc.LocalInfoFeed
 import com.autodrive.radiomaroc.RadioCity
+import com.autodrive.radiomaroc.RadioLocalInfo
 import com.autodrive.radiomaroc.RadioMotion
 import com.autodrive.radiomaroc.SystemNight
 import com.autodrive.radiomaroc.WeatherIcon
@@ -85,7 +86,7 @@ class HomeActivity : Activity() {
         }
     }
 
-    internal enum class Page { HOME, APPS, SETTINGS, QUICK, WIDGETS, TRIP }
+    internal enum class Page { HOME, APPS, SETTINGS, QUICK, WIDGETS, TRIP, DIALER }
 
     /** The two saved destinations: one tap starts Google Maps guidance there. */
     private enum class Place(val label: String, val icon: Int, val key: String) {
@@ -151,6 +152,7 @@ class HomeActivity : Activity() {
     private val dockItems = mutableMapOf<Page, View>()
     private val placeChips = mutableMapOf<Place, View>()
     private lateinit var quick: QuickSettings
+    internal lateinit var dialer: Dialer
     private lateinit var widgets: WidgetBoard
     private lateinit var phone: PhoneLink
     private lateinit var trip: TripMeter
@@ -184,6 +186,7 @@ class HomeActivity : Activity() {
             if (System.currentTimeMillis() - lastTripSave > 30_000) saveTrip()
         }
         quick = QuickSettings(this)
+        dialer = Dialer(this)
         widgets = WidgetBoard(this)
         phone = PhoneLink(this)
         info = LocalInfoFeed(RadioCity.restore(prefs.getString(CITY, null)))
@@ -341,7 +344,7 @@ class HomeActivity : Activity() {
         ColorStateList.valueOf(getColor(R.color.home_ripple)), base,
         GradientDrawable().apply { cornerRadius = dp(radius).toFloat(); setColor(Color.WHITE) })
 
-    private fun round(icon: Int, description: String, primary: Boolean = false, action: () -> Unit) = ImageButton(this).apply {
+    internal fun round(icon: Int, description: String, primary: Boolean = false, action: () -> Unit) = ImageButton(this).apply {
         setImageResource(icon)
         imageTintList = ColorStateList.valueOf(if (primary) onAccent else text)
         // Rounded squares like hardware keys, not the radio's round buttons.
@@ -743,9 +746,7 @@ class HomeActivity : Activity() {
             page?.let { dockItems[it] = this }
         }
         addView(item(Page.HOME, R.drawable.ic_home_home, "Accueil") { closePanel(); pager.show(0) }, LinearLayout.LayoutParams(0, -1, 1f))
-        addView(item(null, R.drawable.ic_home_phone, "Téléphone") {
-            if (!links.openPhone()) Toast.makeText(context, "Aucune application de téléphone trouvée.", Toast.LENGTH_LONG).show()
-        }, LinearLayout.LayoutParams(0, -1, 1f))
+        addView(item(Page.DIALER, R.drawable.ic_home_phone, "Téléphone") { dialer.show() }, LinearLayout.LayoutParams(0, -1, 1f))
         addView(item(Page.APPS, R.drawable.ic_home_apps, "Applis") { showApps(editing = false) }, LinearLayout.LayoutParams(0, -1, 1f))
         addView(item(Page.SETTINGS, R.drawable.ic_home_settings, "Réglages") { showSettings() }, LinearLayout.LayoutParams(0, -1, 1f))
         post { markDock(Page.HOME) }
@@ -778,7 +779,14 @@ class HomeActivity : Activity() {
 
     private fun renderPrayer() {
         if (!::prayerText.isInitialized) return
-        val next = runCatching { info.prayerStatus(info.city.value).next }.getOrNull()
+        // The next prayer by the head unit's own clock, the one shown on screen, so « dans 25 min » always agrees with it.
+        val next = runCatching {
+            val now = LocalDateTime.now()
+            val city = info.city.value
+            val today = now.toLocalDate()
+            RadioLocalInfo.prayerStatus(now, info.prayerTimes(city, today.minusDays(1)), info.prayerTimes(city, today),
+                info.prayerTimes(city, today.plusDays(1))).next
+        }.getOrNull()
         prayerText.text = next?.let { "${it.prayer.label}  ${it.dateTime.toLocalTime()}" } ?: "Salat"
         prayerDetail.text = next?.let {
             // Habous times are Moroccan wall-clock times, like the head unit's own clock.

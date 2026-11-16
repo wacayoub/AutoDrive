@@ -49,6 +49,19 @@ internal class AppLinks(private val activity: Activity) {
         return (guidance ?: search)?.let(::start) ?: false
     }
 
+    /**
+     * Hands [number] to a phone app with Android's documented DIAL request: the Incarlink's Bluetooth phone app
+     * first if it accepts it, then any other phone app. Returns the app that received it, or null when no phone
+     * app accepts numbers from other apps.
+     */
+    fun dial(number: String): String? {
+        val request = Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + Uri.encode(number)))
+        val oem = Intent(request).setPackage(OEM_PHONE.packageName).takeIf { it.resolveActivity(packages) != null }
+        val any = request.takeIf { it.resolveActivity(packages) != null }
+        val chosen = oem ?: any ?: return null
+        return if (start(chosen)) chosen.resolveActivity(packages)?.packageName else null
+    }
+
     /** The Incarlink's Bluetooth phone app when present, otherwise the device's dialer. */
     fun openPhone(): Boolean {
         val oem = Intent.makeMainActivity(OEM_PHONE).takeIf { it.resolveActivity(packages) != null }

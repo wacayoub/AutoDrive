@@ -132,15 +132,13 @@ internal class PhoneLink(private val home: HomeActivity) {
             }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
             list = column()
             addView(list, LinearLayout.LayoutParams(-1, 0, 1f).apply { topMargin = dp(8) })
-            addView(label("Ouvrir Téléphone", 15, onAccent, 700).apply {
+            addView(label("Clavier et numéros", 15, onAccent, 700).apply {
                 gravity = Gravity.CENTER
                 background = pressable(GradientDrawable().apply {
                     cornerRadius = dp(12).toFloat()
                     setColor(accent)
                 }, 12)
-                setOnClickListener {
-                    if (!links.openPhone()) Toast.makeText(context, "Aucune application de téléphone trouvée.", Toast.LENGTH_LONG).show()
-                }
+                setOnClickListener { dialer.show() }
             }, LinearLayout.LayoutParams(-1, dp(44)))
             render()
         }
@@ -164,7 +162,9 @@ internal class PhoneLink(private val home: HomeActivity) {
 
     private fun renderList() = with(home) {
         list.removeAllViews()
+        val saved = dialer.saved().map { Entry(it.name, it.number, "Enregistré") }
         if (!contactsPermitted()) {
+            saved.take(2).forEach { addEntry(it) }
             list.addView(label("Afficher favoris et appels récents  ›", 13, text, 600).apply {
                 maxLines = 2
                 setPadding(0, dp(8), 0, dp(8))
@@ -175,15 +175,19 @@ internal class PhoneLink(private val home: HomeActivity) {
             })
             return@with
         }
-        val entries = (favourites() + recents()).distinctBy { it.number }.take(3)
+        val entries = (saved + favourites() + recents()).distinctBy { it.number }.take(3)
         if (entries.isEmpty()) {
+            // Nothing saved here and nothing Android knows.
             list.addView(label("Les contacts et appels sont dans l’appli Téléphone de l’Incarlink.", 12, muted).apply {
                 maxLines = 3
                 setPadding(0, dp(6), 0, 0)
             })
             return@with
         }
-        entries.forEach { entry ->
+        entries.forEach(::addEntry)
+    }
+
+    private fun addEntry(entry: Entry) = with(home) {
             list.addView(row().apply {
                 background = pressable(null, 10)
                 setPadding(dp(4), 0, dp(4), 0)
@@ -196,9 +200,8 @@ internal class PhoneLink(private val home: HomeActivity) {
                     addView(label(entry.detail, 11, muted), wrap().apply { topMargin = dp(1) })
                 }, LinearLayout.LayoutParams(0, -2, 1f).apply { marginStart = dp(10) })
                 contentDescription = "Appeler ${entry.name}"
-                setOnClickListener { startSafely(Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + Uri.encode(entry.number)))) }
+                setOnClickListener { dialer.call(entry.number) }
             }, LinearLayout.LayoutParams(-1, dp(42)))
-        }
     }
 
     private fun favourites(): List<Entry> = runCatching {

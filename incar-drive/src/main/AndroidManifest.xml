@@ -35,6 +35,10 @@
         <intent>
             <action android:name="android.intent.action.DIAL" />
         </intent>
+        <intent>
+            <action android:name="android.intent.action.DIAL" />
+            <data android:scheme="tel" />
+        </intent>
         <package android:name="com.google.android.apps.maps" />
         <package android:name="com.carsyso.bluetooth" />
         <package android:name="com.autodrive.radiomaroc" />
