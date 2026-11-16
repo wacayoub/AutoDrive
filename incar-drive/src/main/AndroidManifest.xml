@@ -50,12 +50,6 @@
         <!-- The Incarlink's own settings app (firmware SudingSettings.apk). -->
         <package android:name="com.suding.settings" />
         <package android:name="com.autodrive.radiomaroc" />
-        <!-- YouTube apps, for the YouTube button of the radio card. -->
-        <package android:name="com.google.android.youtube" />
-        <package android:name="app.revanced.android.youtube" />
-        <package android:name="com.google.android.apps.youtube.music" />
-        <package android:name="com.liskovsoft.smarttubetv.beta" />
-        <package android:name="org.schabi.newpipe" />
     </queries>
 
     <application android:label="@string/app_name" android:icon="@mipmap/ic_incar_drive"

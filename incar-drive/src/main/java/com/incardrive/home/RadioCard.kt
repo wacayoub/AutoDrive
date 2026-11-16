@@ -10,14 +10,12 @@ import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
-import android.widget.Toast
-import com.autodrive.radiomaroc.EqualizerBars
 import com.autodrive.radiomaroc.RadioMotion
 
 /**
  * The media card while Radio Maroc & Coran plays, drawn like the radio's own player: the station logo large and
- * unframed, its name, genre and the red LIVE badge, the level bars under the logo, the « RADIO » strip, and the round
- * buttons: previous, play in a large filled circle, next, then Maps and YouTube like the radio's companion buttons.
+ * unframed, its name, genre and the red LIVE badge, the radio's coloured level meter under the logo, the « RADIO » strip, and the round
+ * buttons: previous, play in a large filled circle, next.
  * The card glows in the logo's colour (set by the activity).
  */
 internal class RadioCard(private val home: HomeActivity, private val command: (Long) -> Unit) {
@@ -26,7 +24,7 @@ internal class RadioCard(private val home: HomeActivity, private val command: (L
     private lateinit var genre: TextView
     private lateinit var live: View
     private lateinit var strip: TextView
-    private lateinit var bars: EqualizerBars
+    private lateinit var bars: LevelMeter
     private lateinit var play: ImageButton
 
     // The radio's own colours: white controls and a black play button by day, dark controls and mint by night.
@@ -45,8 +43,8 @@ internal class RadioCard(private val home: HomeActivity, private val command: (L
                     gravity = Gravity.CENTER_HORIZONTAL
                     logo = ImageView(context).apply { scaleType = ImageView.ScaleType.FIT_CENTER }
                     addView(logo, LinearLayout.LayoutParams(dp(118), dp(96)))
-                    bars = EqualizerBars(context, green)
-                    addView(bars, LinearLayout.LayoutParams(dp(56), dp(14)).apply { topMargin = dp(8) })
+                    bars = LevelMeter(context, night)
+                    addView(bars, LinearLayout.LayoutParams(dp(80), dp(26)).apply { topMargin = dp(6) })
                 }, LinearLayout.LayoutParams(dp(124), -2))
                 addView(column().apply {
                     addView(caps("Radio Maroc", green))
@@ -95,24 +93,13 @@ internal class RadioCard(private val home: HomeActivity, private val command: (L
                     RadioMotion.pressScale(this, .9f)
                 }
                 addView(button(R.drawable.ic_home_previous, "Station précédente") { command(PlaybackState.ACTION_SKIP_TO_PREVIOUS) },
-                    LinearLayout.LayoutParams(dp(44), dp(44)))
+                    LinearLayout.LayoutParams(dp(52), dp(52)))
                 play = button(R.drawable.ic_home_play, "Écouter", main = true) { command(PlaybackState.ACTION_PLAY_PAUSE) }
-                addView(play, LinearLayout.LayoutParams(dp(56), dp(56)).apply { marginStart = dp(6); marginEnd = dp(6) })
+                addView(play, LinearLayout.LayoutParams(dp(66), dp(66)).apply { marginStart = dp(14); marginEnd = dp(14) })
                 addView(button(R.drawable.ic_home_next, "Station suivante") { command(PlaybackState.ACTION_SKIP_TO_NEXT) },
-                    LinearLayout.LayoutParams(dp(44), dp(44)))
-                addView(button(R.drawable.ic_home_location, "Ouvrir Maps") {
-                    if (!links.openMaps()) Toast.makeText(context, "Google Maps n’est pas installé.", Toast.LENGTH_LONG).show()
-                }, LinearLayout.LayoutParams(dp(44), dp(44)).apply { marginStart = dp(6) })
-                addView(button(R.drawable.ic_home_video, "Ouvrir YouTube") { openYouTube() },
-                    LinearLayout.LayoutParams(dp(44), dp(44)).apply { marginStart = dp(6) })
+                    LinearLayout.LayoutParams(dp(52), dp(52)))
             }, LinearLayout.LayoutParams(-1, -2))
         }
-    }
-
-    private fun openYouTube() = with(home) {
-        val intent = YOUTUBE_APPS.firstNotNullOfOrNull(packageManager::getLaunchIntentForPackage)
-        if (intent != null) startSafely(intent)
-        else Toast.makeText(this, "YouTube n’est pas installé.", Toast.LENGTH_LONG).show()
     }
 
     fun bind(state: MediaState) {
@@ -127,11 +114,5 @@ internal class RadioCard(private val home: HomeActivity, private val command: (L
         bars.playing = state.playing
         play.setImageResource(if (state.playing) R.drawable.ic_home_pause else R.drawable.ic_home_play)
         play.contentDescription = if (state.playing) "Pause" else "Écouter"
-    }
-
-    private companion object {
-        // Google's YouTube first, then the other YouTube apps head units often carry, as in Radio Maroc & Coran.
-        val YOUTUBE_APPS = listOf("com.google.android.youtube", "app.revanced.android.youtube",
-            "com.google.android.apps.youtube.music", "com.liskovsoft.smarttubetv.beta", "org.schabi.newpipe")
     }
 }

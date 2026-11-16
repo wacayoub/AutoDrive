@@ -1330,11 +1330,12 @@ class HomeActivity : Activity() {
         }.getOrNull()
     }
 
-    private fun appTile(app: Launchable, compact: Boolean, onLong: (View) -> Unit) = column().apply {
+    /** A favourite on a tinted tile, or, in the apps list ([plain]), just the app's logo and name. */
+    private fun appTile(app: Launchable, compact: Boolean, plain: Boolean = false, onLong: (View) -> Unit) = column().apply {
         gravity = Gravity.CENTER
         val icon = links.icon(app)
         val tint = iconColor(app, icon) ?: accent
-        background = pressable(GradientDrawable().apply {
+        background = if (plain) pressable(null, 14) else pressable(GradientDrawable().apply {
             cornerRadius = dp(12).toFloat()
             if (neutral) {
                 setColor(getColor(R.color.home_chip))
@@ -1342,8 +1343,8 @@ class HomeActivity : Activity() {
             } else setColor(Color.argb(if (night) 0x2E else 0x26, Color.red(tint), Color.green(tint), Color.blue(tint)))
         }, 12)
         setPadding(dp(4), dp(6), dp(4), dp(6))
-        addView(ImageView(context).apply { setImageDrawable(icon) },
-            LinearLayout.LayoutParams(dp(if (compact) 38 else 48), dp(if (compact) 38 else 48)))
+        val size = dp(when { plain -> 54; compact -> 38; else -> 48 })
+        addView(ImageView(context).apply { setImageDrawable(icon) }, LinearLayout.LayoutParams(size, size))
         addView(label(app.label, 11, text, 500).apply { gravity = Gravity.CENTER },
             LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(5) })
         contentDescription = app.label
@@ -1450,7 +1451,7 @@ class HomeActivity : Activity() {
                     override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
                         val app = apps[position]
                         val chosen = favorites().any { it.component == app.component }
-                        return appTile(app, compact = false) { toggleFavorite(app); notifyDataSetChanged() }.apply {
+                        return appTile(app, compact = false, plain = true) { toggleFavorite(app); notifyDataSetChanged() }.apply {
                             if (editing) {
                                 setOnClickListener { toggleFavorite(app); notifyDataSetChanged() }
                                 alpha = if (chosen) 1f else .5f
