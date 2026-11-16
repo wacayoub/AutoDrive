@@ -873,7 +873,7 @@ class HomeActivity : Activity() {
     }
 
     /** Whether the live map replaces the favourites on the first page (Réglages › Navigation › Carte sur l’accueil). */
-    private fun mapOnHome() = prefs.getBoolean(MAP_ON_HOME, true)
+    private fun mapOnHome() = prefs.getBoolean(MAP_ON_HOME, false)
 
     private fun navMissing() = Toast.makeText(this, "${navigation.app().label} n’est pas installé.", Toast.LENGTH_LONG).show()
 
@@ -1489,7 +1489,7 @@ class HomeActivity : Activity() {
             } else setColor(Color.argb(if (night) 0x2E else 0x26, Color.red(tint), Color.green(tint), Color.blue(tint)))
         }, 12)
         setPadding(dp(4), dp(6), dp(4), dp(6))
-        val size = dp(when { plain -> 54; compact -> 38; else -> 48 })
+        val size = dp(when { plain && compact -> 44; plain -> 54; compact -> 38; else -> 48 })
         addView(ImageView(context).apply { setImageDrawable(icon) }, LinearLayout.LayoutParams(size, size))
         addView(label(app.label, 11, text, 500).apply { gravity = Gravity.CENTER },
             LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(5) })
@@ -1501,14 +1501,12 @@ class HomeActivity : Activity() {
 
     private fun addTile() = column().apply {
         gravity = Gravity.CENTER
-        background = pressable(GradientDrawable().apply {
-            cornerRadius = dp(12).toFloat()
-            setStroke(dp(1), getColor(R.color.home_card_border), dp(6).toFloat(), dp(4).toFloat())
-            setColor(getColor(R.color.home_chip))
-        }, 12)
+        // A free place: just a faint « + », no frame, like the logos around it.
+        background = pressable(null, 14)
         addView(ImageView(context).apply {
             setImageResource(R.drawable.ic_home_add)
             imageTintList = ColorStateList.valueOf(muted)
+            alpha = .6f
         }, LinearLayout.LayoutParams(dp(24), dp(24)))
         contentDescription = "Ajouter un favori"
         setOnClickListener { showApps(editing = true) }
@@ -1524,7 +1522,7 @@ class HomeActivity : Activity() {
             favoritesGrid.addView(row().apply {
                 gravity = Gravity.FILL
                 pair.forEachIndexed { column, app ->
-                    val tile = if (app == null) addTile() else appTile(app, compact = true) { anchor ->
+                    val tile = if (app == null) addTile() else appTile(app, compact = true, plain = true) { anchor ->
                         PopupMenu(this@HomeActivity, anchor).apply {
                             menu.add("Retirer des favoris")
                             setOnMenuItemClickListener { toggleFavorite(app); true }
@@ -1681,7 +1679,7 @@ class HomeActivity : Activity() {
                 setPadding(dp(14), 0, dp(14), 0)
                 addView(column().apply {
                     addView(label("Carte sur l’accueil", 15, text, 700))
-                    addView(label("Widget Google Maps (trafic à proximité) ou Waze, à la place des favoris", 11, muted),
+                    addView(label("Widget Google Maps (trafic à proximité) ou Waze, à la place des favoris · désactivée par défaut", 11, muted),
                         wrap().apply { topMargin = dp(2) })
                 }, LinearLayout.LayoutParams(0, -2, 1f))
                 addView(label(if (mapOnHome()) "ON" else "OFF", 14, accent, 700), wrap().apply { marginStart = dp(12) })
