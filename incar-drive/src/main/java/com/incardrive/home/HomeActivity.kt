@@ -170,6 +170,7 @@ class HomeActivity : Activity() {
     private lateinit var favoritesGrid: LinearLayout
     private lateinit var panelHost: FrameLayout
     private val dockItems = mutableMapOf<Page, View>()
+    private lateinit var dockApps: LinearLayout
     private lateinit var quick: QuickSettings
     internal lateinit var dialer: Dialer
     private lateinit var navigation: Navigation
@@ -383,6 +384,7 @@ class HomeActivity : Activity() {
         renderMedia()
         renderSpeed()
         renderFavorites()
+        renderDockApps()
     }
 
     override fun onStop() {
@@ -551,7 +553,7 @@ class HomeActivity : Activity() {
                 }
                 markDots(0)
             }, LinearLayout.LayoutParams(-1, dp(14)))
-            addView(dock(), LinearLayout.LayoutParams(-1, dp(44)))
+            addView(dock(), LinearLayout.LayoutParams(-1, dp(46)))
         }
         panelHost = FrameLayout(this).apply { visibility = View.GONE }
         callBanner = FrameLayout(this).apply { visibility = View.GONE }
@@ -1047,25 +1049,89 @@ class HomeActivity : Activity() {
     private fun dock() = row().apply {
         background = glass(18)
         elevation = dp(6).toFloat()
+        gravity = Gravity.CENTER_VERTICAL
         setPadding(dp(5), dp(4), dp(5), dp(4))
         fun item(page: Page?, icon: Int, title: String, color: Int, action: () -> Unit) = row().apply {
             gravity = Gravity.CENTER
             tag = color
+            setPadding(dp(10), 0, dp(12), 0)
             addView(ImageView(context).apply {
                 setImageResource(icon)
                 imageTintList = ColorStateList.valueOf(color)
                 tag = "icon"
-            }, LinearLayout.LayoutParams(dp(19), dp(19)))
-            addView(label(title, 14, text, 600).apply { tag = "label" }, wrap().apply { marginStart = dp(8) })
+            }, LinearLayout.LayoutParams(dp(18), dp(18)))
+            addView(label(title, 13, text, 600).apply { tag = "label" }, wrap().apply { marginStart = dp(6) })
             contentDescription = title
             setOnClickListener { action() }
             page?.let { dockItems[it] = this }
         }
+        // The home screen's pages first, each as wide as its name…
         addView(item(Page.HOME, R.drawable.ic_home_home, "Accueil", accent) { closePanel(); pager.show(0) }, LinearLayout.LayoutParams(0, -1, 1f))
-        addView(item(Page.DIALER, R.drawable.ic_home_phone, "Téléphone", phoneColor) { dialer.show() }, LinearLayout.LayoutParams(0, -1, 1f))
+        addView(item(Page.DIALER, R.drawable.ic_home_phone, "Téléphone", phoneColor) { dialer.show() }, LinearLayout.LayoutParams(0, -1, 1.25f))
         addView(item(Page.APPS, R.drawable.ic_home_apps, "Applis", appsColor) { showApps(editing = false) }, LinearLayout.LayoutParams(0, -1, 1f))
-        addView(item(Page.SETTINGS, R.drawable.ic_home_settings, "Réglages", muted) { showSettings() }, LinearLayout.LayoutParams(0, -1, 1f))
+        addView(item(Page.SETTINGS, R.drawable.ic_home_settings, "Réglages", muted) { showSettings() }, LinearLayout.LayoutParams(0, -1, 1.15f))
+        // …then the driver's apps, as logos, like the dock of a phone.
+        addView(View(context).apply { setBackgroundColor(tint(text, 0x26)) },
+            LinearLayout.LayoutParams(dp(1), dp(24)).apply { marginStart = dp(6); marginEnd = dp(6) })
+        dockApps = row().apply { gravity = Gravity.CENTER_VERTICAL }
+        addView(dockApps, LinearLayout.LayoutParams(-2, -1))
+        renderDockApps()
         post { markDock(Page.HOME) }
+    }
+
+    /** The apps in the dock: up to [DOCK_SIZE] logos, then a faint « + » while there is room. */
+    private fun renderDockApps() {
+        if (!::dockApps.isInitialized) return
+        dockApps.removeAllViews()
+        val list = dockAppList()
+        list.forEach { app ->
+            dockApps.addView(ImageView(this).apply {
+                setImageDrawable(links.icon(app))
+                setPadding(dp(4), dp(3), dp(4), dp(3))
+                background = pressable(null, 12)
+                contentDescription = app.label
+                setOnClickListener { links.open(app) }
+                setOnLongClickListener { anchor ->
+                    PopupMenu(this@HomeActivity, anchor).apply {
+                        menu.add("Retirer de la barre")
+                        menu.add("Changer les applis de la barre")
+                        setOnMenuItemClickListener { item ->
+                            if (item.title == "Retirer de la barre") toggleDockApp(app) else showApps(editing = true, dock = true)
+                            true
+                        }
+                    }.show()
+                    true
+                }
+                RadioMotion.pressScale(this, .9f)
+            }, LinearLayout.LayoutParams(dp(42), dp(36)).apply { marginStart = dp(2) })
+        }
+        if (list.size < DOCK_SIZE) dockApps.addView(ImageView(this).apply {
+            setImageResource(R.drawable.ic_home_add)
+            imageTintList = ColorStateList.valueOf(muted)
+            alpha = .6f
+            setPadding(dp(9), dp(8), dp(9), dp(8))
+            background = pressable(null, 12)
+            contentDescription = "Ajouter une appli à la barre"
+            setOnClickListener { showApps(editing = true, dock = true) }
+        }, LinearLayout.LayoutParams(dp(36), dp(36)).apply { marginStart = dp(2) })
+    }
+
+    private fun dockAppList(): List<Launchable> {
+        val apps = links.apps()
+        val keys = prefs.getString(DOCK_APPS, null)?.split('\n')?.filter { it.isNotBlank() }
+            ?: DEFAULT_DOCK.mapNotNull { pkg -> apps.firstOrNull { it.component.packageName == pkg }?.component?.flattenToString() }
+        return keys.mapNotNull { key -> apps.firstOrNull { it.component.flattenToString() == key } }.take(DOCK_SIZE)
+    }
+
+    private fun toggleDockApp(app: Launchable) {
+        val current = dockAppList().toMutableList()
+        if (current.any { it.component == app.component }) current.removeAll { it.component == app.component }
+        else if (current.size >= DOCK_SIZE) {
+            Toast.makeText(this, "$DOCK_SIZE applis au maximum dans la barre : retire d’abord une appli.", Toast.LENGTH_LONG).show()
+            return
+        } else current += app
+        prefs.edit().putString(DOCK_APPS, current.joinToString("\n") { it.component.flattenToString() }).apply()
+        renderDockApps()
     }
 
     /**
@@ -1586,14 +1652,18 @@ class HomeActivity : Activity() {
     }
 
     /** Every app of the head unit; in edit mode a tap adds or removes a favourite instead of opening it. */
-    private fun showApps(editing: Boolean) {
+    private fun showApps(editing: Boolean, dock: Boolean = false) {
         val apps = links.apps()
+        fun chosen(app: Launchable) = (if (dock) dockAppList() else favorites()).any { it.component == app.component }
         openPanel(Page.APPS, column().apply {
             background = sheet()
             setPadding(dp(16), dp(12), dp(16), dp(10))
-            addView(panelHeader(if (editing) "Choisir les favoris" else "Applications",
-                if (editing) "Touche une appli pour l’ajouter ou la retirer · 6 au maximum"
-                else "Garde le doigt sur une appli pour l’ajouter aux favoris"))
+            addView(panelHeader(when { dock -> "Applis de la barre"; editing -> "Choisir les favoris"; else -> "Applications" },
+                when {
+                    dock -> "Touche une appli pour l’ajouter à la barre du bas ou l’en retirer · $DOCK_SIZE au maximum"
+                    editing -> "Touche une appli pour l’ajouter ou la retirer · 6 au maximum"
+                    else -> "Garde le doigt sur une appli pour l’ajouter aux favoris ou à la barre du bas"
+                }))
             addView(GridView(context).apply {
                 numColumns = if (resources.configuration.screenWidthDp >= 700) 6 else 4
                 verticalSpacing = dp(8)
@@ -1605,11 +1675,23 @@ class HomeActivity : Activity() {
                     override fun getItemId(position: Int) = position.toLong()
                     override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
                         val app = apps[position]
-                        val chosen = favorites().any { it.component == app.component }
-                        return appTile(app, compact = false, plain = true) { toggleFavorite(app); notifyDataSetChanged() }.apply {
+                        val toggle = { if (dock) toggleDockApp(app) else toggleFavorite(app); notifyDataSetChanged() }
+                        return appTile(app, compact = false, plain = true) { anchor ->
+                            if (editing) toggle() else PopupMenu(this@HomeActivity, anchor).apply {
+                                val favorite = favorites().any { it.component == app.component }
+                                val docked = dockAppList().any { it.component == app.component }
+                                menu.add(if (favorite) "Retirer des favoris" else "Ajouter aux favoris")
+                                menu.add(if (docked) "Retirer de la barre du bas" else "Ajouter à la barre du bas")
+                                setOnMenuItemClickListener { item ->
+                                    if (item.title.toString().contains("favoris")) toggleFavorite(app) else toggleDockApp(app)
+                                    notifyDataSetChanged()
+                                    true
+                                }
+                            }.show()
+                        }.apply {
                             if (editing) {
-                                setOnClickListener { toggleFavorite(app); notifyDataSetChanged() }
-                                alpha = if (chosen) 1f else .5f
+                                setOnClickListener { toggle() }
+                                alpha = if (chosen(app)) 1f else .5f
                             }
                             layoutParams = ViewGroup.LayoutParams(-1, dp(98))
                         }
@@ -2016,6 +2098,11 @@ class HomeActivity : Activity() {
         val COORDINATES = Regex("""-?\d+(\.\d+)?,-?\d+(\.\d+)?""")
         const val CITY = "city"
         const val FAVORITES = "favorites"
+        const val DOCK_APPS = "dock_apps"
+        const val DOCK_SIZE = 5
+        // First apps of the bottom bar: navigation, video and music, those that are installed.
+        val DEFAULT_DOCK = listOf("com.google.android.apps.maps", "com.waze", "com.google.android.youtube",
+            RADIO_PACKAGE, "com.spotify.music")
         const val RADIO_PACKAGE = "com.autodrive.radiomaroc"
         const val RADIO_HOME_VISIBLE = "com.autodrive.radiomaroc.HOME_VISIBLE"
         // First favourites when the listener has not chosen any: the radio, video and navigation apps of the car.
