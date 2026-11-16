@@ -8,6 +8,7 @@ Incar Drive 1.0.1 — écran d’accueil pour l’Incarlink (Android 11 à 13, c
 **Nouveautés**
 - Plein écran : la barre d’Android est masquée ; Wi-Fi, signal mobile (4G / 5G après autorisation) et Bluetooth sont affichés en haut d’Incar Drive. Barre du bas et barre du haut affinées pour agrandir les cartes.
 - Mises à jour en ligne depuis GitHub.
+- Effets sonores : le clic de Radio Maroc à chaque appui (Réglages › Effets sonores), et l’égaliseur du boîtier s’il en propose un.
 - Carte média au style de Radio Maroc & Coran quand la radio joue : grand logo, LIVE, boutons ronds, Maps et YouTube.
 - Naviguer ouvre directement l’itinéraire de Google Maps ; Maison et Travail utilisent les adresses enregistrées dans Google Maps (appui long pour une autre adresse).
 - Météo à la position GPS de la voiture.

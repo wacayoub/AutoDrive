@@ -225,6 +225,7 @@ class HomeActivity : Activity() {
         phone = PhoneLink(this)
         updatesUi = IncarUpdates(this)
         status = StatusIcons(this)
+        clicks = ClickSound(this).apply { enabled = prefs.getBoolean(CLICKS, true) }
         info = LocalInfoFeed(RadioCity.restore(prefs.getString(CITY, null)))
         window.setDecorFitsSystemWindows(false)
         window.statusBarColor = Color.TRANSPARENT
@@ -248,6 +249,19 @@ class HomeActivity : Activity() {
             hide(WindowInsets.Type.statusBars())
             systemBarsBehavior = WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         }
+    }
+
+    private lateinit var clicks: ClickSound
+
+    // Radio Maroc & Coran's click on every tap, when « Clics de l’interface » is on.
+    override fun dispatchTouchEvent(event: android.view.MotionEvent): Boolean {
+        if (::clicks.isInitialized) clicks.onTouch(window.decorView, event)
+        return super.dispatchTouchEvent(event)
+    }
+
+    override fun onDestroy() {
+        if (::clicks.isInitialized) clicks.release()
+        super.onDestroy()
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
@@ -1471,6 +1485,35 @@ class HomeActivity : Activity() {
                     setOnClickListener { editPlace(place) { showSettings() } }
                 }, LinearLayout.LayoutParams(-1, dp(46)).apply { topMargin = dp(8) })
             }
+            addView(caps("Effets sonores"), wrap().apply { topMargin = dp(14) })
+            fun settingRow(title: String, detail: String, value: String, action: (TextView) -> Unit) = row().apply {
+                background = pressable(GradientDrawable().apply {
+                    cornerRadius = dp(12).toFloat()
+                    setColor(getColor(R.color.home_chip))
+                    setStroke(dp(1), getColor(R.color.home_card_border))
+                }, 12)
+                setPadding(dp(14), 0, dp(14), 0)
+                addView(column().apply {
+                    addView(label(title, 15, text, 700))
+                    addView(label(detail, 11, muted), wrap().apply { topMargin = dp(2) })
+                }, LinearLayout.LayoutParams(0, -2, 1f))
+                val state = label(value, 14, accent, 700)
+                addView(state, wrap().apply { marginStart = dp(12) })
+                setOnClickListener { action(state) }
+            }
+            addView(settingRow("Clics de l’interface", "Son discret à chaque appui, comme Radio Maroc",
+                if (clicks.enabled) "ON" else "OFF") { state ->
+                val enabled = !clicks.enabled
+                clicks.enabled = enabled
+                prefs.edit().putBoolean(CLICKS, enabled).apply()
+                state.text = if (enabled) "ON" else "OFF"
+            }, LinearLayout.LayoutParams(-1, dp(52)).apply { topMargin = dp(8) })
+            val equalizer = ClickSound.equalizerIntent(this@HomeActivity)
+            addView(settingRow("Égaliseur", if (equalizer != null) "Effets sonores du boîtier (égaliseur, Dolby…)"
+                else "Aucun égaliseur sur cet appareil", if (equalizer != null) "›" else "—") {
+                if (equalizer != null) startSafely(equalizer)
+                else Toast.makeText(this@HomeActivity, "Ce boîtier ne propose pas d’égaliseur aux applis.", Toast.LENGTH_LONG).show()
+            }, LinearLayout.LayoutParams(-1, dp(52)).apply { topMargin = dp(8) })
             addView(caps("Mises à jour"), wrap().apply { topMargin = dp(14) })
             addView(row().apply {
                 val message = label("", 14, text, 600).apply { maxLines = 2 }
@@ -1614,6 +1657,7 @@ class HomeActivity : Activity() {
         const val OEM_SETTINGS = "oem_settings"
         const val REQUEST_HOME_ROLE = 7
         const val REQUEST_PHONE_STATE = 8
+        const val CLICKS = "interface_clicks"
         const val PREFS = "incar_drive_home"
         const val APPEARANCE = "appearance"
         const val ACCENT = "accent"
