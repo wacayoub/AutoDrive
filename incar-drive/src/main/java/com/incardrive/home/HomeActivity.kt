@@ -103,7 +103,12 @@ class HomeActivity : Activity() {
         NEUTRAL("Neutre", 0xFFE4E8EE.toInt(), 0xFF1E242D.toInt()),
         AMBER("Ambre", 0xFFFFB020.toInt(), 0xFFF29A0E.toInt()),
         CYAN("Cyan", 0xFF3DD6F5.toInt(), 0xFF1BA8CC.toInt()),
-        RED("Rouge", 0xFFFF4D5E.toInt(), 0xFFE5394F.toInt());
+        RED("Rouge", 0xFFFF4D5E.toInt(), 0xFFE5394F.toInt()),
+        BLUE("Bleu", 0xFF5B9BFF.toInt(), 0xFF2563EB.toInt()),
+        GREEN("Vert", 0xFF3DDC97.toInt(), 0xFF0E9F6E.toInt()),
+        VIOLET("Violet", 0xFFB197FC.toInt(), 0xFF7C3AED.toInt()),
+        PINK("Rose", 0xFFFF7EB6.toInt(), 0xFFDB2777.toInt()),
+        GOLD("Or", 0xFFE8C872.toInt(), 0xFFB8860B.toInt());
 
         companion object {
             fun restore(prefs: SharedPreferences) = entries.firstOrNull { it.name == prefs.getString(ACCENT, null) } ?: NEUTRAL
@@ -1267,9 +1272,7 @@ class HomeActivity : Activity() {
                 prefs.edit().putString(APPEARANCE, it.name).apply()
             }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
             addView(caps("Couleur du tableau de bord"), wrap().apply { topMargin = dp(14) })
-            addView(choices(Accent.entries, accentChoice, { it.label }, { if (night) it.night else it.day }) {
-                prefs.edit().putString(ACCENT, it.name).apply()
-            }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+            addView(accentPicker(), LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
             addView(caps("Ville (météo et salat)"), wrap().apply { topMargin = dp(14) })
             addView(label(info.city.value.label + "  ›", 17, text, 700).apply {
                 setPadding(0, dp(10), 0, dp(10))
@@ -1315,6 +1318,35 @@ class HomeActivity : Activity() {
                 }, 14)
                 setOnClickListener { startSafely(Intent(Settings.ACTION_SETTINGS)) }
             }, LinearLayout.LayoutParams(-1, dp(48)).apply { topMargin = dp(16) })
+        }
+    }
+
+    /** Every dashboard colour as a round swatch with its name; the chosen one is ringed. */
+    private fun accentPicker() = row().apply {
+        gravity = Gravity.FILL
+        Accent.entries.forEach { choice ->
+            val color = if (night) choice.night else choice.day
+            val selected = choice == accentChoice
+            addView(column().apply {
+                gravity = Gravity.CENTER_HORIZONTAL
+                background = pressable(null, 12)
+                setPadding(0, dp(4), 0, dp(4))
+                addView(View(context).apply {
+                    background = GradientDrawable().apply {
+                        shape = GradientDrawable.OVAL
+                        setColor(color)
+                        setStroke(dp(if (selected) 4 else 1), if (selected) text else getColor(R.color.home_card_border))
+                    }
+                }, LinearLayout.LayoutParams(dp(if (selected) 40 else 36), dp(if (selected) 40 else 36)))
+                addView(label(choice.label, 12, if (selected) text else muted, if (selected) 700 else 500).apply {
+                    gravity = Gravity.CENTER
+                }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(5) })
+                contentDescription = "Couleur ${choice.label}"
+                setOnClickListener {
+                    prefs.edit().putString(ACCENT, choice.name).apply()
+                    recreate()
+                }
+            }, LinearLayout.LayoutParams(0, -2, 1f))
         }
     }
 
