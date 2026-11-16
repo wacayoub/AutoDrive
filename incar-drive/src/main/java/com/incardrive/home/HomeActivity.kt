@@ -764,7 +764,12 @@ class HomeActivity : Activity() {
         }
         gauge = dial as SpeedDial
         gauge.limit = activeLimit()
-        addView(dial, FrameLayout.LayoutParams(-1, -1).apply { setMargins(dp(4), dp(4), dp(4), dp(20)) })
+        // The road reaches the card's edges, clipped to its rounded corners; the dials keep a margin.
+        val road = dial is RoadGauge
+        if (road) clipToOutline = true
+        addView(dial, FrameLayout.LayoutParams(-1, -1).apply {
+            if (!road) setMargins(dp(4), dp(4), dp(4), dp(20))
+        })
         // Altitude in the upper left corner, the limit as a road sign in the upper right.
         addView(column().apply {
             altitudeText = label("", 11, muted, 600)
