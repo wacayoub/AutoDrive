@@ -22,6 +22,10 @@ internal data class MediaState(
     val favorites: List<Pair<String, String>> = emptyList(),
     /** Package of the app that plays, so the home screen can open it. */
     val source: String? = null,
+    /** What the station airs now, as Radio Maroc & Coran shares it: the programme, its hours and where it comes from. */
+    val programme: String? = null,
+    val programmeHours: String? = null,
+    val programmeSource: String? = null,
 ) {
     fun supports(action: Long) = actions and action != 0L
 }
@@ -39,6 +43,7 @@ internal class MediaSessions(context: Context, private val changed: () -> Unit) 
     private val callback = object : MediaController.Callback() {
         override fun onPlaybackStateChanged(state: PlaybackState?) = changed()
         override fun onMetadataChanged(metadata: MediaMetadata?) = changed()
+        override fun onExtrasChanged(extras: android.os.Bundle?) = changed()
         override fun onSessionDestroyed() {
             available = available.filterNot { it.sessionToken == controller?.sessionToken }
             connect()
@@ -117,6 +122,9 @@ internal class MediaSessions(context: Context, private val changed: () -> Unit) 
             val label = it.name.toString()
             label.contains("favorite", ignoreCase = true) || label.contains("favourite", ignoreCase = true)
         }.map { it.action to it.name.toString() }
+        // Radio Maroc & Coran's programme guide, from its session extras (only for its own session).
+        val extras = if (current.packageName == RADIO) runCatching { current.extras }.getOrNull() else null
+        val programme = extras?.getString("$RADIO.STREAM_TITLE")?.trim()?.takeIf { it.isNotEmpty() }
         return MediaState(
             metadata?.description?.title?.toString(),
             metadata?.description?.subtitle?.toString(),
@@ -125,7 +133,14 @@ internal class MediaSessions(context: Context, private val changed: () -> Unit) 
             if (duration > 0 && progress >= 0) progress.coerceIn(0, duration) else -1,
             favorites,
             current.packageName,
+            programme,
+            extras?.getString("$RADIO.PROGRAMME_HOURS")?.takeIf { programme != null && it.isNotBlank() },
+            extras?.getString("$RADIO.PROGRAMME_SOURCE")?.takeIf { programme != null && it.isNotBlank() },
         )
+    }
+
+    private companion object {
+        const val RADIO = "com.autodrive.radiomaroc"
     }
 
     fun command(action: Long): Boolean {

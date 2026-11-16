@@ -24,6 +24,7 @@ internal class RadioCard(private val home: HomeActivity, private val command: (L
     private lateinit var genre: TextView
     private lateinit var live: View
     private lateinit var strip: TextView
+    private lateinit var stripLabel: TextView
     private lateinit var bars: LevelMeter
     private lateinit var play: ImageButton
 
@@ -69,7 +70,8 @@ internal class RadioCard(private val home: HomeActivity, private val command: (L
             addView(row().apply {
                 background = GradientDrawable().apply { cornerRadius = dp(10).toFloat(); setColor(stripColor) }
                 setPadding(dp(6), 0, dp(10), 0)
-                addView(label("RADIO", 11, muted, 700).apply {
+                stripLabel = label("RADIO", 11, muted, 700)
+                addView(stripLabel.apply {
                     gravity = Gravity.CENTER
                     letterSpacing = .06f
                     setPadding(dp(8), 0, dp(8), 0)
@@ -105,14 +107,29 @@ internal class RadioCard(private val home: HomeActivity, private val command: (L
     fun bind(state: MediaState) {
         if (!::name.isInitialized) return
         logo.setImageBitmap(state.artwork)
-        name.text = state.title ?: "Radio Maroc & Coran"
-        genre.text = state.subtitle.orEmpty()
-        genre.visibility = if (state.subtitle.isNullOrBlank()) View.GONE else View.VISIBLE
-        strip.text = listOfNotNull(state.title, state.subtitle?.takeIf { it.isNotBlank() }).joinToString(" · ")
+        // The radio names a station's current programme as the title and the station under it; here the station
+        // stays large and the programme moves to the guide line below.
+        val programme = state.programme
+        val programmeIsTitle = programme != null && programme.equals(state.title, ignoreCase = true)
+        val station = if (programmeIsTitle) state.subtitle?.takeIf { it.isNotBlank() } else state.title
+        val detail = if (programmeIsTitle) null else state.subtitle
+        name.text = station ?: state.title ?: "Radio Maroc & Coran"
+        genre.text = detail.orEmpty()
+        genre.visibility = if (detail.isNullOrBlank()) View.GONE else View.VISIBLE
+        // The programme guide like in the radio: what airs now and its hours; the station otherwise.
+        val hours = state.programmeHours?.let(::clock)
+        stripLabel.text = hours ?: if (programme != null) "EN DIRECT" else "RADIO"
+        stripLabel.setTextColor(if (programme != null) green else home.muted)
+        strip.text = programme ?: listOfNotNull(state.title, state.subtitle?.takeIf { it.isNotBlank() }).joinToString(" · ")
+        strip.contentDescription = programme?.let { listOfNotNull("Émission en cours : $it", hours?.let { h -> "de $h" }).joinToString(" ") }
         live.visibility = if (state.playing) View.VISIBLE else View.INVISIBLE
         bars.visibility = if (state.playing) View.VISIBLE else View.INVISIBLE
         bars.playing = state.playing
         play.setImageResource(if (state.playing) R.drawable.ic_home_pause else R.drawable.ic_home_play)
         play.contentDescription = if (state.playing) "Pause" else "Écouter"
     }
+
+    /** « 19H03 - 20H00 » from SNRT's guide as « 19:03–20:00 ». */
+    private fun clock(hours: String) = hours.trim().replace(Regex("""(\d{1,2})\s*[Hh:]\s*(\d{2})"""), "$1:$2")
+        .replace(Regex("""\s*-\s*"""), "–").takeIf { it.isNotBlank() }
 }
