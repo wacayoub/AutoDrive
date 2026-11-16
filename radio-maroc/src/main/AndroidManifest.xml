@@ -18,6 +18,10 @@
         <package android:name="app.luxeradio.ma" />
         <!-- The Incar Drive home screen, which may start the radio (same signing key). -->
         <package android:name="com.incardrive.home" />
+        <!-- The Incarlink's own firmware apps, to recognise the head unit. -->
+        <package android:name="com.carsyso.main" />
+        <package android:name="com.carsyso.bluetooth" />
+        <package android:name="com.suding.settings" />
         <!-- Installed apps, to choose those the floating bubble appears over. -->
         <intent>
             <action android:name="android.intent.action.MAIN" />

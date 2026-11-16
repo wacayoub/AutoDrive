@@ -112,6 +112,8 @@ class RadioActivity : ComponentActivity() {
     private val stationPopupPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
     private companion object {
+        // Apps that only the Incarlink's firmware carries.
+        val HEAD_UNIT_PACKAGES = listOf("com.carsyso.main", "com.carsyso.bluetooth", "com.suding.settings")
         const val PREFERENCES = "radio_maroc"
         const val APPEARANCE = "appearance"
         const val MINI_PLAYER = "mini_player"
@@ -265,6 +267,17 @@ class RadioActivity : ComponentActivity() {
     private val touchGuide get() = profile.touchGuide
     private val touchMosaic get() = profile.touchMosaic
     private val carScreen get() = profile.carScreen
+
+    /**
+     * The Incarlink head unit itself, recognised by its firmware's own apps (Bluetooth phone, settings, main box app)
+     * or by the « Incarlink » look. There, the Incar Drive home screen already shows the weather and the next prayer,
+     * so the radio leaves them out; a phone in landscape keeps them.
+     */
+    private val headUnit by lazy {
+        incarlinkStyle || HEAD_UNIT_PACKAGES.any { name ->
+            runCatching { packageManager.getPackageInfo(name, 0) }.isSuccess
+        }
+    }
     private val smallTouchGuide get() = profile.smallTouchGuide
     private val compactGuideTabs get() = profile.compactGuideTabs
     private val showDashboardTiles get() = profile.showDashboardTiles
@@ -618,7 +631,7 @@ class RadioActivity : ComponentActivity() {
             if (dashboardInfo.value) {
                 addView(tvClockBar(), LinearLayout.LayoutParams(-2, -1).apply { marginEnd = dp(6) })
             }
-            if (profile.headerInfoChips && inlineCategories) {
+            if (profile.headerInfoChips && inlineCategories && !headUnit) {
                 val chipHeight = dp(40)
                 weatherChip = WeatherChip(context, ::showWeather).also {
                     addView(it, LinearLayout.LayoutParams(-2, chipHeight).apply { marginEnd = dp(6) })
@@ -1882,7 +1895,7 @@ class RadioActivity : ComponentActivity() {
                     ellipsize = TextUtils.TruncateAt.END
                     playerCategory = this
                 }, LinearLayout.LayoutParams(-1, -2))
-                if (dashboardInfo.value && showDashboardTiles && !mini) {
+                if (dashboardInfo.value && showDashboardTiles && !mini && !headUnit) {
                     addView(localInfoBar(), LinearLayout.LayoutParams(-1, dp(if (compactTv) 56 else 64)).apply {
                         topMargin = dp(4)
                     })
