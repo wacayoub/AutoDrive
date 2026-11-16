@@ -61,9 +61,11 @@ import com.autodrive.radiomaroc.RadioMotion
 import com.autodrive.radiomaroc.SystemNight
 import com.autodrive.radiomaroc.WeatherIcon
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.time.Duration
 import java.time.Instant
 import java.time.ZoneId
@@ -163,6 +165,10 @@ class HomeActivity : Activity() {
     private var shownPage = Page.HOME
     private lateinit var callBanner: FrameLayout
     private var alerted = false
+    private val roadLimits = RoadLimits()
+    private var roadLimit: Int? = null
+    private var fetchingRoads = false
+    private lateinit var limitSign: LimitSign
     private var lastTripSave = 0L
     private val iconColors = HashMap<ComponentName, Int?>()
 
@@ -182,6 +188,7 @@ class HomeActivity : Activity() {
         gps = GpsMonitor(this, ::renderSpeed)
         trip = TripMeter(Trip.decode(prefs.getString(TRIP, null)))
         gps.onFix = { fix, kmh ->
+            if (roadMode()) followRoad(fix, kmh)
             trip.accept(System.currentTimeMillis(), fix.latitude, fix.longitude, fix.accuracy.takeIf { fix.hasAccuracy() }, kmh)
             if (System.currentTimeMillis() - lastTripSave > 30_000) saveTrip()
         }
@@ -567,7 +574,7 @@ class HomeActivity : Activity() {
         background = pressable(glass())
         gauge = SpeedGauge(context, getColor(R.color.home_gauge_track), shade(accent, Color.BLACK, .25f),
             shade(accent, Color.WHITE, .3f), text, muted)
-        gauge.limit = speedLimit()
+        gauge.limit = activeLimit()
         addView(gauge, FrameLayout.LayoutParams(-1, -1).apply { setMargins(dp(4), dp(4), dp(4), dp(20)) })
         // Heading and altitude in the upper left corner, the limit as a road sign in the upper right.
         addView(column().apply {
@@ -576,7 +583,8 @@ class HomeActivity : Activity() {
             addView(headingText)
             addView(altitudeText, wrap().apply { topMargin = dp(3) })
         }, FrameLayout.LayoutParams(-2, -2, Gravity.TOP or Gravity.START).apply { setMargins(dp(12), dp(10), 0, 0) })
-        addView(LimitSign(context).apply { limit = speedLimit() },
+        limitSign = LimitSign(context).apply { limit = activeLimit() }
+        addView(limitSign,
             FrameLayout.LayoutParams(dp(34), dp(34), Gravity.TOP or Gravity.END).apply { setMargins(0, dp(8), dp(10), 0) })
         speedStatus = label("", 11, muted, 600).apply { gravity = Gravity.CENTER }
         addView(speedStatus, FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM).apply { bottomMargin = dp(8) })
@@ -900,7 +908,32 @@ class HomeActivity : Activity() {
         }
     }
 
-    private fun speedLimit() = prefs.getInt(SPEED_LIMIT, 0).takeIf { it > 0 }
+    /** The alert setting: [ROAD_LIMIT] follows the road's legal limit (the default), 0 is off, else a fixed speed. */
+    private fun alertSetting() = prefs.getInt(SPEED_LIMIT, ROAD_LIMIT)
+
+    private fun roadMode() = alertSetting() == ROAD_LIMIT
+
+    /** The limit the dial and the beep use now. */
+    private fun activeLimit(): Int? = if (roadMode()) roadLimit else alertSetting().takeIf { it > 0 }
+
+    /** Matches each GPS fix to the road under the car; fetches the roads around it again every 350 m. */
+    private fun followRoad(fix: android.location.Location, kmh: Int?) {
+        val now = System.currentTimeMillis()
+        if (!fetchingRoads && roadLimits.needsRefresh(fix.latitude, fix.longitude, now)) {
+            fetchingRoads = true
+            scope?.launch {
+                withContext(Dispatchers.IO) { roadLimits.refresh(fix.latitude, fix.longitude, now) }
+                fetchingRoads = false
+            } ?: run { fetchingRoads = false }
+        }
+        val bearing = if ((kmh ?: 0) >= 5 && fix.hasBearing()) fix.bearing.toInt() else null
+        val limit = roadLimits.limitAt(fix.latitude, fix.longitude, bearing)?.limit
+        if (limit != roadLimit) {
+            roadLimit = limit
+            if (::gauge.isInitialized) gauge.limit = limit
+            if (::limitSign.isInitialized) limitSign.limit = limit
+        }
+    }
 
     private fun kilometres(meters: Double) = if (meters < 10_000) String.format(Locale.FRENCH, "%.1f km", meters / 1000)
         else "${(meters / 1000).toInt()} km"
@@ -957,9 +990,9 @@ class HomeActivity : Activity() {
             addView(statRow("Distance", "Temps de conduite", "Moyenne", "Maximum"),
                 LinearLayout.LayoutParams(-1, 0, 1f).apply { topMargin = dp(8) })
             addView(statRow("Départ", "Cap", "Altitude"), LinearLayout.LayoutParams(-1, 0, 1f).apply { topMargin = dp(8) })
-            addView(caps("Alerte de vitesse"), wrap().apply { topMargin = dp(12) })
-            val limits = listOf(0, 60, 80, 100, 120)
-            addView(choices(limits, speedLimit() ?: 0, { if (it == 0) "Non" else "$it" }, { null }) {
+            addView(caps("Alerte de vitesse · Route = limite lue sur la carte"), wrap().apply { topMargin = dp(12) })
+            val limits = listOf(ROAD_LIMIT, 0, 60, 80, 100, 120)
+            addView(choices(limits, alertSetting(), { when (it) { ROAD_LIMIT -> "Route"; 0 -> "Non"; else -> "$it" } }, { null }) {
                 prefs.edit().putInt(SPEED_LIMIT, it).apply()
             }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
         })
@@ -1320,6 +1353,7 @@ class HomeActivity : Activity() {
         const val REQUEST_CONTACTS = 6
         const val TRIP = "trip"
         const val SPEED_LIMIT = "speed_limit"
+        const val ROAD_LIMIT = -1
         const val PREFS = "incar_drive_home"
         const val APPEARANCE = "appearance"
         const val ACCENT = "accent"
