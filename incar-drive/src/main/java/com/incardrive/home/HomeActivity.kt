@@ -380,8 +380,8 @@ class HomeActivity : Activity() {
                     gravity = Gravity.FILL
                     addView(mediaCard(), LinearLayout.LayoutParams(0, -1, 1.4f))
                     addView(column().apply {
-                        addView(speedCard(), LinearLayout.LayoutParams(-1, 0, 1.05f))
-                        addView(mapsCard(), LinearLayout.LayoutParams(-1, 0, .95f).apply { topMargin = dp(10) })
+                        addView(speedCard(), LinearLayout.LayoutParams(-1, 0, 1.25f))
+                        addView(mapsCard(), LinearLayout.LayoutParams(-1, 0, .75f).apply { topMargin = dp(10) })
                     }, LinearLayout.LayoutParams(0, -1, 1f).apply { marginStart = dp(10); marginEnd = dp(10) })
                     addView(favoritesCard(), LinearLayout.LayoutParams(0, -1, 1.05f))
                 })
@@ -568,13 +568,18 @@ class HomeActivity : Activity() {
         gauge = SpeedGauge(context, getColor(R.color.home_gauge_track), shade(accent, Color.BLACK, .25f),
             shade(accent, Color.WHITE, .3f), text, muted)
         gauge.limit = speedLimit()
-        addView(gauge, FrameLayout.LayoutParams(-1, -1).apply { setMargins(dp(8), dp(8), dp(8), dp(18)) })
-        headingText = caps("", text)
-        addView(headingText, FrameLayout.LayoutParams(-2, -2, Gravity.TOP or Gravity.START).apply { setMargins(dp(12), dp(10), 0, 0) })
-        altitudeText = label("", 11, muted, 600)
-        addView(altitudeText, FrameLayout.LayoutParams(-2, -2, Gravity.TOP or Gravity.END).apply { setMargins(0, dp(10), dp(12), 0) })
-        speedStatus = label("", 10, muted, 500).apply { gravity = Gravity.CENTER }
-        addView(speedStatus, FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM).apply { bottomMargin = dp(10) })
+        addView(gauge, FrameLayout.LayoutParams(-1, -1).apply { setMargins(dp(4), dp(4), dp(4), dp(20)) })
+        // Heading and altitude in the upper left corner, the limit as a road sign in the upper right.
+        addView(column().apply {
+            headingText = caps("", text)
+            altitudeText = label("", 11, muted, 600)
+            addView(headingText)
+            addView(altitudeText, wrap().apply { topMargin = dp(3) })
+        }, FrameLayout.LayoutParams(-2, -2, Gravity.TOP or Gravity.START).apply { setMargins(dp(12), dp(10), 0, 0) })
+        addView(LimitSign(context).apply { limit = speedLimit() },
+            FrameLayout.LayoutParams(dp(34), dp(34), Gravity.TOP or Gravity.END).apply { setMargins(0, dp(8), dp(10), 0) })
+        speedStatus = label("", 11, muted, 600).apply { gravity = Gravity.CENTER }
+        addView(speedStatus, FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM).apply { bottomMargin = dp(8) })
         contentDescription = "Vitesse et trajet"
         setOnClickListener {
             if (!gps.permitted()) requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION,
