@@ -760,7 +760,7 @@ class HomeActivity : Activity() {
             brand != null -> BrandGauge(context, brand, text, muted)
             styleName == DIAL -> SpeedGauge(context, getColor(R.color.home_gauge_track), shade(accent, Color.BLACK, .25f),
                 shade(accent, Color.WHITE, .3f), text, muted)
-            else -> RoadGauge(context, ROAD_BLUE, text, muted)
+            else -> RoadGauge(context, ROAD_BLUE, text, muted, carLogo.bitmap())
         }
         gauge = dial as SpeedDial
         gauge.limit = activeLimit()

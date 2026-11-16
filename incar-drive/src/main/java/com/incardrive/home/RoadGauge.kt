@@ -29,7 +29,7 @@ internal interface SpeedDial {
  * like the number.
  */
 internal class RoadGauge(context: Context, private val accent: Int, private val textColor: Int,
-    private val mutedColor: Int) : View(context), SpeedDial {
+    private val mutedColor: Int, private val badge: android.graphics.Bitmap? = null) : View(context), SpeedDial {
     private val density = resources.displayMetrics.density
     private val alert = 0xFFFF4D4F.toInt()
     private val valuePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -46,6 +46,10 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
     private val markPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val carPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val glowPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+    // The logo in dark chrome on the light body, whatever its own colours.
+    private val badgePaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
+        colorFilter = android.graphics.PorterDuffColorFilter(0xFF39414E.toInt(), android.graphics.PorterDuff.Mode.SRC_IN)
+    }
     private val path = Path()
     private val rect = RectF()
 
@@ -213,6 +217,13 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
         carPaint.color = 0xFFE4E8EE.toInt()
         rect.set(cx - carW * .12f, lightTop + carH * .18f, cx + carW * .12f, lightTop + carH * .3f)
         canvas.drawRoundRect(rect, carH * .02f, carH * .02f, carPaint)
+        // The driver's car logo on the boot, between the window and the light, when one is chosen.
+        badge?.let { logo ->
+            val tall = carH * .17f
+            val wide = (tall * logo.width / logo.height.coerceAtLeast(1)).coerceAtMost(carW * .32f)
+            rect.set(cx - wide / 2, lightTop - tall - carH * .01f, cx + wide / 2, lightTop - carH * .01f)
+            canvas.drawBitmap(logo, null, rect, badgePaint)
+        }
     }
 
     private companion object {

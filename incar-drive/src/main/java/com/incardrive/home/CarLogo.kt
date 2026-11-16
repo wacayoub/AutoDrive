@@ -30,9 +30,12 @@ internal class CarLogo(private val home: HomeActivity) {
         render()
     }
 
+    /** The chosen logo, also worn by the car of the « Route » speed style; null when none is chosen. */
+    fun bitmap(): Bitmap? = if (chosen) runCatching { BitmapFactory.decodeFile(file.path) }.getOrNull() else null
+
     private fun render() {
         val image = view ?: return
-        val bitmap = if (chosen) runCatching { BitmapFactory.decodeFile(file.path) }.getOrNull() else null
+        val bitmap = bitmap()
         image.setImageBitmap(bitmap)
         image.visibility = if (bitmap != null) View.VISIBLE else View.GONE
     }
@@ -62,7 +65,7 @@ internal class CarLogo(private val home: HomeActivity) {
         if (requestCode != REQUEST) return false
         val uri = data?.data
         if (resultCode == Activity.RESULT_OK && uri != null) {
-            if (save(uri)) render()
+            if (save(uri)) home.recreate()
             else Toast.makeText(home, "Cette image n’a pas pu être lue.", Toast.LENGTH_LONG).show()
         }
         return true
