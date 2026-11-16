@@ -23,6 +23,8 @@ import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.LayerDrawable
 import android.graphics.drawable.RippleDrawable
 import android.location.LocationManager
+import android.media.AudioManager
+import android.media.ToneGenerator
 import android.media.session.PlaybackState
 import android.os.Build
 import android.os.Bundle
@@ -61,6 +63,8 @@ import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import java.time.Duration
+import java.time.Instant
+import java.time.ZoneId
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -80,7 +84,7 @@ class HomeActivity : Activity() {
         }
     }
 
-    private enum class Page { HOME, APPS, SETTINGS }
+    internal enum class Page { HOME, APPS, SETTINGS, QUICK, WIDGETS, TRIP }
 
     /** The two saved destinations: one tap starts Google Maps guidance there. */
     private enum class Place(val label: String, val icon: Int, val key: String) {
@@ -102,21 +106,21 @@ class HomeActivity : Activity() {
         }
     }
 
-    private lateinit var prefs: SharedPreferences
-    private lateinit var links: AppLinks
+    internal lateinit var prefs: SharedPreferences
+    internal lateinit var links: AppLinks
     private lateinit var media: MediaSessions
     private lateinit var gps: GpsMonitor
     private lateinit var info: LocalInfoFeed
     private var scope: CoroutineScope? = null
     private val handler = Handler(Looper.getMainLooper())
 
-    private val text by lazy { getColor(R.color.home_text) }
-    private val muted by lazy { getColor(R.color.home_muted) }
+    internal val text by lazy { getColor(R.color.home_text) }
+    internal val muted by lazy { getColor(R.color.home_muted) }
     private val accentChoice by lazy { Accent.restore(prefs) }
-    private val accent by lazy { if (night) accentChoice.night else accentChoice.day }
-    private val onAccent by lazy { if (Color.luminance(accent) > .3f) 0xFF0B0D12.toInt() else Color.WHITE }
+    internal val accent by lazy { if (night) accentChoice.night else accentChoice.day }
+    internal val onAccent by lazy { if (Color.luminance(accent) > .3f) 0xFF0B0D12.toInt() else Color.WHITE }
     private val neutral get() = accentChoice == Accent.NEUTRAL
-    private val night get() = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES
+    internal val night get() = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES
 
     private lateinit var greeting: TextView
     private lateinit var clock: TextView
@@ -145,6 +149,17 @@ class HomeActivity : Activity() {
     private lateinit var panelHost: FrameLayout
     private val dockItems = mutableMapOf<Page, View>()
     private val placeChips = mutableMapOf<Place, View>()
+    private lateinit var quick: QuickSettings
+    private lateinit var widgets: WidgetBoard
+    private lateinit var phone: PhoneLink
+    private lateinit var trip: TripMeter
+    private lateinit var pager: SwipePager
+    private lateinit var dots: List<View>
+    private lateinit var headingText: TextView
+    private lateinit var altitudeText: TextView
+    private var shownPage = Page.HOME
+    private var alerted = false
+    private var lastTripSave = 0L
     private val iconColors = HashMap<ComponentName, Int?>()
 
     override fun attachBaseContext(newBase: Context) {
@@ -161,6 +176,14 @@ class HomeActivity : Activity() {
         links = AppLinks(this)
         media = MediaSessions(this, ::renderMedia).apply { followActive = true }
         gps = GpsMonitor(this, ::renderSpeed)
+        trip = TripMeter(Trip.decode(prefs.getString(TRIP, null)))
+        gps.onFix = { fix, kmh ->
+            trip.accept(System.currentTimeMillis(), fix.latitude, fix.longitude, fix.accuracy.takeIf { fix.hasAccuracy() }, kmh)
+            if (System.currentTimeMillis() - lastTripSave > 30_000) saveTrip()
+        }
+        quick = QuickSettings(this)
+        widgets = WidgetBoard(this)
+        phone = PhoneLink(this)
         info = LocalInfoFeed(RadioCity.restore(prefs.getString(CITY, null)))
         window.setDecorFitsSystemWindows(false)
         window.statusBarColor = Color.TRANSPARENT
@@ -170,7 +193,7 @@ class HomeActivity : Activity() {
             if (night) 0 else WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS or WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS,
             WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS or WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            onBackInvokedDispatcher.registerOnBackInvokedCallback(OnBackInvokedDispatcher.PRIORITY_DEFAULT) { closePanel() }
+            onBackInvokedDispatcher.registerOnBackInvokedCallback(OnBackInvokedDispatcher.PRIORITY_DEFAULT) { goBack() }
         }
     }
 
@@ -178,7 +201,32 @@ class HomeActivity : Activity() {
     @Deprecated("Deprecated in Java")
     @Suppress("DEPRECATION")
     override fun onBackPressed() {
-        closePanel()
+        goBack()
+    }
+
+    // Home pressed while Incar Drive is already in front, or coming back to it: show the first page, like other launchers.
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        if (intent.hasCategory(Intent.CATEGORY_HOME)) {
+            closePanel()
+            if (::pager.isInitialized) pager.show(0, animate = hasWindowFocus())
+        }
+    }
+
+    /** Back closes the open page, then returns to the first home page. */
+    private fun goBack() {
+        if (shownPage != Page.HOME) closePanel() else if (::pager.isInitialized) pager.show(0)
+    }
+
+    private fun saveTrip() {
+        lastTripSave = System.currentTimeMillis()
+        prefs.edit().putString(TRIP, trip.trip.encode()).apply()
+    }
+
+    @Deprecated("Deprecated in Java")
+    @Suppress("DEPRECATION")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        if (!widgets.onResult(requestCode, resultCode)) super.onActivityResult(requestCode, resultCode, data)
     }
 
     override fun onStart() {
@@ -191,6 +239,8 @@ class HomeActivity : Activity() {
         tasks.launch { info.refreshPrayerCalendars() }
         tasks.launch { info.weather.collect { renderWeather() } }
         tasks.launch { info.prayerCalendars.collect { renderPrayer() } }
+        widgets.start()
+        phone.start()
         tick.run()
         renderMedia()
         renderSpeed()
@@ -203,6 +253,9 @@ class HomeActivity : Activity() {
         scope = null
         media.stop()
         gps.stop()
+        widgets.stop()
+        phone.stop()
+        saveTrip()
         super.onStop()
     }
 
@@ -210,6 +263,9 @@ class HomeActivity : Activity() {
     override fun onResume() {
         super.onResume()
         tellRadio(visible = true)
+        // Back from an Android settings screen: show the new Wi-Fi, Bluetooth and brightness states.
+        if (shownPage == Page.QUICK) quick.show()
+        phone.render()
     }
 
     override fun onPause() {
@@ -225,6 +281,8 @@ class HomeActivity : Activity() {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (gps.permitted()) gps.start()
         renderSpeed()
+        if (requestCode == REQUEST_BLUETOOTH) phone.start()
+        phone.render()
     }
 
     private val tick = object : Runnable {
@@ -246,9 +304,9 @@ class HomeActivity : Activity() {
 
     // ——— Building blocks ———
 
-    private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
+    internal fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
 
-    private fun label(value: String, size: Int, color: Int, weight: Int = 400, condensed: Boolean = false) = TextView(this).apply {
+    internal fun label(value: String, size: Int, color: Int, weight: Int = 400, condensed: Boolean = false) = TextView(this).apply {
         text = value
         setTextColor(color)
         setTextSize(TypedValue.COMPLEX_UNIT_SP, size.toFloat())
@@ -260,23 +318,23 @@ class HomeActivity : Activity() {
     }
 
     /** A dashboard caption: small, spaced capitals in the accent colour. */
-    private fun caps(value: String, color: Int = accent) = label(value, 11, color, 700).apply {
+    internal fun caps(value: String, color: Int = accent) = label(value, 11, color, 700).apply {
         isAllCaps = true
         letterSpacing = .14f
     }
 
-    private fun column() = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-    private fun row() = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-    private fun wrap() = LinearLayout.LayoutParams(-2, -2)
+    internal fun column() = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+    internal fun row() = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+    internal fun wrap() = LinearLayout.LayoutParams(-2, -2)
 
     /** A dashboard panel: near opaque, square-ish corners, a hairline edge. */
-    private fun glass(radius: Int = 16): GradientDrawable = GradientDrawable().apply {
+    internal fun glass(radius: Int = 16): GradientDrawable = GradientDrawable().apply {
         cornerRadius = dp(radius).toFloat()
         setColor(getColor(R.color.home_card))
         setStroke(dp(1), getColor(R.color.home_card_border))
     }
 
-    private fun pressable(base: Drawable?, radius: Int = 16) = RippleDrawable(
+    internal fun pressable(base: Drawable?, radius: Int = 16) = RippleDrawable(
         ColorStateList.valueOf(getColor(R.color.home_ripple)), base,
         GradientDrawable().apply { cornerRadius = dp(radius).toFloat(); setColor(Color.WHITE) })
 
@@ -310,15 +368,35 @@ class HomeActivity : Activity() {
             accent, getColor(R.color.home_grid), if (night) 0x26 else 0x1C)
         val content = column().apply {
             addView(topBar(), LinearLayout.LayoutParams(-1, dp(62)))
+            pager = SwipePager(context) { page -> markDots(page) }.apply {
+                clipChildren = true
+                addPage(row().apply {
+                    gravity = Gravity.FILL
+                    addView(mediaCard(), LinearLayout.LayoutParams(0, -1, 1.4f))
+                    addView(column().apply {
+                        addView(speedCard(), LinearLayout.LayoutParams(-1, 0, 1.05f))
+                        addView(mapsCard(), LinearLayout.LayoutParams(-1, 0, .95f).apply { topMargin = dp(10) })
+                    }, LinearLayout.LayoutParams(0, -1, 1f).apply { marginStart = dp(10); marginEnd = dp(10) })
+                    addView(favoritesCard(), LinearLayout.LayoutParams(0, -1, 1.05f))
+                })
+                // Second page: the connected phone and the driver's Android widgets.
+                addPage(row().apply {
+                    gravity = Gravity.FILL
+                    addView(phone.view(), LinearLayout.LayoutParams(0, -1, 1f))
+                    addView(widgets.view(), LinearLayout.LayoutParams(0, -1, 2.45f).apply { marginStart = dp(10) })
+                })
+            }
+            addView(pager, LinearLayout.LayoutParams(-1, 0, 1f).apply { topMargin = dp(6) })
             addView(row().apply {
-                gravity = Gravity.FILL
-                addView(mediaCard(), LinearLayout.LayoutParams(0, -1, 1.4f))
-                addView(column().apply {
-                    addView(speedCard(), LinearLayout.LayoutParams(-1, 0, 1.05f))
-                    addView(mapsCard(), LinearLayout.LayoutParams(-1, 0, .95f).apply { topMargin = dp(10) })
-                }, LinearLayout.LayoutParams(0, -1, 1f).apply { marginStart = dp(10); marginEnd = dp(10) })
-                addView(favoritesCard(), LinearLayout.LayoutParams(0, -1, 1.05f))
-            }, LinearLayout.LayoutParams(-1, 0, 1f).apply { topMargin = dp(6); bottomMargin = dp(10) })
+                gravity = Gravity.CENTER
+                dots = List(2) { index ->
+                    View(context).also { dot ->
+                        addView(dot, LinearLayout.LayoutParams(dp(6), dp(6)).apply { marginStart = dp(4); marginEnd = dp(4) })
+                        dot.setOnClickListener { pager.show(index) }
+                    }
+                }
+                markDots(0)
+            }, LinearLayout.LayoutParams(-1, dp(14)))
             addView(dock(), LinearLayout.LayoutParams(-1, dp(58)))
         }
         panelHost = FrameLayout(this).apply { visibility = View.GONE }
@@ -333,6 +411,25 @@ class HomeActivity : Activity() {
                 insets
             }
         }
+    }
+
+    /** Two small marks under the pages; the current one is a longer bar in the accent colour. */
+    private fun markDots(page: Int) {
+        if (!::dots.isInitialized) return
+        dots.forEachIndexed { index, dot ->
+            val active = index == page
+            dot.background = GradientDrawable().apply {
+                cornerRadius = dp(3).toFloat()
+                setColor(if (active) accent else muted)
+            }
+            dot.alpha = if (active) 1f else .5f
+            dot.layoutParams = (dot.layoutParams as LinearLayout.LayoutParams).apply { width = dp(if (active) 18 else 6) }
+        }
+    }
+
+    internal fun toggleNight() {
+        prefs.edit().putString(APPEARANCE, if (night) Appearance.DAY.name else Appearance.NIGHT.name).apply()
+        recreate()
     }
 
     private fun topBar() = row().apply {
@@ -352,6 +449,14 @@ class HomeActivity : Activity() {
             setPadding(dp(14), 0, dp(16), 0)
             content()
         }
+        addView(ImageButton(context).apply {
+            setImageResource(R.drawable.ic_home_tune)
+            imageTintList = ColorStateList.valueOf(text)
+            background = pressable(glass(14), 14)
+            contentDescription = "Réglages rapides"
+            setOnClickListener { quick.show() }
+            RadioMotion.pressScale(this, .92f)
+        }, LinearLayout.LayoutParams(dp(50), dp(50)).apply { marginEnd = dp(8) })
         addView(chip {
             weatherIcon = WeatherIcon(context, text)
             addView(weatherIcon, LinearLayout.LayoutParams(dp(28), dp(28)))
@@ -453,12 +558,19 @@ class HomeActivity : Activity() {
         background = pressable(glass())
         gauge = SpeedGauge(context, getColor(R.color.home_gauge_track), shade(accent, Color.BLACK, .25f),
             shade(accent, Color.WHITE, .3f), text, muted)
+        gauge.limit = speedLimit()
         addView(gauge, FrameLayout.LayoutParams(-1, -1).apply { setMargins(dp(8), dp(8), dp(8), dp(18)) })
+        headingText = caps("", text)
+        addView(headingText, FrameLayout.LayoutParams(-2, -2, Gravity.TOP or Gravity.START).apply { setMargins(dp(12), dp(10), 0, 0) })
+        altitudeText = label("", 11, muted, 600)
+        addView(altitudeText, FrameLayout.LayoutParams(-2, -2, Gravity.TOP or Gravity.END).apply { setMargins(0, dp(10), dp(12), 0) })
         speedStatus = label("", 10, muted, 500).apply { gravity = Gravity.CENTER }
         addView(speedStatus, FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM).apply { bottomMargin = dp(10) })
+        contentDescription = "Vitesse et trajet"
         setOnClickListener {
             if (!gps.permitted()) requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION,
                 Manifest.permission.ACCESS_COARSE_LOCATION), 1)
+            else showTrip()
         }
     }
 
@@ -624,7 +736,7 @@ class HomeActivity : Activity() {
             setOnClickListener { action() }
             page?.let { dockItems[it] = this }
         }
-        addView(item(Page.HOME, R.drawable.ic_home_home, "Accueil") { closePanel() }, LinearLayout.LayoutParams(0, -1, 1f))
+        addView(item(Page.HOME, R.drawable.ic_home_home, "Accueil") { closePanel(); pager.show(0) }, LinearLayout.LayoutParams(0, -1, 1f))
         addView(item(null, R.drawable.ic_home_phone, "Téléphone") {
             if (!links.openPhone()) Toast.makeText(context, "Aucune application de téléphone trouvée.", Toast.LENGTH_LONG).show()
         }, LinearLayout.LayoutParams(0, -1, 1f))
@@ -682,14 +794,103 @@ class HomeActivity : Activity() {
         }
         val state = gps.snapshot()
         gauge.setSpeed(state.speed.kmh)
+        headingText.text = state.bearing?.let { "${compassPoint(it)} ${it}°" }.orEmpty()
+        altitudeText.text = state.altitude?.let { "≈ $it m" }.orEmpty()
         speedStatus.text = when (state.status) {
             "Precise location off" -> "Localisation précise désactivée"
             "GPS unavailable" -> "GPS indisponible"
             "GPS disabled" -> "GPS désactivé"
             "Waiting for GPS" -> "Recherche du GPS…"
             "Mock location ignored" -> "Position simulée ignorée"
-            else -> state.direction.orEmpty()
+            else -> tripSummary()
         }
+        // One beep each time the speed passes the chosen limit, again only after dropping 3 km/h below it.
+        val limit = gauge.limit
+        val kmh = state.speed.kmh ?: 0
+        if (limit != null && kmh > limit && !alerted) {
+            alerted = true
+            runCatching { ToneGenerator(AudioManager.STREAM_NOTIFICATION, 80).startTone(ToneGenerator.TONE_PROP_BEEP2, 400) }
+        } else if (limit == null || kmh <= limit - 3) alerted = false
+        if (shownPage == Page.TRIP) tripValues?.invoke()
+    }
+
+    private fun speedLimit() = prefs.getInt(SPEED_LIMIT, 0).takeIf { it > 0 }
+
+    private fun kilometres(meters: Double) = if (meters < 10_000) String.format(Locale.FRENCH, "%.1f km", meters / 1000)
+        else "${(meters / 1000).toInt()} km"
+
+    private fun hours(ms: Long): String {
+        val minutes = ms / 60_000
+        return if (minutes < 60) "$minutes min" else "${minutes / 60} h ${(minutes % 60).toString().padStart(2, '0')}"
+    }
+
+    private fun tripSummary(): String {
+        val current = trip.trip
+        if (current.meters < 50) return "Trajet : 0 km"
+        return listOfNotNull(kilometres(current.meters), hours(current.movingMs),
+            current.averageKmh?.let { "moy. $it km/h" }).joinToString(" · ")
+    }
+
+    private var tripValues: (() -> Unit)? = null
+
+    /** The trip in big numbers, its reset, and the speed alert. */
+    private fun showTrip() {
+        val values = mutableMapOf<String, TextView>()
+        fun stat(name: String) = column().apply {
+            gravity = Gravity.CENTER
+            background = GradientDrawable().apply {
+                cornerRadius = dp(12).toFloat()
+                setColor(getColor(R.color.home_chip))
+                setStroke(dp(1), getColor(R.color.home_card_border))
+            }
+            val value = label("—", 24, text, 700, condensed = true).apply { gravity = Gravity.CENTER }
+            values[name] = value
+            addView(value, LinearLayout.LayoutParams(-1, -2))
+            addView(caps(name, muted).apply { gravity = Gravity.CENTER }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(4) })
+        }
+        fun statRow(vararg names: String) = row().apply {
+            gravity = Gravity.FILL
+            names.forEachIndexed { index, name ->
+                addView(stat(name), LinearLayout.LayoutParams(0, -1, 1f).apply { if (index > 0) marginStart = dp(8) })
+            }
+        }
+        openPanel(Page.TRIP, column().apply {
+            background = sheet()
+            setPadding(dp(18), dp(12), dp(18), dp(12))
+            addView(panelHeader("Trajet", null).apply {
+                addView(label("Remettre à zéro", 13, text, 700).apply {
+                    gravity = Gravity.CENTER
+                    setPadding(dp(14), 0, dp(14), 0)
+                    background = pressable(GradientDrawable().apply {
+                        cornerRadius = dp(12).toFloat()
+                        setColor(getColor(R.color.home_chip))
+                    }, 12)
+                    setOnClickListener { trip.reset(System.currentTimeMillis()); saveTrip(); tripValues?.invoke(); renderSpeed() }
+                }, 1, LinearLayout.LayoutParams(-2, dp(40)).apply { marginEnd = dp(10) })
+            })
+            addView(statRow("Distance", "Temps de conduite", "Moyenne", "Maximum"),
+                LinearLayout.LayoutParams(-1, 0, 1f).apply { topMargin = dp(8) })
+            addView(statRow("Départ", "Cap", "Altitude"), LinearLayout.LayoutParams(-1, 0, 1f).apply { topMargin = dp(8) })
+            addView(caps("Alerte de vitesse"), wrap().apply { topMargin = dp(12) })
+            val limits = listOf(0, 60, 80, 100, 120)
+            addView(choices(limits, speedLimit() ?: 0, { if (it == 0) "Non" else "$it" }, { null }) {
+                prefs.edit().putInt(SPEED_LIMIT, it).apply()
+            }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+        })
+        tripValues = {
+            val current = trip.trip
+            val state = gps.snapshot()
+            values["Distance"]?.text = kilometres(current.meters)
+            values["Temps de conduite"]?.text = hours(current.movingMs)
+            values["Moyenne"]?.text = current.averageKmh?.let { "$it km/h" } ?: "—"
+            values["Maximum"]?.text = if (current.maxKmh > 0) "${current.maxKmh} km/h" else "—"
+            values["Départ"]?.text = current.startedAt.takeIf { it > 0 }?.let {
+                Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("HH:mm"))
+            } ?: "—"
+            values["Cap"]?.text = state.bearing?.let { "${compassPoint(it)} $it°" } ?: "—"
+            values["Altitude"]?.text = state.altitude?.let { "≈ $it m" } ?: "—"
+        }
+        tripValues?.invoke()
     }
 
     private fun renderMedia() {
@@ -747,7 +948,7 @@ class HomeActivity : Activity() {
                 ComponentName(this, MediaAccessService::class.java).flattenToString()))
     }
 
-    private fun startSafely(intent: Intent) {
+    internal fun startSafely(intent: Intent) {
         try {
             startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         } catch (_: ActivityNotFoundException) {
@@ -859,25 +1060,28 @@ class HomeActivity : Activity() {
 
     // ——— Pages over the home screen ———
 
-    private fun sheet(): Drawable = GradientDrawable().apply {
+    internal fun sheet(): Drawable = GradientDrawable().apply {
         cornerRadius = dp(18).toFloat()
         setColor(getColor(R.color.home_background_bottom))
         setStroke(dp(1), getColor(R.color.home_card_border))
     }
 
-    private fun openPanel(page: Page, content: View) {
+    internal fun openPanel(page: Page, content: View) {
         panelHost.removeAllViews()
         panelHost.addView(content, FrameLayout.LayoutParams(-1, -1))
         panelHost.visibility = View.VISIBLE
         panelHost.alpha = 0f
         panelHost.translationY = dp(16).toFloat()
         panelHost.animate().alpha(1f).translationY(0f).setDuration(180).start()
+        shownPage = page
         markDock(page)
     }
 
-    private fun closePanel() {
+    internal fun closePanel() {
         if (!::panelHost.isInitialized) return
         markDock(Page.HOME)
+        shownPage = Page.HOME
+        tripValues = null
         if (panelHost.visibility != View.VISIBLE) return
         panelHost.animate().alpha(0f).translationY(dp(12).toFloat()).setDuration(150).withEndAction {
             panelHost.visibility = View.GONE
@@ -885,7 +1089,7 @@ class HomeActivity : Activity() {
         }.start()
     }
 
-    private fun panelHeader(title: String, subtitle: String?) = row().apply {
+    internal fun panelHeader(title: String, subtitle: String?) = row().apply {
         addView(column().apply {
             addView(label(title, 22, text, 700, condensed = true))
             subtitle?.let { addView(label(it, 12, muted), wrap().apply { topMargin = dp(4) }) }
@@ -996,7 +1200,7 @@ class HomeActivity : Activity() {
     }
 
     /** A row of segmented choices; picking one saves it and redraws the screen in it. */
-    private fun <T> choices(all: List<T>, current: T, name: (T) -> String, swatch: (T) -> Int?, pick: (T) -> Unit) = row().apply {
+    internal fun <T> choices(all: List<T>, current: T, name: (T) -> String, swatch: (T) -> Int?, pick: (T) -> Unit) = row().apply {
         all.forEach { choice ->
             val selected = choice == current
             addView(row().apply {
@@ -1021,9 +1225,13 @@ class HomeActivity : Activity() {
         }
     }
 
-    private fun shade(color: Int, toward: Int, amount: Float) = ArgbEvaluator().evaluate(amount, color, toward) as Int
+    internal fun shade(color: Int, toward: Int, amount: Float) = ArgbEvaluator().evaluate(amount, color, toward) as Int
 
-    private companion object {
+    internal companion object {
+        const val REQUEST_BLUETOOTH = 5
+        const val REQUEST_CONTACTS = 6
+        const val TRIP = "trip"
+        const val SPEED_LIMIT = "speed_limit"
         const val PREFS = "incar_drive_home"
         const val APPEARANCE = "appearance"
         const val ACCENT = "accent"

@@ -14,10 +14,16 @@ import kotlin.math.roundToInt
 internal data class GpsState(
     val speed: SpeedReading = SpeedReading(),
     val status: String = "Waiting for GPS",
-    val direction: String? = null
+    val direction: String? = null,
+    /** Heading in degrees while moving, from the GPS course. */
+    val bearing: Int? = null,
+    /** GPS altitude in metres; Android 13 reports it above the ellipsoid, a few tens of metres off sea level. */
+    val altitude: Int? = null,
 )
 
 internal class GpsMonitor(private val context: Context, private val changed: () -> Unit) {
+    /** Every genuine fix, with the filtered speed, for the trip meter. */
+    var onFix: ((Location, Int?) -> Unit)? = null
     private val manager = context.getSystemService(LocationManager::class.java)
     private val filter = SpeedFilter()
     private var lastFix: Location? = null
@@ -33,6 +39,7 @@ internal class GpsMonitor(private val context: Context, private val changed: () 
                 location.speedAccuracyMetersPerSecond.takeIf { location.hasSpeedAccuracy() },
                 stamp, now
             )
+            if (!location.mocked) onFix?.invoke(location, filter.current(now).kmh)
             changed()
         }
 
@@ -77,14 +84,12 @@ internal class GpsMonitor(private val context: Context, private val changed: () 
         if (fix.mocked) return GpsState(status = "Mock location ignored")
         val speed = filter.current(now)
         val accuracy = if (fix.hasAccuracy()) " ±${fix.accuracy.roundToInt()} m" else ""
-        val direction = if (speed.kmh != null && speed.kmh >= 5 && fix.hasBearing() &&
+        val bearing = if (speed.kmh != null && speed.kmh >= 5 && fix.hasBearing() &&
             fix.hasBearingAccuracy() && fix.bearingAccuracyDegrees <= 30
-        ) {
-            val directions = listOf("N", "NE", "E", "SE", "S", "SW", "W", "NW")
-            directions[((fix.bearing / 45).roundToInt() % 8 + 8) % 8]
-        } else null
+        ) (fix.bearing.roundToInt() % 360 + 360) % 360 else null
+        val direction = bearing?.let { compassPoint(it) }
         val status = if (speed.kmh == null) "GPS fix · Speed unavailable" else "GPS$accuracy"
-        return GpsState(speed, status, direction)
+        return GpsState(speed, status, direction, bearing, fix.altitude.roundToInt().takeIf { fix.hasAltitude() })
     }
 }
 
@@ -93,3 +98,7 @@ internal class GpsMonitor(private val context: Context, private val changed: () 
 private val android.location.Location.mocked: Boolean
     get() = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) isMock else isFromMockProvider
 
+
+/** The French compass point of a heading: N, NE, E, SE, S, SO, O, NO. */
+internal fun compassPoint(degrees: Int): String =
+    listOf("N", "NE", "E", "SE", "S", "SO", "O", "NO")[((degrees / 45.0).roundToInt() % 8 + 8) % 8]

@@ -41,13 +41,29 @@ internal class SpeedGauge(context: Context, private val track: Int, private val 
         textAlign = Paint.Align.CENTER
         typeface = Typeface.create(Typeface.DEFAULT, 500, false)
     }
+    private val limitPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        strokeWidth = 3 * density
+        strokeCap = Paint.Cap.ROUND
+        color = ALERT
+    }
     private val tickPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         strokeWidth = 1.5f * density
         strokeCap = Paint.Cap.ROUND
         color = mutedColor
         alpha = 110
     }
+    private val alertPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeCap = Paint.Cap.ROUND
+        strokeWidth = stroke
+        color = ALERT
+    }
     private val box = RectF()
+
+    /** Above this speed the arc and the number turn red; null turns the alert off. */
+    var limit: Int? = null
+        set(value) { field = value; invalidate() }
+    val over get() = limit?.let { (speed ?: 0) > it } == true
     private var shown = 0f
     private var speed: Int? = null
     private var easing: ValueAnimator? = null
@@ -100,11 +116,24 @@ internal class SpeedGauge(context: Context, private val track: Int, private val 
             mark += 10
         }
         val sweep = (shown / scale).coerceIn(0f, 1f) * 240f
-        if (sweep > .5f) canvas.drawArc(box, 150f, sweep, false, arcPaint)
+        if (sweep > .5f) canvas.drawArc(box, 150f, sweep, false, if (over) alertPaint else arcPaint)
+        // The chosen limit as a small mark on the track.
+        limit?.takeIf { it < scale }?.let { mark ->
+            val angle = Math.toRadians((150 + mark / scale * 240).toDouble())
+            val outer = radius + stroke * .9f
+            val inner = radius - stroke * .9f
+            canvas.drawLine(cx0 + (outer * Math.cos(angle)).toFloat(), cy0 + (outer * Math.sin(angle)).toFloat(),
+                cx0 + (inner * Math.cos(angle)).toFloat(), cy0 + (inner * Math.sin(angle)).toFloat(), limitPaint)
+        }
+        valuePaint.color = if (over) ALERT else textColor
         val cx = box.centerX()
         val cy = box.centerY()
         canvas.drawText(speed?.let { shown.toInt().toString() } ?: "—", cx, cy + valuePaint.textSize * .32f, valuePaint)
         canvas.drawText("km/h", cx, cy + valuePaint.textSize * .32f + unitPaint.textSize * 1.6f, unitPaint)
+    }
+
+    private companion object {
+        const val ALERT = 0xFFFF4D5E.toInt()
     }
 
     override fun onDetachedFromWindow() {
