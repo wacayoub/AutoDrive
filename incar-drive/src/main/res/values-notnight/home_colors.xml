@@ -1,8 +1,8 @@
 <!-- Incar Drive, Jour: a light silver cockpit with white panels. -->
 <resources>
-    <color name="home_background_top">#F3F5F8</color>
-    <color name="home_background_bottom">#DCE1E8</color>
-    <color name="home_card">#F2FFFFFF</color>
+    <color name="home_background_top">#F6F8FB</color>
+    <color name="home_background_bottom">#E2E7EE</color>
+    <color name="home_card">#FAFFFFFF</color>
     <color name="home_card_border">#1A0F172A</color>
     <color name="home_text">#111722</color>
     <color name="home_muted">#5A6576</color>
@@ -11,5 +11,5 @@
     <color name="home_gauge_track">#140F172A</color>
     <color name="home_grid">#140F172A</color>
     <!-- System widgets only; the screen itself uses the accent chosen in Réglages. -->
-    <color name="home_accent">#E07010</color>
+    <color name="home_accent">#F29A0E</color>
 </resources>

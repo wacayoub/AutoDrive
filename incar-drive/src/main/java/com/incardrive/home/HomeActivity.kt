@@ -78,9 +78,9 @@ class HomeActivity : Activity() {
 
     /** The dashboard light: one colour for the speed arc, the play button, the dock and the labels. */
     private enum class Accent(val label: String, val night: Int, val day: Int, val darkInk: Boolean) {
-        AMBER("Ambre", 0xFFFFB020.toInt(), 0xFFE07010.toInt(), true),
-        CYAN("Cyan", 0xFF3DD6F5.toInt(), 0xFF0A8FB5.toInt(), true),
-        RED("Rouge", 0xFFFF4D5E.toInt(), 0xFFD42A42.toInt(), false);
+        AMBER("Ambre", 0xFFFFB020.toInt(), 0xFFF29A0E.toInt(), true),
+        CYAN("Cyan", 0xFF3DD6F5.toInt(), 0xFF1BA8CC.toInt(), true),
+        RED("Rouge", 0xFFFF4D5E.toInt(), 0xFFE5394F.toInt(), false);
 
         companion object {
             fun restore(prefs: SharedPreferences) = entries.firstOrNull { it.name == prefs.getString(ACCENT, null) } ?: AMBER
@@ -290,7 +290,7 @@ class HomeActivity : Activity() {
 
     private fun screen(): View {
         val backdrop = CockpitBackdrop(getColor(R.color.home_background_top), getColor(R.color.home_background_bottom),
-            accent, getColor(R.color.home_grid), if (night) 0x38 else 0x2E)
+            accent, getColor(R.color.home_grid), if (night) 0x26 else 0x1C)
         val content = column().apply {
             addView(topBar(), LinearLayout.LayoutParams(-1, dp(62)))
             addView(row().apply {
@@ -418,7 +418,7 @@ class HomeActivity : Activity() {
     private fun washWith(color: Int) {
         if (color == mediaColor) return
         washFade?.cancel()
-        val alpha = if (night) 0x8C else 0x66
+        val alpha = if (night) 0x4D else 0x2E
         fun paint(value: Int) {
             mediaWash.colors = intArrayOf(Color.argb(if (Color.alpha(value) == 0) 0 else alpha,
                 Color.red(value), Color.green(value), Color.blue(value)), Color.TRANSPARENT)
@@ -446,29 +446,32 @@ class HomeActivity : Activity() {
     }
 
     private fun mapsCard() = row().apply {
+        // Deep accent at night carries white text; the bright day card keeps the accent's own ink.
+        val ink = if (night) Color.WHITE else onAccent
         background = pressable(GradientDrawable(GradientDrawable.Orientation.BL_TR,
-            intArrayOf(shade(accent, Color.BLACK, .18f), shade(accent, Color.WHITE, .12f))).apply {
+            if (night) intArrayOf(shade(accent, Color.BLACK, .45f), shade(accent, Color.BLACK, .1f))
+                else intArrayOf(shade(accent, Color.BLACK, .08f), shade(accent, Color.WHITE, .15f))).apply {
             cornerRadius = dp(16).toFloat()
         })
         elevation = dp(4).toFloat()
         setPadding(dp(16), 0, dp(12), 0)
         addView(FrameLayout(context).apply {
-            background = GradientDrawable().apply { cornerRadius = dp(12).toFloat(); setColor(Color.argb(0x2E, Color.red(onAccent),
-                Color.green(onAccent), Color.blue(onAccent))) }
+            background = GradientDrawable().apply { cornerRadius = dp(12).toFloat(); setColor(Color.argb(0x2E, Color.red(ink),
+                Color.green(ink), Color.blue(ink))) }
             addView(ImageView(context).apply {
                 setImageResource(R.drawable.ic_home_navigation)
-                imageTintList = ColorStateList.valueOf(onAccent)
+                imageTintList = ColorStateList.valueOf(ink)
                 rotation = 45f
             }, FrameLayout.LayoutParams(dp(24), dp(24), Gravity.CENTER))
         }, LinearLayout.LayoutParams(dp(44), dp(44)))
         addView(column().apply {
-            addView(label("Naviguer", 19, onAccent, 700, condensed = true))
-            addView(label("Google Maps", 12, Color.argb(0xCC, Color.red(onAccent), Color.green(onAccent), Color.blue(onAccent)), 500),
+            addView(label("Naviguer", 19, ink, 700, condensed = true))
+            addView(label("Google Maps", 12, Color.argb(0xCC, Color.red(ink), Color.green(ink), Color.blue(ink)), 500),
                 wrap().apply { topMargin = dp(3) })
         }, LinearLayout.LayoutParams(0, -2, 1f).apply { marginStart = dp(12) })
         addView(ImageView(context).apply {
             setImageResource(R.drawable.ic_home_chevron)
-            imageTintList = ColorStateList.valueOf(onAccent)
+            imageTintList = ColorStateList.valueOf(ink)
         }, LinearLayout.LayoutParams(dp(22), dp(22)))
         contentDescription = "Ouvrir Google Maps"
         setOnClickListener {
