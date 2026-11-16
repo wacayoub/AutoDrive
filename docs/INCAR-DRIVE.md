@@ -31,6 +31,7 @@ L’accueil est l’interface principale du boîtier. Son thème « cockpit » l
 - **Maps** : carte au dégradé de la couleur d’accent, avec une flèche de navigation, « Naviguer » et un chevron.
 - **Favoris** : trois rangées de deux tuiles, chacune teintée de la couleur dominante de son icône ; les places libres montrent un « + » en pointillés qui ouvre le choix des favoris.
 - **Dock** : barre flottante, avec la page en cours sur fond d’accent. Les boutons sont des carrés arrondis, comme des touches de tableau de bord. Les pages Applis et Réglages glissent au-dessus de l’accueil.
+- **Ciel selon la saison et la météo** : `SkyPalette` choisit le dégradé du fond d’après le mois (printemps vert tendre, été sable chaud, automne cuivre, hiver argent ; la nuit sarcelle, indigo, bleu nuit, bleu glacier) et la météo d’Open-Meteo déjà affichée : nuages, brouillard, pluie, orage ou neige le grisent en proportion et éteignent la lueur du soleil. Le fond se met à jour à chaque nouvelle météo.
 - **Fond** : `CockpitBackdrop`, statique : un dégradé, une lueur de la couleur d’accent en haut à droite et une grille de route en perspective vers l’horizon.
 
 ## Bulle de la radio

@@ -68,6 +68,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.time.Duration
 import java.time.Instant
+import java.time.LocalDate
 import java.time.ZoneId
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
@@ -180,6 +181,8 @@ class HomeActivity : Activity() {
     private lateinit var altitudeText: TextView
     private var shownPage = Page.HOME
     private lateinit var callBanner: FrameLayout
+    private lateinit var screenRoot: FrameLayout
+    private var shownSky: Sky? = null
     private var alerted = false
     private val roadLimits = RoadLimits()
     private var roadLimit: Int? = null
@@ -393,9 +396,7 @@ class HomeActivity : Activity() {
     // ——— Screen ———
 
     private fun screen(): View {
-        val backdrop = CockpitBackdrop(getColor(R.color.home_background_top), getColor(R.color.home_background_mid),
-            getColor(R.color.home_background_bottom), accent, getColor(R.color.home_grid), if (night) 0x26 else 0x30,
-            getColor(R.color.home_background_glow))
+        val backdrop = skyBackdrop()
         val content = column().apply {
             addView(topBar(), LinearLayout.LayoutParams(-1, dp(62)))
             pager = SwipePager(context) { page -> markDots(page) }.apply {
@@ -432,6 +433,7 @@ class HomeActivity : Activity() {
         panelHost = FrameLayout(this).apply { visibility = View.GONE }
         callBanner = FrameLayout(this).apply { visibility = View.GONE }
         return FrameLayout(this).apply {
+            screenRoot = this
             background = backdrop
             addView(content, FrameLayout.LayoutParams(-1, -1))
             addView(panelHost, FrameLayout.LayoutParams(-1, -1))
@@ -805,8 +807,17 @@ class HomeActivity : Activity() {
 
     // ——— Live content ———
 
+    /** The background for this season and the weather outside, behind the cards. */
+    private fun skyBackdrop(): CockpitBackdrop {
+        val sky = SkyPalette.of(info.weather.value?.condition, LocalDate.now().month, night)
+        shownSky = sky
+        return CockpitBackdrop(sky.top, sky.mid, sky.bottom, accent, getColor(R.color.home_grid), if (night) 0x26 else 0x30, sky.glow)
+    }
+
     private fun renderWeather() {
         val weather = info.weather.value
+        if (::screenRoot.isInitialized &&
+            SkyPalette.of(weather?.condition, LocalDate.now().month, night) != shownSky) screenRoot.background = skyBackdrop()
         weatherIcon.bind(weather)
         weatherText.text = weather?.let { "${it.degrees}°" } ?: "—"
         weatherDetail.text = weather?.condition?.label ?: info.city.value.label

@@ -1,10 +1,7 @@
-<!-- Incar Drive, Jour: a soft morning sky fading through white to warm sand, with white panels. -->
+<!-- Incar Drive, Jour: white panels. The sky behind them follows the season and the weather (SkyPalette). -->
 <resources>
     <color name="home_background_top">#D6E6FF</color>
-    <color name="home_background_mid">#F3F6FB</color>
     <color name="home_background_bottom">#F1E3D1</color>
-    <!-- A warm low sun in the lower left corner. -->
-    <color name="home_background_glow">#59FFB45C</color>
     <color name="home_sheet">#F7F9FC</color>
     <color name="home_card">#E8FFFFFF</color>
     <color name="home_card_border">#1F0F172A</color>
