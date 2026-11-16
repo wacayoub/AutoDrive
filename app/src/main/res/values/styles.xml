@@ -11,6 +11,13 @@
         <item name="android:statusBarColor">#101F32</item>
         <item name="android:navigationBarColor">#101F32</item>
     </style>
+    <style name="AutoDriveHomeTheme" parent="android:style/Theme.Material.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:colorAccent">@color/home_accent</item>
+        <item name="android:windowBackground">@color/home_background_bottom</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
     <style name="AutoDriveMapWebTheme" parent="android:style/Theme.Material.Light.NoActionBar">
         <item name="android:isLightTheme">true</item>
         <item name="android:forceDarkAllowed">false</item>

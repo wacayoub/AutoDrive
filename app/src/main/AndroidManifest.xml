@@ -57,9 +57,11 @@
         <activity android:name=".MainActivity" android:exported="false"
             android:launchMode="singleTask" android:resizeableActivity="true"
             android:windowSoftInputMode="adjustResize" />
-        <activity android:name=".WebDashboardActivity" android:exported="true"
+        <!-- The new home screen (2.0): time, weather, salat, media, speed, Maps and favourite apps. -->
+        <activity android:name=".HomeActivity" android:exported="true"
             android:launchMode="singleTask" android:resizeableActivity="true"
-            android:windowSoftInputMode="adjustResize">
+            android:theme="@style/AutoDriveHomeTheme" android:stateNotNeeded="true"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.HOME" />
@@ -70,6 +72,10 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <!-- The former web dashboard, no longer the home screen; its phone flow moves to HomeActivity next. -->
+        <activity android:name=".WebDashboardActivity" android:exported="false"
+            android:launchMode="singleTask" android:resizeableActivity="true"
+            android:windowSoftInputMode="adjustResize" />
         <service android:name=".MediaAccessService" android:label="@string/media_access"
             android:exported="false" android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
             <intent-filter>

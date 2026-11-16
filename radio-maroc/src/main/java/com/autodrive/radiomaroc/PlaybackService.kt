@@ -87,6 +87,8 @@ internal class PlaybackService : MediaLibraryService() {
                 screenListener?.invoke(value)
             }
         private var screenListener: ((Boolean) -> Unit)? = null
+        // Sent by the AutoDrive home screen when it comes to the front or leaves (a hint only: it hides the bubble).
+        const val HOME_VISIBLE = "com.autodrive.radiomaroc.HOME_VISIBLE"
 
         fun setVisibleStations(stations: List<RadioStation>) {
             visibleStations.value = stations.filter { it != Stations.luxe }
@@ -289,6 +291,9 @@ internal class PlaybackService : MediaLibraryService() {
                     Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT))
             })
         screenListener = { active -> if (active) floating.screenShown() else refreshFloating() }
+        // The AutoDrive home screen shows the radio itself: no bubble on top of it while it is in front.
+        androidx.core.content.ContextCompat.registerReceiver(this, homeVisibility,
+            android.content.IntentFilter(HOME_VISIBLE), androidx.core.content.ContextCompat.RECEIVER_EXPORTED)
         val reopen = PendingIntent.getActivity(this, 0, Intent(this, RadioActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
         session = MediaLibrarySession.Builder(this, sessionPlayer, object : MediaLibrarySession.Callback {
                 override fun onConnect(session: MediaSession, controller: MediaSession.ControllerInfo): MediaSession.ConnectionResult {
@@ -625,13 +630,21 @@ internal class PlaybackService : MediaLibraryService() {
         refreshFloating()
     }
 
+    private var homeVisible = false
+    private val homeVisibility = object : android.content.BroadcastReceiver() {
+        override fun onReceive(context: android.content.Context, intent: Intent) {
+            homeVisible = intent.getBooleanExtra("visible", false)
+            refreshFloating()
+        }
+    }
+
     /** The bubble over other apps: the station, what plays now and the play state, while the radio's screen is away. */
     private fun refreshFloating() {
         if (!::floating.isInitialized) return
         val item = activeItem ?: engine.currentMediaItem
         val base = item?.mediaMetadata
         val now = (programme?.title ?: icyTitle)?.takeUnless { it == base?.title?.toString() } ?: base?.subtitle
-        floating.render(!radioScreenActive && item != null, base?.title, now, activeLogo, engine.playWhenReady)
+        floating.render(!radioScreenActive && !homeVisible && item != null, base?.title, now, activeLogo, engine.playWhenReady)
     }
 
     private fun setNetworkUnavailable(unavailable: Boolean) {
@@ -734,7 +747,10 @@ internal class PlaybackService : MediaLibraryService() {
 
     override fun onDestroy() {
         screenListener = null
-        if (::floating.isInitialized) floating.hide()
+        if (::floating.isInitialized) {
+            runCatching { unregisterReceiver(homeVisibility) }
+            floating.hide()
+        }
         stationPopup.dismiss()
         retryHandler.removeCallbacks(retryStream)
         connectivity.unregisterNetworkCallback(networkCallback)
