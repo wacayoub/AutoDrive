@@ -114,13 +114,13 @@ internal class PhoneLink(private val home: HomeActivity) {
         column().apply {
             background = glass()
             setPadding(dp(14), dp(12), dp(14), dp(12))
-            addView(caps("Téléphone"))
+            addView(caps("Téléphone", phoneColor))
             addView(row().apply {
                 addView(FrameLayout(context).apply {
-                    background = GradientDrawable().apply { cornerRadius = dp(12).toFloat(); setColor(getColor(R.color.home_chip)) }
+                    background = GradientDrawable().apply { cornerRadius = dp(12).toFloat(); setColor(tint(phoneColor, 0x2E)) }
                     addView(ImageView(context).apply {
                         setImageResource(R.drawable.ic_home_bluetooth)
-                        imageTintList = ColorStateList.valueOf(text)
+                        imageTintList = ColorStateList.valueOf(phoneColor)
                     }, FrameLayout.LayoutParams(dp(22), dp(22), Gravity.CENTER))
                 }, LinearLayout.LayoutParams(dp(42), dp(42)))
                 addView(column().apply {
@@ -132,11 +132,12 @@ internal class PhoneLink(private val home: HomeActivity) {
             }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
             list = column()
             addView(list, LinearLayout.LayoutParams(-1, 0, 1f).apply { topMargin = dp(8) })
-            addView(label("Clavier et numéros", 15, onAccent, 700).apply {
+            addView(label("Clavier et numéros", 15, phoneColor, 700).apply {
                 gravity = Gravity.CENTER
                 background = pressable(GradientDrawable().apply {
                     cornerRadius = dp(12).toFloat()
-                    setColor(accent)
+                    setColor(tint(phoneColor, if (night) 0x2E else 0x1F))
+                    setStroke(dp(1), tint(phoneColor, 0x66))
                 }, 12)
                 setOnClickListener { dialer.show() }
             }, LinearLayout.LayoutParams(-1, dp(44)))
@@ -193,7 +194,7 @@ internal class PhoneLink(private val home: HomeActivity) {
                 setPadding(dp(4), 0, dp(4), 0)
                 addView(ImageView(context).apply {
                     setImageResource(R.drawable.ic_home_phone)
-                    imageTintList = ColorStateList.valueOf(accent)
+                    imageTintList = ColorStateList.valueOf(phoneColor)
                 }, LinearLayout.LayoutParams(dp(18), dp(18)))
                 addView(column().apply {
                     addView(label(entry.name, 14, text, 700))

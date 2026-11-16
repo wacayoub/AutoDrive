@@ -4,7 +4,6 @@ import android.app.AlertDialog
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.res.ColorStateList
-import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
 import android.text.InputType
 import android.view.Gravity
@@ -114,15 +113,17 @@ internal class Dialer(private val home: HomeActivity) {
     private fun callButton(title: String, action: () -> Unit) = with(home) {
         row().apply {
             gravity = Gravity.CENTER
+            // See-through green with a green phone and text, like the phone button of the dock.
             background = pressable(GradientDrawable().apply {
                 cornerRadius = dp(12).toFloat()
-                setColor(HomeActivity.CALL_GREEN)
+                setColor(tint(phoneColor, if (night) 0x38 else 0x26))
+                setStroke(dp(1), tint(phoneColor, 0x80))
             }, 12)
             addView(android.widget.ImageView(context).apply {
                 setImageResource(R.drawable.ic_home_phone)
-                imageTintList = ColorStateList.valueOf(Color.WHITE)
+                imageTintList = ColorStateList.valueOf(phoneColor)
             }, LinearLayout.LayoutParams(dp(20), dp(20)))
-            addView(label(title, 16, Color.WHITE, 700), wrap().apply { marginStart = dp(10) })
+            addView(label(title, 16, phoneColor, 700), wrap().apply { marginStart = dp(10) })
             contentDescription = title
             setOnClickListener { action() }
         }
@@ -138,7 +139,7 @@ internal class Dialer(private val home: HomeActivity) {
     private fun favourites(): View = with(home) {
         column().apply {
             addView(row().apply {
-                addView(caps("Numéros enregistrés"), LinearLayout.LayoutParams(0, -2, 1f))
+                addView(caps("Numéros enregistrés", phoneColor), LinearLayout.LayoutParams(0, -2, 1f))
                 addView(round(R.drawable.ic_home_close, "Fermer") { closePanel() }, LinearLayout.LayoutParams(dp(40), dp(40)))
             })
             val list = column()
@@ -165,11 +166,11 @@ internal class Dialer(private val home: HomeActivity) {
                     addView(FrameLayout(context).apply {
                         background = pressable(GradientDrawable().apply {
                             cornerRadius = dp(10).toFloat()
-                            setColor(HomeActivity.CALL_GREEN)
+                            setColor(tint(phoneColor, if (night) 0x38 else 0x26))
                         }, 10)
                         addView(android.widget.ImageView(context).apply {
                             setImageResource(R.drawable.ic_home_phone)
-                            imageTintList = ColorStateList.valueOf(Color.WHITE)
+                            imageTintList = ColorStateList.valueOf(phoneColor)
                         }, FrameLayout.LayoutParams(dp(20), dp(20), Gravity.CENTER))
                         contentDescription = "Appeler ${entry.name}"
                         setOnClickListener { call(entry.number) }

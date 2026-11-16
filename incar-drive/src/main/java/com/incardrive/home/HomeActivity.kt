@@ -129,6 +129,17 @@ class HomeActivity : Activity() {
     internal val accent by lazy { if (night) accentChoice.night else accentChoice.day }
     internal val onAccent by lazy { if (Color.luminance(accent) > .3f) 0xFF0B0D12.toInt() else Color.WHITE }
     private val neutral get() = accentChoice == Accent.NEUTRAL
+    // Each part of the screen keeps its own colour, whatever the dashboard colour: navigation blue, phone green,
+    // weather amber, prayer teal, apps violet. Brighter by night, deeper by day.
+    internal val navColor by lazy { if (night) 0xFF5B9BFF.toInt() else 0xFF2563EB.toInt() }
+    internal val phoneColor by lazy { if (night) 0xFF3DDC97.toInt() else 0xFF0E9F6E.toInt() }
+    internal val weatherColor by lazy { if (night) 0xFFFFB020.toInt() else 0xFFD97706.toInt() }
+    internal val prayerColor by lazy { if (night) 0xFF2DD4BF.toInt() else 0xFF0D9488.toInt() }
+    internal val appsColor by lazy { if (night) 0xFFB197FC.toInt() else 0xFF7C3AED.toInt() }
+
+    /** [color] at [alpha], for the light washes behind coloured icons and selected items. */
+    internal fun tint(color: Int, alpha: Int) = Color.argb(alpha, Color.red(color), Color.green(color), Color.blue(color))
+
     internal val night get() = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES
 
     private lateinit var greeting: TextView
@@ -479,7 +490,7 @@ class HomeActivity : Activity() {
             RadioMotion.pressScale(this, .92f)
         }, LinearLayout.LayoutParams(dp(50), dp(50)).apply { marginEnd = dp(8) })
         addView(chip {
-            weatherIcon = WeatherIcon(context, accent)
+            weatherIcon = WeatherIcon(context, weatherColor)
             addView(weatherIcon, LinearLayout.LayoutParams(dp(28), dp(28)))
             addView(column().apply {
                 weatherText = label("—", 17, text, 700)
@@ -492,7 +503,7 @@ class HomeActivity : Activity() {
         addView(chip {
             addView(column().apply {
                 prayerText = label("Salat", 16, text, 700)
-                prayerDetail = caps("")
+                prayerDetail = caps("", prayerColor)
                 addView(prayerText, wrap())
                 addView(prayerDetail, wrap().apply { topMargin = dp(2) })
             })
@@ -603,18 +614,17 @@ class HomeActivity : Activity() {
 
     /** « Naviguer » opens Google Maps full screen; Maison and Travail start its guidance straight away. */
     private fun mapsCard() = column().apply {
-        // A panel like the others, so it reads well in every colour: the accent lights the icon, the chevron and the
-        // Maison / Travail icons, never large areas of text.
+        // A panel like the others, in navigation blue: the icon, the chevron and the Maison / Travail icons.
         background = glass()
         setPadding(dp(8), dp(6), dp(8), dp(8))
         addView(row().apply {
             background = pressable(null, 12)
             setPadding(dp(8), 0, dp(4), 0)
             addView(FrameLayout(context).apply {
-                background = GradientDrawable().apply { cornerRadius = dp(12).toFloat(); setColor(accent) }
+                background = GradientDrawable().apply { cornerRadius = dp(12).toFloat(); setColor(tint(navColor, 0x33)) }
                 addView(ImageView(context).apply {
                     setImageResource(R.drawable.ic_home_navigation)
-                    imageTintList = ColorStateList.valueOf(onAccent)
+                    imageTintList = ColorStateList.valueOf(navColor)
                     rotation = 45f
                 }, FrameLayout.LayoutParams(dp(22), dp(22), Gravity.CENTER))
             }, LinearLayout.LayoutParams(dp(40), dp(40)))
@@ -624,7 +634,7 @@ class HomeActivity : Activity() {
             }, LinearLayout.LayoutParams(0, -2, 1f).apply { marginStart = dp(12) })
             addView(ImageView(context).apply {
                 setImageResource(R.drawable.ic_home_chevron)
-                imageTintList = ColorStateList.valueOf(accent)
+                imageTintList = ColorStateList.valueOf(navColor)
             }, LinearLayout.LayoutParams(dp(22), dp(22)))
             contentDescription = "Ouvrir Google Maps"
             setOnClickListener {
@@ -644,7 +654,7 @@ class HomeActivity : Activity() {
                     }, 12)
                     addView(ImageView(context).apply {
                         setImageResource(if (set) place.icon else R.drawable.ic_home_add)
-                        imageTintList = ColorStateList.valueOf(if (set) accent else muted)
+                        imageTintList = ColorStateList.valueOf(if (set) navColor else muted)
                         tag = "icon"
                     }, LinearLayout.LayoutParams(dp(18), dp(18)))
                     addView(label(place.label, 14, if (set) text else muted, 700).apply { tag = "label" },
@@ -669,7 +679,7 @@ class HomeActivity : Activity() {
             // A place without an address shows « + » and muted text instead of being faded.
             chip.findViewWithTag<ImageView>("icon")?.apply {
                 setImageResource(if (target != null) place.icon else R.drawable.ic_home_add)
-                imageTintList = ColorStateList.valueOf(if (target != null) accent else muted)
+                imageTintList = ColorStateList.valueOf(if (target != null) navColor else muted)
             }
             chip.findViewWithTag<TextView>("label")?.setTextColor(if (target != null) text else muted)
             chip.contentDescription = target?.let { "Aller à ${place.label}" } ?: "Choisir l’adresse ${place.label}"
@@ -754,11 +764,12 @@ class HomeActivity : Activity() {
         background = glass(18)
         elevation = dp(6).toFloat()
         setPadding(dp(6), dp(6), dp(6), dp(6))
-        fun item(page: Page?, icon: Int, title: String, action: () -> Unit) = row().apply {
+        fun item(page: Page?, icon: Int, title: String, color: Int, action: () -> Unit) = row().apply {
             gravity = Gravity.CENTER
+            tag = color
             addView(ImageView(context).apply {
                 setImageResource(icon)
-                imageTintList = ColorStateList.valueOf(text)
+                imageTintList = ColorStateList.valueOf(color)
                 tag = "icon"
             }, LinearLayout.LayoutParams(dp(22), dp(22)))
             addView(label(title, 15, text, 600).apply { tag = "label" }, wrap().apply { marginStart = dp(10) })
@@ -766,26 +777,28 @@ class HomeActivity : Activity() {
             setOnClickListener { action() }
             page?.let { dockItems[it] = this }
         }
-        addView(item(Page.HOME, R.drawable.ic_home_home, "Accueil") { closePanel(); pager.show(0) }, LinearLayout.LayoutParams(0, -1, 1f))
-        addView(item(Page.DIALER, R.drawable.ic_home_phone, "Téléphone") { dialer.show() }, LinearLayout.LayoutParams(0, -1, 1f))
-        addView(item(Page.APPS, R.drawable.ic_home_apps, "Applis") { showApps(editing = false) }, LinearLayout.LayoutParams(0, -1, 1f))
-        addView(item(Page.SETTINGS, R.drawable.ic_home_settings, "Réglages") { showSettings() }, LinearLayout.LayoutParams(0, -1, 1f))
+        addView(item(Page.HOME, R.drawable.ic_home_home, "Accueil", accent) { closePanel(); pager.show(0) }, LinearLayout.LayoutParams(0, -1, 1f))
+        addView(item(Page.DIALER, R.drawable.ic_home_phone, "Téléphone", phoneColor) { dialer.show() }, LinearLayout.LayoutParams(0, -1, 1f))
+        addView(item(Page.APPS, R.drawable.ic_home_apps, "Applis", appsColor) { showApps(editing = false) }, LinearLayout.LayoutParams(0, -1, 1f))
+        addView(item(Page.SETTINGS, R.drawable.ic_home_settings, "Réglages", muted) { showSettings() }, LinearLayout.LayoutParams(0, -1, 1f))
         post { markDock(Page.HOME) }
     }
 
-    /** The current page's dock item sits in a filled pill. */
+    /**
+     * Each dock item keeps its own colour on its icon. The current page sits in a see-through pill of that colour,
+     * with its name in the colour too.
+     */
     private fun markDock(current: Page) {
-        val activeFill = accent
-        val onActive = onAccent
         dockItems.forEach { (page, view) ->
             val active = page == current
+            val color = view.tag as? Int ?: accent
             view.background = pressable(GradientDrawable().apply {
                 cornerRadius = dp(12).toFloat()
-                setColor(if (active) activeFill else Color.TRANSPARENT)
+                setColor(if (active) tint(color, if (night) 0x33 else 0x24) else Color.TRANSPARENT)
+                if (active) setStroke(dp(1), tint(color, 0x73))
             }, 12)
-            val tint = if (active) onActive else text
-            (view.findViewWithTag<ImageView>("icon"))?.imageTintList = ColorStateList.valueOf(tint)
-            (view.findViewWithTag<TextView>("label"))?.setTextColor(tint)
+            (view.findViewWithTag<ImageView>("icon"))?.imageTintList = ColorStateList.valueOf(color)
+            (view.findViewWithTag<TextView>("label"))?.setTextColor(if (active) color else text)
         }
     }
 
