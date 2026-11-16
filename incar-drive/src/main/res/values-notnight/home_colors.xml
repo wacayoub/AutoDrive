@@ -11,5 +11,5 @@
     <color name="home_gauge_track">#140F172A</color>
     <color name="home_grid">#140F172A</color>
     <!-- System widgets only; the screen itself uses the accent chosen in Réglages. -->
-    <color name="home_accent">#F29A0E</color>
+    <color name="home_accent">#1E242D</color>
 </resources>

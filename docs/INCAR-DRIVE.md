@@ -16,7 +16,7 @@ Lanceur (écran d’accueil) pour l’Incarlink en 800 × 480, demandé le 16 no
 
 L’accueil est l’interface principale du boîtier. Son thème « cockpit » lui donne une identité propre, distincte de Radio Maroc & Coran (16 novembre 2026) :
 
-- **Couleurs** : graphite la nuit, argent le jour, et une seule couleur d’accent choisie dans Réglages : Ambre (par défaut), Cyan ou Rouge. Elle colore l’arc de vitesse, le bouton lecture, la carte Maps, le dock et les légendes.
+- **Couleurs** : graphite la nuit, argent le jour, et une seule couleur d’accent choisie dans Réglages : Neutre (par défaut), Ambre, Cyan ou Rouge. Elle colore l’arc de vitesse, le bouton lecture, la carte Maps, le dock et les légendes. Neutre est blanc sur graphite la nuit et graphite sur argent le jour ; il ne teinte ni la carte média selon le logo ni les favoris selon leur icône, et la carte Maps y devient un panneau comme les autres.
 
 - **Bandeau** : salutation selon l’heure (« Bonjour », « Bon après-midi », « Bonsoir », « Bonne nuit »), horloge condensée fine en 44 sp et date. Les légendes sont en petites capitales espacées. La météo affiche la température et l’état du ciel, la salat la prochaine prière et un compte à rebours (« dans 25 min »).
 - **Média** : la carte entière se teinte d’un dégradé de la couleur du logo, en fondu d’une station à l’autre, avec un logo plus grand, ombré, et l’égaliseur animé pendant la lecture.

@@ -76,14 +76,18 @@ class HomeActivity : Activity() {
 
     private enum class Page { HOME, APPS, SETTINGS }
 
-    /** The dashboard light: one colour for the speed arc, the play button, the dock and the labels. */
-    private enum class Accent(val label: String, val night: Int, val day: Int, val darkInk: Boolean) {
-        AMBER("Ambre", 0xFFFFB020.toInt(), 0xFFF29A0E.toInt(), true),
-        CYAN("Cyan", 0xFF3DD6F5.toInt(), 0xFF1BA8CC.toInt(), true),
-        RED("Rouge", 0xFFFF4D5E.toInt(), 0xFFE5394F.toInt(), false);
+    /**
+     * The dashboard light: one colour for the speed arc, the play button, the dock and the labels. « Neutre », the
+     * default, is white on graphite at night and graphite on silver by day, with no tint from logos or icons.
+     */
+    private enum class Accent(val label: String, val night: Int, val day: Int) {
+        NEUTRAL("Neutre", 0xFFE4E8EE.toInt(), 0xFF1E242D.toInt()),
+        AMBER("Ambre", 0xFFFFB020.toInt(), 0xFFF29A0E.toInt()),
+        CYAN("Cyan", 0xFF3DD6F5.toInt(), 0xFF1BA8CC.toInt()),
+        RED("Rouge", 0xFFFF4D5E.toInt(), 0xFFE5394F.toInt());
 
         companion object {
-            fun restore(prefs: SharedPreferences) = entries.firstOrNull { it.name == prefs.getString(ACCENT, null) } ?: AMBER
+            fun restore(prefs: SharedPreferences) = entries.firstOrNull { it.name == prefs.getString(ACCENT, null) } ?: NEUTRAL
         }
     }
 
@@ -99,7 +103,8 @@ class HomeActivity : Activity() {
     private val muted by lazy { getColor(R.color.home_muted) }
     private val accentChoice by lazy { Accent.restore(prefs) }
     private val accent by lazy { if (night) accentChoice.night else accentChoice.day }
-    private val onAccent by lazy { if (accentChoice.darkInk) 0xFF0B0D12.toInt() else Color.WHITE }
+    private val onAccent by lazy { if (Color.luminance(accent) > .3f) 0xFF0B0D12.toInt() else Color.WHITE }
+    private val neutral get() = accentChoice == Accent.NEUTRAL
     private val night get() = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES
 
     private lateinit var greeting: TextView
@@ -446,9 +451,9 @@ class HomeActivity : Activity() {
     }
 
     private fun mapsCard() = row().apply {
-        // Deep accent at night carries white text; the bright day card keeps the accent's own ink.
-        val ink = if (night) Color.WHITE else onAccent
-        background = pressable(GradientDrawable(GradientDrawable.Orientation.BL_TR,
+        // Neutral: a panel like the others. A colour: deep accent at night with white text, the bright accent by day.
+        val ink = if (neutral) text else if (night) Color.WHITE else onAccent
+        background = pressable(if (neutral) glass() else GradientDrawable(GradientDrawable.Orientation.BL_TR,
             if (night) intArrayOf(shade(accent, Color.BLACK, .45f), shade(accent, Color.BLACK, .1f))
                 else intArrayOf(shade(accent, Color.BLACK, .08f), shade(accent, Color.WHITE, .15f))).apply {
             cornerRadius = dp(16).toFloat()
@@ -611,7 +616,7 @@ class HomeActivity : Activity() {
         mediaArt.setImageBitmap(art)
         mediaArt.visibility = if (art != null) View.VISIBLE else View.INVISIBLE
         mediaInitial.text = state.title?.trim()?.take(1)?.takeIf { hasMedia } ?: "♪"
-        washWith(art?.let(RadioMotion::logoColor) ?: if (hasMedia) accent else Color.TRANSPARENT)
+        washWith(if (neutral) Color.TRANSPARENT else art?.let(RadioMotion::logoColor) ?: if (hasMedia) accent else Color.TRANSPARENT)
         mediaBars.visibility = if (hasMedia && state.playing) View.VISIBLE else View.INVISIBLE
         mediaBars.playing = hasMedia && state.playing
         playButton.setImageResource(if (state.playing) R.drawable.ic_home_pause else R.drawable.ic_home_play)
@@ -690,7 +695,10 @@ class HomeActivity : Activity() {
         val tint = iconColor(app, icon) ?: accent
         background = pressable(GradientDrawable().apply {
             cornerRadius = dp(12).toFloat()
-            setColor(Color.argb(if (night) 0x2E else 0x26, Color.red(tint), Color.green(tint), Color.blue(tint)))
+            if (neutral) {
+                setColor(getColor(R.color.home_chip))
+                setStroke(dp(1), getColor(R.color.home_card_border))
+            } else setColor(Color.argb(if (night) 0x2E else 0x26, Color.red(tint), Color.green(tint), Color.blue(tint)))
         }, 12)
         setPadding(dp(4), dp(6), dp(4), dp(6))
         addView(ImageView(context).apply { setImageDrawable(icon) },
