@@ -1690,6 +1690,36 @@ class HomeActivity : Activity() {
                     recreate()
                 }
             }, LinearLayout.LayoutParams(-1, dp(52)).apply { topMargin = dp(8) })
+            // Google Maps' own small window (picture-in-picture) during guidance: it is Maps' feature, allowed per app
+            // in Android's settings; this row opens Maps' app page there and explains the two steps.
+            addView(row().apply {
+                background = pressable(GradientDrawable().apply {
+                    cornerRadius = dp(12).toFloat()
+                    setColor(getColor(R.color.home_chip))
+                    setStroke(dp(1), getColor(R.color.home_card_border))
+                }, 12)
+                setPadding(dp(14), 0, dp(14), 0)
+                addView(column().apply {
+                    addView(label("Petite fenêtre Google Maps", 15, text, 700))
+                    addView(label("Pendant un guidage, Accueil garde Maps en petite fenêtre, si le boîtier l’affiche", 11, muted)
+                        .apply { maxLines = 2 }, wrap().apply { topMargin = dp(2) })
+                }, LinearLayout.LayoutParams(0, -2, 1f))
+                addView(label("›", 18, accent, 700), wrap().apply { marginStart = dp(12) })
+                setOnClickListener {
+                    AlertDialog.Builder(this@HomeActivity)
+                        .setTitle("Petite fenêtre Google Maps")
+                        .setMessage("1. Dans la page de Google Maps, ouvre « Picture-in-picture » (ou « Image dans l’image ») " +
+                            "et autorise-la.\n2. Lance un itinéraire dans Maps, puis appuie sur Accueil : Maps reste en petite " +
+                            "fenêtre au-dessus d’Incar Drive, déplaçable au doigt.\n\nSi rien n’apparaît, le boîtier n’affiche " +
+                            "pas ces fenêtres : la bulle de guidage d’Incar Drive prend le relais.")
+                        .setPositiveButton("Ouvrir Google Maps dans Android") { _, _ ->
+                            startSafely(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                                android.net.Uri.parse("package:${AppLinks.MAPS}")))
+                        }
+                        .setNegativeButton("Fermer", null)
+                        .show()
+                }
+            }, LinearLayout.LayoutParams(-1, dp(56)).apply { topMargin = dp(8) })
             val bubbleOn = prefs.getBoolean(NavBubble.ENABLED, true) && Settings.canDrawOverlays(this@HomeActivity)
             addView(row().apply {
                 background = pressable(GradientDrawable().apply {
