@@ -754,9 +754,14 @@ class HomeActivity : Activity() {
     private fun speedCard() = FrameLayout(this).apply {
         background = pressable(glass())
         // The driver's style: the road ahead with the speed over it, or the graduated dial.
-        val dial: View = if (prefs.getString(SPEED_STYLE, ROAD) == ROAD) RoadGauge(context, ROAD_BLUE, text, muted)
-            else SpeedGauge(context, getColor(R.color.home_gauge_track), shade(accent, Color.BLACK, .25f),
+        val styleName = prefs.getString(SPEED_STYLE, ROAD) ?: ROAD
+        val brand = BrandGauge.Style.entries.firstOrNull { it.name == styleName }
+        val dial: View = when {
+            brand != null -> BrandGauge(context, brand, text, muted)
+            styleName == DIAL -> SpeedGauge(context, getColor(R.color.home_gauge_track), shade(accent, Color.BLACK, .25f),
                 shade(accent, Color.WHITE, .3f), text, muted)
+            else -> RoadGauge(context, ROAD_BLUE, text, muted)
+        }
         gauge = dial as SpeedDial
         gauge.limit = activeLimit()
         addView(dial, FrameLayout.LayoutParams(-1, -1).apply { setMargins(dp(4), dp(4), dp(4), dp(20)) })
@@ -1746,10 +1751,15 @@ class HomeActivity : Activity() {
                 }
             })
             addView(caps("Compteur de vitesse"), wrap().apply { topMargin = dp(6) })
-            addView(choices(listOf(ROAD, DIAL), prefs.getString(SPEED_STYLE, ROAD) ?: ROAD,
-                { if (it == ROAD) "Route" else "Cadran" }, { null }) {
-                prefs.edit().putString(SPEED_STYLE, it).apply()
-            }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8); bottomMargin = dp(12) })
+            val speedStyle = prefs.getString(SPEED_STYLE, ROAD) ?: ROAD
+            val styleNames = mapOf(ROAD to "Route", DIAL to "Cadran", BrandGauge.Style.ELECTRIC.name to "Électrique",
+                BrandGauge.Style.FACET.name to "Angulaire", BrandGauge.Style.VIRTUAL.name to "Virtuel",
+                BrandGauge.Style.ELEGANT.name to "Élégant")
+            styleNames.keys.chunked(3).forEachIndexed { index, group ->
+                addView(choices(group, speedStyle, { styleNames.getValue(it) }, { null }) {
+                    prefs.edit().putString(SPEED_STYLE, it).apply()
+                }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8); if (index == 1) bottomMargin = dp(12) })
+            }
             addView(caps("Navigation"), wrap().apply { topMargin = dp(6) })
             addView(row().apply {
                 gravity = Gravity.FILL
