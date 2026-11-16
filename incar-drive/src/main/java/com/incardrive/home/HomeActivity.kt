@@ -5,6 +5,7 @@ import android.animation.ArgbEvaluator
 import android.animation.ValueAnimator
 import android.app.Activity
 import android.app.AlertDialog
+import android.app.PendingIntent
 import android.content.ActivityNotFoundException
 import android.content.ComponentName
 import android.content.Context
@@ -158,6 +159,7 @@ class HomeActivity : Activity() {
     private lateinit var headingText: TextView
     private lateinit var altitudeText: TextView
     private var shownPage = Page.HOME
+    private lateinit var callBanner: FrameLayout
     private var alerted = false
     private var lastTripSave = 0L
     private val iconColors = HashMap<ComponentName, Int?>()
@@ -239,6 +241,7 @@ class HomeActivity : Activity() {
         tasks.launch { info.refreshPrayerCalendars() }
         tasks.launch { info.weather.collect { renderWeather() } }
         tasks.launch { info.prayerCalendars.collect { renderPrayer() } }
+        tasks.launch { CallWatch.call.collect { renderCall(it) } }
         widgets.start()
         phone.start()
         tick.run()
@@ -400,14 +403,17 @@ class HomeActivity : Activity() {
             addView(dock(), LinearLayout.LayoutParams(-1, dp(58)))
         }
         panelHost = FrameLayout(this).apply { visibility = View.GONE }
+        callBanner = FrameLayout(this).apply { visibility = View.GONE }
         return FrameLayout(this).apply {
             background = backdrop
             addView(content, FrameLayout.LayoutParams(-1, -1))
             addView(panelHost, FrameLayout.LayoutParams(-1, -1))
+            addView(callBanner, FrameLayout.LayoutParams(-1, -2, Gravity.TOP))
             setOnApplyWindowInsetsListener { _, insets ->
                 val bars = insets.getInsets(WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout())
                 content.setPadding(bars.left + dp(14), bars.top + dp(8), bars.right + dp(14), bars.bottom + dp(10))
                 panelHost.setPadding(bars.left + dp(14), bars.top + dp(8), bars.right + dp(14), bars.bottom + dp(78))
+                callBanner.setPadding(bars.left + dp(14), bars.top + dp(8), bars.right + dp(14), 0)
                 insets
             }
         }
@@ -812,6 +818,73 @@ class HomeActivity : Activity() {
             runCatching { ToneGenerator(AudioManager.STREAM_NOTIFICATION, 80).startTone(ToneGenerator.TONE_PROP_BEEP2, 400) }
         } else if (limit == null || kmh <= limit - 3) alerted = false
         if (shownPage == Page.TRIP) tripValues?.invoke()
+    }
+
+    /**
+     * A call shown by the phone app's notification, large over the top of the screen, with that notification's own
+     * buttons: Answer in green, Decline or Hang up in red. Tapping the caller opens the phone app.
+     */
+    private fun renderCall(call: CallAlert?) {
+        if (!::callBanner.isInitialized) return
+        if (call == null) {
+            if (callBanner.visibility == View.VISIBLE) callBanner.animate().alpha(0f).translationY(-dp(20).toFloat())
+                .setDuration(150).withEndAction { callBanner.visibility = View.GONE; callBanner.removeAllViews() }.start()
+            return
+        }
+        val wasShown = callBanner.visibility == View.VISIBLE && callBanner.alpha > 0f
+        callBanner.removeAllViews()
+        callBanner.addView(row().apply {
+            background = GradientDrawable().apply {
+                cornerRadius = dp(18).toFloat()
+                setColor(getColor(R.color.home_background_top))
+                setStroke(dp(1), getColor(R.color.home_card_border))
+            }
+            elevation = dp(12).toFloat()
+            setPadding(dp(16), dp(10), dp(12), dp(10))
+            addView(FrameLayout(context).apply {
+                background = GradientDrawable().apply { cornerRadius = dp(14).toFloat(); setColor(CALL_GREEN) }
+                addView(ImageView(context).apply {
+                    setImageResource(R.drawable.ic_home_phone)
+                    imageTintList = ColorStateList.valueOf(Color.WHITE)
+                }, FrameLayout.LayoutParams(dp(26), dp(26), Gravity.CENTER))
+            }, LinearLayout.LayoutParams(dp(52), dp(52)))
+            addView(column().apply {
+                addView(caps(if (call.ongoing) "En appel" else "Appel entrant", if (call.ongoing) muted else CALL_GREEN))
+                addView(label(call.caller, 22, text, 700, condensed = true), wrap().apply { topMargin = dp(3) })
+                call.detail?.takeIf { it != call.caller }?.let { addView(label(it, 12, muted), wrap().apply { topMargin = dp(2) }) }
+                setOnClickListener { runCatching { call.open?.send() } }
+            }, LinearLayout.LayoutParams(0, -2, 1f).apply { marginStart = dp(14) })
+            // Decline first, then answer, as on phones; other buttons (speaker, mute…) after them.
+            call.actions.sortedBy { it.kind.ordinal.let { order -> if (order == 1) -1 else order } }.take(3).forEach { action ->
+                val color = when (action.kind) {
+                    CallButton.ANSWER -> CALL_GREEN
+                    CallButton.DECLINE -> CALL_RED
+                    CallButton.OTHER -> getColor(R.color.home_chip)
+                }
+                addView(label(action.title, 15, if (action.kind == CallButton.OTHER) text else Color.WHITE, 700).apply {
+                    gravity = Gravity.CENTER
+                    setPadding(dp(18), 0, dp(18), 0)
+                    background = pressable(GradientDrawable().apply {
+                        cornerRadius = dp(14).toFloat()
+                        setColor(color)
+                    }, 14)
+                    contentDescription = "${action.title} ${call.caller}"
+                    setOnClickListener {
+                        try {
+                            action.intent.send()
+                        } catch (_: PendingIntent.CanceledException) {
+                            Toast.makeText(context, "L’appel n’est plus disponible.", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                }, LinearLayout.LayoutParams(-2, dp(52)).apply { marginStart = dp(10) })
+            }
+        }, FrameLayout.LayoutParams(-1, -2))
+        callBanner.visibility = View.VISIBLE
+        if (!wasShown) {
+            callBanner.alpha = 0f
+            callBanner.translationY = -dp(20).toFloat()
+            callBanner.animate().alpha(1f).translationY(0f).setDuration(200).start()
+        }
     }
 
     private fun speedLimit() = prefs.getInt(SPEED_LIMIT, 0).takeIf { it > 0 }
@@ -1229,6 +1302,8 @@ class HomeActivity : Activity() {
 
     internal companion object {
         const val REQUEST_BLUETOOTH = 5
+        const val CALL_GREEN = 0xFF1FA35B.toInt()
+        const val CALL_RED = 0xFFE5394F.toInt()
         const val REQUEST_CONTACTS = 6
         const val TRIP = "trip"
         const val SPEED_LIMIT = "speed_limit"

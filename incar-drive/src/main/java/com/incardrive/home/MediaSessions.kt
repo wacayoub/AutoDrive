@@ -9,9 +9,6 @@ import android.media.session.MediaController
 import android.media.session.MediaSessionManager
 import android.media.session.PlaybackState
 import android.os.SystemClock
-import android.service.notification.NotificationListenerService
-
-class MediaAccessService : NotificationListenerService()
 
 internal data class MediaState(
     val title: String? = null,
