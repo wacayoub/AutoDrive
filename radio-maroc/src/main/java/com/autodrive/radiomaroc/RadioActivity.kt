@@ -271,7 +271,7 @@ class RadioActivity : ComponentActivity() {
     /**
      * The Incarlink head unit itself, recognised by its firmware's own apps (Bluetooth phone, settings, main box app)
      * or by the « Incarlink » look. There, the Incar Drive home screen already shows the weather and the next prayer,
-     * so the radio leaves them out; a phone in landscape keeps them.
+     * so the radio leaves them out with the clock; a phone in landscape keeps them.
      */
     private val headUnit by lazy {
         incarlinkStyle || HEAD_UNIT_PACKAGES.any { name ->
@@ -628,7 +628,8 @@ class RadioActivity : ComponentActivity() {
                     ellipsize = TextUtils.TruncateAt.END
                 }, LinearLayout.LayoutParams(0, -2, 1f))
             }
-            if (dashboardInfo.value) {
+            // The Incar Drive home screen shows the time on the head unit; the radio keeps it on phones and TVs.
+            if (dashboardInfo.value && !headUnit) {
                 addView(tvClockBar(), LinearLayout.LayoutParams(-2, -1).apply { marginEnd = dp(6) })
             }
             if (profile.headerInfoChips && inlineCategories && !headUnit) {
