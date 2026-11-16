@@ -173,6 +173,7 @@ class HomeActivity : Activity() {
     private lateinit var quick: QuickSettings
     internal lateinit var dialer: Dialer
     private lateinit var navigation: Navigation
+    private lateinit var mapWidget: MapWidget
     private lateinit var widgets: WidgetBoard
     private lateinit var phone: PhoneLink
     private lateinit var trip: TripMeter
@@ -222,6 +223,7 @@ class HomeActivity : Activity() {
         quick = QuickSettings(this)
         dialer = Dialer(this)
         navigation = Navigation(this, prefs)
+        mapWidget = MapWidget(this)
         widgets = WidgetBoard(this)
         phone = PhoneLink(this)
         updatesUi = IncarUpdates(this)
@@ -314,7 +316,9 @@ class HomeActivity : Activity() {
             if (!isDefaultHome()) startSafely(Intent(Settings.ACTION_HOME_SETTINGS))
             return
         }
-        if (!widgets.onResult(requestCode, resultCode)) super.onActivityResult(requestCode, resultCode, data)
+        if (!widgets.onResult(requestCode, resultCode) && !mapWidget.onResult(requestCode, resultCode)) {
+            super.onActivityResult(requestCode, resultCode, data)
+        }
     }
 
     /** Whether Home opens Incar Drive. */
@@ -366,6 +370,7 @@ class HomeActivity : Activity() {
         tasks.launch { NavWatch.nav.collect { renderNav(it) } }
         updatesUi.follow(tasks)
         widgets.start()
+        mapWidget.start()
         phone.start()
         tick.run()
         renderMedia()
@@ -380,6 +385,7 @@ class HomeActivity : Activity() {
         media.stop()
         gps.stop()
         widgets.stop()
+        mapWidget.stop()
         phone.stop()
         saveTrip()
         super.onStop()
@@ -513,13 +519,16 @@ class HomeActivity : Activity() {
                         addView(speedCard(), LinearLayout.LayoutParams(-1, 0, 1.25f))
                         addView(mapsCard(), LinearLayout.LayoutParams(-1, 0, .75f).apply { topMargin = dp(10) })
                     }, LinearLayout.LayoutParams(0, -1, 1f).apply { marginStart = dp(10); marginEnd = dp(10) })
-                    addView(favoritesCard(), LinearLayout.LayoutParams(0, -1, 1.05f))
+                // The live map (a Google Maps or Waze widget) takes the favourites' place when chosen; they move to page 2.
+                addView(if (mapOnHome()) mapWidget.view() else favoritesCard(), LinearLayout.LayoutParams(0, -1, 1.05f))
                 })
                 // Second page: the connected phone and the driver's Android widgets.
                 addPage(row().apply {
                     gravity = Gravity.FILL
                     addView(phone.view(), LinearLayout.LayoutParams(0, -1, 1f))
-                    addView(widgets.view(), LinearLayout.LayoutParams(0, -1, 2.45f).apply { marginStart = dp(10) })
+                    if (mapOnHome()) addView(favoritesCard(), LinearLayout.LayoutParams(0, -1, 1f).apply { marginStart = dp(10) })
+                    addView(widgets.view(), LinearLayout.LayoutParams(0, -1, if (mapOnHome()) 1.45f else 2.45f)
+                        .apply { marginStart = dp(10) })
                 })
             }
             addView(pager, LinearLayout.LayoutParams(-1, 0, 1f).apply { topMargin = dp(6) })
@@ -853,6 +862,9 @@ class HomeActivity : Activity() {
             add(chip(search.icon, search.label, weatherColor, { if (!navigation.search(search.query)) navMissing() }))
         }
     }
+
+    /** Whether the live map replaces the favourites on the first page (Réglages › Navigation › Carte sur l’accueil). */
+    private fun mapOnHome() = prefs.getBoolean(MAP_ON_HOME, true)
 
     private fun navMissing() = Toast.makeText(this, "${navigation.app().label} n’est pas installé.", Toast.LENGTH_LONG).show()
 
@@ -1651,6 +1663,24 @@ class HomeActivity : Activity() {
                     }, LinearLayout.LayoutParams(0, dp(46), 1f).apply { if (index > 0) marginStart = dp(8) })
                 }
             }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+            addView(row().apply {
+                background = pressable(GradientDrawable().apply {
+                    cornerRadius = dp(12).toFloat()
+                    setColor(getColor(R.color.home_chip))
+                    setStroke(dp(1), getColor(R.color.home_card_border))
+                }, 12)
+                setPadding(dp(14), 0, dp(14), 0)
+                addView(column().apply {
+                    addView(label("Carte sur l’accueil", 15, text, 700))
+                    addView(label("Widget Google Maps (trafic à proximité) ou Waze, à la place des favoris", 11, muted),
+                        wrap().apply { topMargin = dp(2) })
+                }, LinearLayout.LayoutParams(0, -2, 1f))
+                addView(label(if (mapOnHome()) "ON" else "OFF", 14, accent, 700), wrap().apply { marginStart = dp(12) })
+                setOnClickListener {
+                    prefs.edit().putBoolean(MAP_ON_HOME, !mapOnHome()).apply()
+                    recreate()
+                }
+            }, LinearLayout.LayoutParams(-1, dp(52)).apply { topMargin = dp(8) })
             addView(caps("Destinations"), wrap().apply { topMargin = dp(12) })
             Place.entries.forEach { place ->
                 addView(row().apply {
@@ -1886,6 +1916,7 @@ class HomeActivity : Activity() {
         const val CLICKS = "interface_clicks"
         const val SOUND_PROFILE = "sound_profile"
         const val MY_PLACES = "my_places"
+        const val MAP_ON_HOME = "map_on_home"
         const val PREFS = "incar_drive_home"
         const val APPEARANCE = "appearance"
         const val ACCENT = "accent"
