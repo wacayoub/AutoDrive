@@ -584,10 +584,27 @@ class HomeActivity : Activity() {
         mediaWash = GradientDrawable(GradientDrawable.Orientation.TL_BR, intArrayOf(Color.TRANSPARENT, Color.TRANSPARENT)).apply {
             cornerRadius = dp(16).toFloat()
         }
-        return column().apply {
+        radioCard = RadioCard(this) { action ->
+            media.command(action) || (action == PlaybackState.ACTION_PLAY_PAUSE && media.command(PlaybackState.ACTION_PLAY))
+        }
+        radioBody = radioCard.view().apply { visibility = View.GONE }
+        mediaBody = column()
+        return FrameLayout(this).apply {
             background = pressable(LayerDrawable(arrayOf(glass(), mediaWash)))
             setPadding(dp(16), dp(16), dp(16), dp(14))
             setOnClickListener { openMediaSource() }
+            addView(mediaBody, FrameLayout.LayoutParams(-1, -1))
+            addView(radioBody, FrameLayout.LayoutParams(-1, -1))
+        }.also { buildMediaBody() }
+    }
+
+    private lateinit var radioCard: RadioCard
+    private lateinit var radioBody: View
+    private lateinit var mediaBody: LinearLayout
+
+    /** The card for any other player: artwork, app, title and the three transport buttons. */
+    private fun buildMediaBody() {
+        mediaBody.apply {
             addView(row().apply {
                 gravity = Gravity.TOP
                 val art = FrameLayout(context).apply {
@@ -1129,6 +1146,11 @@ class HomeActivity : Activity() {
         val state = media.snapshot()
         mediaSource = state.source
         val hasMedia = state.source != null && (state.title != null || state.playing)
+        // Radio Maroc & Coran gets its own player look; every other app the common card.
+        val radio = hasMedia && state.source == RADIO_PACKAGE
+        radioBody.visibility = if (radio) View.VISIBLE else View.GONE
+        mediaBody.visibility = if (radio) View.GONE else View.VISIBLE
+        if (radio) radioCard.bind(state)
         mediaControls.visibility = if (hasMedia) View.VISIBLE else View.GONE
         mediaAction.visibility = if (hasMedia) View.GONE else View.VISIBLE
         when {
@@ -1157,7 +1179,8 @@ class HomeActivity : Activity() {
         mediaArt.setImageBitmap(art)
         mediaArt.visibility = if (art != null) View.VISIBLE else View.INVISIBLE
         mediaInitial.text = state.title?.trim()?.take(1)?.takeIf { hasMedia } ?: "♪"
-        washWith(if (neutral) Color.TRANSPARENT else art?.let(RadioMotion::logoColor) ?: if (hasMedia) accent else Color.TRANSPARENT)
+        // The radio card always glows in the station's colour, like the radio's player.
+        washWith(if (neutral && !radio) Color.TRANSPARENT else art?.let(RadioMotion::logoColor) ?: if (hasMedia) accent else Color.TRANSPARENT)
         mediaBars.visibility = if (hasMedia && state.playing) View.VISIBLE else View.INVISIBLE
         mediaBars.playing = hasMedia && state.playing
         playButton.setImageResource(if (state.playing) R.drawable.ic_home_pause else R.drawable.ic_home_play)
