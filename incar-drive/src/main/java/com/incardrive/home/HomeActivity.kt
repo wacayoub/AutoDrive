@@ -175,6 +175,7 @@ class HomeActivity : Activity() {
     internal lateinit var dialer: Dialer
     private lateinit var navigation: Navigation
     private lateinit var mapWidget: MapWidget
+    private lateinit var carLogo: CarLogo
     private lateinit var mediaResume: MediaResume
     private lateinit var widgets: WidgetBoard
     private lateinit var phone: PhoneLink
@@ -226,6 +227,7 @@ class HomeActivity : Activity() {
         dialer = Dialer(this)
         navigation = Navigation(this, prefs)
         mapWidget = MapWidget(this)
+        carLogo = CarLogo(this)
         mediaResume = MediaResume(this)
         widgets = WidgetBoard(this)
         phone = PhoneLink(this)
@@ -320,6 +322,7 @@ class HomeActivity : Activity() {
             if (!isDefaultHome()) startSafely(Intent(Settings.ACTION_HOME_SETTINGS))
             return
         }
+        if (carLogo.onResult(requestCode, resultCode, data)) return
         if (!widgets.onResult(requestCode, resultCode) && !mapWidget.onResult(requestCode, resultCode)) {
             super.onActivityResult(requestCode, resultCode, data)
         }
@@ -593,6 +596,8 @@ class HomeActivity : Activity() {
     }
 
     private fun topBar() = row().apply {
+        // The driver's car logo, when chosen in Réglages › Écran d’accueil.
+        addView(carLogo.view(), LinearLayout.LayoutParams(-2, dp(46)).apply { marginEnd = dp(12) })
         addView(column().apply {
             greeting = caps("")
             addView(row().apply {
@@ -1987,6 +1992,17 @@ class HomeActivity : Activity() {
                 }
             }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
             addView(caps("Écran d’accueil"), wrap().apply { topMargin = dp(14) })
+            addView(row().apply {
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(0, dp(10), 0, dp(6))
+                addView(label(if (carLogo.chosen) "Changer le logo de la voiture  ›" else "Logo de la voiture en haut  ›", 14, text, 700).apply {
+                    setOnClickListener { carLogo.pick() }
+                }, LinearLayout.LayoutParams(0, -2, 1f))
+                if (carLogo.chosen) addView(label("Retirer", 14, accent, 700).apply {
+                    setPadding(dp(12), 0, 0, 0)
+                    setOnClickListener { carLogo.remove(); recreate() }
+                })
+            })
             addView(label(if (isDefaultHome()) "Incar Drive est l’écran d’accueil par défaut" else "Définir Incar Drive par défaut  ›",
                 14, if (isDefaultHome()) muted else text, 700).apply {
                 setPadding(0, dp(10), 0, dp(6))
