@@ -18,6 +18,8 @@
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
     <!-- Online updates: the verified APK is handed to Android's installer, which asks the driver to confirm. -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- The Normal / Basses / Voix equaliser on the head unit's global sound output. -->
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <uses-feature android:name="android.hardware.location.gps" android:required="false" />
     <uses-feature android:name="android.hardware.bluetooth" android:required="false" />
     <uses-feature android:name="android.software.app_widgets" android:required="false" />
@@ -45,6 +47,8 @@
         </intent>
         <package android:name="com.google.android.apps.maps" />
         <package android:name="com.carsyso.bluetooth" />
+        <!-- The Incarlink's own settings app (firmware SudingSettings.apk). -->
+        <package android:name="com.suding.settings" />
         <package android:name="com.autodrive.radiomaroc" />
         <!-- YouTube apps, for the YouTube button of the radio card. -->
         <package android:name="com.google.android.youtube" />

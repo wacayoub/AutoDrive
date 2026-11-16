@@ -49,6 +49,22 @@ internal class AppLinks(private val activity: Activity) {
      * The Incarlink's own settings app, separate from Android's: the one the driver picked, else the only installed
      * app whose name says settings (« Réglages », « Paramètres », « Settings », « 设置 »…), Android's own excepted.
      */
+    /**
+     * Opens the Incarlink's own settings app, `com.suding.settings` in the box's firmware: its launcher entry, else its
+     * exported settings screen. Returns false when this device has no such app.
+     */
+    fun openOemSettings(): Boolean {
+        packages.getLaunchIntentForPackage(OEM_SETTINGS)?.let { return start(it) }
+        @Suppress("DEPRECATION")
+        val screens = runCatching {
+            packages.getPackageInfo(OEM_SETTINGS, PackageManager.GET_ACTIVITIES).activities.orEmpty()
+                .filter { it.exported && it.enabled && it.permission == null }
+        }.getOrDefault(emptyList())
+        val screen = screens.firstOrNull { it.name.contains("Main", true) } ?: screens.firstOrNull { it.name.contains("Setting", true) }
+            ?: screens.firstOrNull()
+        return screen?.let { start(Intent().setComponent(ComponentName(OEM_SETTINGS, it.name))) } ?: false
+    }
+
     fun oemSettingsCandidates(): List<Launchable> = apps().filter {
         it.component.packageName != "com.android.settings" &&
             Regex("(?i)(r[ée]glage|param[èe]tre|setting|设置|设定|car ?set)").containsMatchIn(it.label)
@@ -97,6 +113,8 @@ internal class AppLinks(private val activity: Activity) {
 
     companion object {
         const val MAPS = "com.google.android.apps.maps"
+        // The Incarlink's settings app in its firmware (SudingSettings.apk).
+        const val OEM_SETTINGS = "com.suding.settings"
         // The Incarlink's own Bluetooth phone app.
         val OEM_PHONE = ComponentName("com.carsyso.bluetooth", "com.carsyso.bluetoothcall.MainActivity")
     }

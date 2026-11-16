@@ -226,6 +226,10 @@ class HomeActivity : Activity() {
         updatesUi = IncarUpdates(this)
         status = StatusIcons(this)
         clicks = ClickSound(this).apply { enabled = prefs.getBoolean(CLICKS, true) }
+        // The chosen equaliser profile stays on as long as the home screen runs.
+        if (soundProfile() != SoundProfile.NORMAL && !SoundEffects.apply(soundProfile())) {
+            prefs.edit().putString(SOUND_PROFILE, SoundProfile.NORMAL.name).apply()
+        }
         info = LocalInfoFeed(RadioCity.restore(prefs.getString(CITY, null)))
         window.setDecorFitsSystemWindows(false)
         window.statusBarColor = Color.TRANSPARENT
@@ -252,6 +256,9 @@ class HomeActivity : Activity() {
     }
 
     private lateinit var clicks: ClickSound
+
+    private fun soundProfile() = SoundProfile.entries.firstOrNull { it.name == prefs.getString(SOUND_PROFILE, null) }
+        ?: SoundProfile.NORMAL
 
     // Radio Maroc & Coran's click on every tap, when « Clics de l’interface » is on.
     override fun dispatchTouchEvent(event: android.view.MotionEvent): Boolean {
@@ -355,6 +362,7 @@ class HomeActivity : Activity() {
         tasks.launch { info.weather.collect { renderWeather() } }
         tasks.launch { info.prayerCalendars.collect { renderPrayer() } }
         tasks.launch { CallWatch.call.collect { renderCall(it) } }
+        tasks.launch { NavWatch.nav.collect { renderNav(it) } }
         updatesUi.follow(tasks)
         widgets.start()
         phone.start()
@@ -758,8 +766,10 @@ class HomeActivity : Activity() {
                 }, FrameLayout.LayoutParams(dp(22), dp(22), Gravity.CENTER))
             }, LinearLayout.LayoutParams(dp(40), dp(40)))
             addView(column().apply {
-                addView(label("Naviguer", 19, text, 700, condensed = true))
-                addView(label("Google Maps", 12, muted, 500), wrap().apply { topMargin = dp(2) })
+                navTitle = label("Naviguer", 19, text, 700, condensed = true)
+                navDetail = label("Google Maps", 12, muted, 500)
+                addView(navTitle)
+                addView(navDetail, wrap().apply { topMargin = dp(2) })
             }, LinearLayout.LayoutParams(0, -2, 1f).apply { marginStart = dp(12) })
             addView(ImageView(context).apply {
                 setImageResource(R.drawable.ic_home_chevron)
@@ -767,7 +777,10 @@ class HomeActivity : Activity() {
             }, LinearLayout.LayoutParams(dp(22), dp(22)))
             contentDescription = "Ouvrir Google Maps"
             setOnClickListener {
-                if (!links.openMaps()) Toast.makeText(context, "Google Maps n’est pas installé.", Toast.LENGTH_LONG).show()
+                // While guiding, back to the guidance; otherwise straight to choosing a destination.
+                val opened = if (NavWatch.nav.value != null) packageManager.getLaunchIntentForPackage(AppLinks.MAPS)
+                    ?.let { startSafely(it); true } ?: false else links.openMaps()
+                if (!opened) Toast.makeText(context, "Google Maps n’est pas installé.", Toast.LENGTH_LONG).show()
             }
             RadioMotion.pressScale(this, .97f)
         }, LinearLayout.LayoutParams(-1, 0, 1f))
@@ -796,6 +809,26 @@ class HomeActivity : Activity() {
             }
         }, LinearLayout.LayoutParams(-1, dp(42)).apply { topMargin = dp(4) })
         renderPlaces()
+    }
+
+    private lateinit var navTitle: TextView
+    private lateinit var navDetail: TextView
+
+    /**
+     * While Google Maps guides, the Maps card shows the trip as Maps reports it: time left and arrival in large, then
+     * the distance left and the next instruction.
+     */
+    private fun renderNav(nav: NavInfo?) {
+        if (!::navTitle.isInitialized) return
+        if (nav == null) {
+            navTitle.text = "Naviguer"
+            navDetail.text = "Google Maps"
+            navDetail.setTextColor(muted)
+            return
+        }
+        navTitle.text = listOfNotNull(nav.remaining, nav.arrival?.let { "arrivée $it" }).joinToString(" · ")
+        navDetail.text = listOfNotNull(nav.distance, nav.instruction).joinToString(" · ").ifEmpty { "Guidage en cours" }
+        navDetail.setTextColor(navColor)
     }
 
     private fun destination(place: Place) = prefs.getString(place.key, null)?.takeIf { it.isNotBlank() }
@@ -1508,11 +1541,44 @@ class HomeActivity : Activity() {
                 prefs.edit().putBoolean(CLICKS, enabled).apply()
                 state.text = if (enabled) "ON" else "OFF"
             }, LinearLayout.LayoutParams(-1, dp(52)).apply { topMargin = dp(8) })
+            // ÉGALISEUR: the radio's three profiles, for all the head unit's sound.
+            addView(caps("Égaliseur", muted), wrap().apply { topMargin = dp(12) })
+            val soundStatus = label("", 11, muted)
+            val profiles = mutableMapOf<SoundProfile, TextView>()
+            fun markProfiles(current: SoundProfile) = profiles.forEach { (profile, view) ->
+                val selected = profile == current
+                view.setTextColor(if (selected) onAccent else text)
+                view.background = pressable(GradientDrawable().apply {
+                    cornerRadius = dp(12).toFloat()
+                    setColor(if (selected) accent else getColor(R.color.home_chip))
+                    if (!selected) setStroke(dp(1), getColor(R.color.home_card_border))
+                }, 12)
+            }
+            addView(row().apply {
+                gravity = Gravity.FILL
+                SoundProfile.entries.forEachIndexed { index, profile ->
+                    val view = label(profile.label, 15, text, 700).apply {
+                        gravity = Gravity.CENTER
+                        setOnClickListener {
+                            val applied = SoundEffects.apply(profile)
+                            if (applied) prefs.edit().putString(SOUND_PROFILE, profile.name).apply()
+                            markProfiles(if (applied) profile else SoundProfile.NORMAL)
+                            soundStatus.text = if (applied) "Appliqué à tout le son du boîtier"
+                                else "Ce boîtier n’autorise pas l’égaliseur pour tout le son"
+                        }
+                    }
+                    profiles[profile] = view
+                    addView(view, LinearLayout.LayoutParams(0, dp(46), 1f).apply { if (index > 0) marginStart = dp(8) })
+                }
+            }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+            markProfiles(soundProfile())
+            soundStatus.text = "Normal, Basses ou Voix, comme dans Radio Maroc"
+            addView(soundStatus, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(6) })
             val equalizer = ClickSound.equalizerIntent(this@HomeActivity)
-            addView(settingRow("Égaliseur", if (equalizer != null) "Effets sonores du boîtier (égaliseur, Dolby…)"
-                else "Aucun égaliseur sur cet appareil", if (equalizer != null) "›" else "—") {
+            addView(settingRow("Dolby", if (equalizer != null) "Effets sonores du boîtier" else "Indisponible sur cet appareil",
+                if (equalizer != null) "›" else "—") {
                 if (equalizer != null) startSafely(equalizer)
-                else Toast.makeText(this@HomeActivity, "Ce boîtier ne propose pas d’égaliseur aux applis.", Toast.LENGTH_LONG).show()
+                else Toast.makeText(this@HomeActivity, "Ce boîtier ne propose pas de réglage Dolby aux applis.", Toast.LENGTH_LONG).show()
             }, LinearLayout.LayoutParams(-1, dp(52)).apply { topMargin = dp(8) })
             addView(caps("Mises à jour"), wrap().apply { topMargin = dp(14) })
             addView(row().apply {
@@ -1555,37 +1621,28 @@ class HomeActivity : Activity() {
                 }
                 addView(button("Réglages Android  ›") { startSafely(Intent(Settings.ACTION_SETTINGS)) },
                     LinearLayout.LayoutParams(0, -1, 1f))
-                addView(button("Réglages Incarlink  ›") { openOemSettings(choose = false) }.apply {
-                    setOnLongClickListener { openOemSettings(choose = true); true }
-                }, LinearLayout.LayoutParams(0, -1, 1f).apply { marginStart = dp(8) })
+                addView(button("Réglages Incarlink  ›") { openOemSettings() },
+                    LinearLayout.LayoutParams(0, -1, 1f).apply { marginStart = dp(8) })
             }, LinearLayout.LayoutParams(-1, dp(48)).apply { topMargin = dp(12) })
         }
     }
 
     /**
-     * The Incarlink's own settings app (its car settings, separate from Android's). The first time, or on a long press,
-     * the driver picks it among the installed apps; it is guessed when only one app's name says settings.
+     * The Incarlink's own settings app: `com.suding.settings` from the box's firmware, or, on another head unit, the
+     * one installed app whose name says settings. Never a list of every app.
      */
-    internal fun openOemSettings(choose: Boolean) {
-        val saved = prefs.getString(OEM_SETTINGS, null)?.let(ComponentName::unflattenFromString)
-        val apps = links.apps()
-        val chosen = apps.firstOrNull { it.component == saved }.takeIf { !choose }
-            ?: links.oemSettingsCandidates().singleOrNull().takeIf { !choose && saved == null }
-        if (chosen != null) {
-            prefs.edit().putString(OEM_SETTINGS, chosen.component.flattenToString()).apply()
-            links.open(chosen)
-            return
-        }
+    internal fun openOemSettings(@Suppress("UNUSED_PARAMETER") choose: Boolean = false) {
+        if (links.openOemSettings()) return
         val candidates = links.oemSettingsCandidates()
-        val list = candidates + (apps - candidates.toSet())
-        AlertDialog.Builder(this)
-            .setTitle("Appli des réglages Incarlink")
-            .setItems(list.map { it.label }.toTypedArray()) { _, index ->
-                prefs.edit().putString(OEM_SETTINGS, list[index].component.flattenToString()).apply()
-                links.open(list[index])
-            }
-            .setNegativeButton("Annuler", null)
-            .show()
+        when (candidates.size) {
+            0 -> Toast.makeText(this, "Les réglages Incarlink ne sont pas sur cet appareil.", Toast.LENGTH_LONG).show()
+            1 -> links.open(candidates.single())
+            else -> AlertDialog.Builder(this)
+                .setTitle("Réglages Incarlink")
+                .setItems(candidates.map { it.label }.toTypedArray()) { _, index -> links.open(candidates[index]) }
+                .setNegativeButton("Annuler", null)
+                .show()
+        }
     }
 
     /** Every dashboard colour as a round swatch with its name; the chosen one is ringed. */
@@ -1654,10 +1711,10 @@ class HomeActivity : Activity() {
         const val SPEED_LIMIT = "speed_limit"
         const val ROAD_LIMIT = -1
         const val ASKED_HOME = "asked_home"
-        const val OEM_SETTINGS = "oem_settings"
         const val REQUEST_HOME_ROLE = 7
         const val REQUEST_PHONE_STATE = 8
         const val CLICKS = "interface_clicks"
+        const val SOUND_PROFILE = "sound_profile"
         const val PREFS = "incar_drive_home"
         const val APPEARANCE = "appearance"
         const val ACCENT = "accent"
