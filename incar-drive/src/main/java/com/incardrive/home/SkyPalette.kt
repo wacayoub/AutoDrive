@@ -10,6 +10,8 @@ import java.time.Month
 internal data class Sky(
     val top: Int, val mid: Int, val bottom: Int, val glow: Int,
     val sunX: Float = .12f, val sunY: Float = .95f, val sunSize: Float = .55f,
+    /** How visible the stars are, 0 to 1: only on a dark, clear night. */
+    val stars: Float = 0f,
 )
 
 internal enum class Season { SPRING, SUMMER, AUTUMN, WINTER;
@@ -108,7 +110,9 @@ internal object SkyPalette {
         }
         // Large and warm near the horizon, small once high.
         val size = .6f - ((e - 5) / 30).coerceIn(0f, 1f) * .28f
-        return sky.copy(glow = glow, sunX = x, sunY = y, sunSize = size)
+        // Stars come out as the sky darkens, fully once the sun is 18° down (astronomical night).
+        val stars = if (night) ((-e - 8) / 10).coerceIn(0f, 1f) else ((-e - 12) / 12).coerceIn(0f, 1f) * .25f
+        return sky.copy(glow = glow, sunX = x, sunY = y, sunSize = size, stars = stars)
     }
 
     fun of(condition: WeatherCondition?, month: Month, night: Boolean, sun: Sun? = null): Sky {
@@ -125,7 +129,8 @@ internal object SkyPalette {
             WeatherCondition.CLEAR, WeatherCondition.UNKNOWN, null -> return clear
         }
         return Sky(mix(clear.top, weather.top, amount), mix(clear.mid, weather.mid, amount),
-            mix(clear.bottom, weather.bottom, amount), fade(clear.glow, 1 - amount), clear.sunX, clear.sunY, clear.sunSize)
+            mix(clear.bottom, weather.bottom, amount), fade(clear.glow, 1 - amount), clear.sunX, clear.sunY, clear.sunSize,
+            clear.stars * (1 - amount).coerceAtLeast(0f) * (1 - amount))
     }
 
     fun mix(from: Int, to: Int, amount: Float): Int {

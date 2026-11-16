@@ -19,10 +19,16 @@ import android.graphics.drawable.Drawable
 internal class CockpitBackdrop(
     private val top: Int, private val mid: Int, private val bottom: Int, private val accent: Int, private val grid: Int,
     private val glowAlpha: Int, private val warm: Int, private val sunX: Float = .12f, private val sunY: Float = .95f, private val sunSize: Float = .55f,
+    private val stars: Float = 0f,
 ) : Drawable() {
     private val fill = Paint()
     private val glow = Paint(Paint.ANTI_ALIAS_FLAG)
     private val sun = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val star = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE }
+    // The same scattered stars every time, denser and brighter towards the top of the sky.
+    private val starField = java.util.Random(7).let { random ->
+        List(90) { floatArrayOf(random.nextFloat(), random.nextFloat().let { it * it } * .62f, .5f + random.nextFloat(), random.nextFloat()) }
+    }
     private val lines = Paint(Paint.ANTI_ALIAS_FLAG).apply { strokeWidth = 1.5f }
 
     override fun onBoundsChange(bounds: Rect) {
@@ -45,6 +51,13 @@ internal class CockpitBackdrop(
         canvas.drawRect(b, fill)
         canvas.drawRect(b, glow)
         if (Color.alpha(warm) > 0) canvas.drawRect(b, sun)
+        if (stars > 0f) {
+            val density = b.height() / 300f
+            starField.forEach { (x, y, size, twinkle) ->
+                star.alpha = ((90 + twinkle * 165) * stars * (1 - y)).toInt().coerceIn(0, 255)
+                canvas.drawCircle(b.left + x * b.width(), b.top + y * b.height(), size * density.coerceAtLeast(1f), star)
+            }
+        }
         val w = b.width().toFloat()
         val h = b.height().toFloat()
         val horizon = b.top + h * .55f

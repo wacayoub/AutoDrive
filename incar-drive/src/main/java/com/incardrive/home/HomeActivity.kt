@@ -822,7 +822,7 @@ class HomeActivity : Activity() {
         val sky = currentSky()
         shownSky = sky
         return CockpitBackdrop(sky.top, sky.mid, sky.bottom, accent, getColor(R.color.home_grid), if (night) 0x26 else 0x30,
-            sky.glow, sky.sunX, sky.sunY, sky.sunSize)
+            sky.glow, sky.sunX, sky.sunY, sky.sunSize, sky.stars)
     }
 
     /** Called every minute and on new weather: the sun moves, so the sky follows it. */
