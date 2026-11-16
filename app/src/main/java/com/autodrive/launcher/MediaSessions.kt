@@ -22,9 +22,7 @@ internal data class MediaState(
     val playing: Boolean = false,
     val durationMs: Long = 0,
     val positionMs: Long = -1,
-    val favorites: List<Pair<String, String>> = emptyList(),
-    /** Package of the app that plays, so the home screen can open it. */
-    val source: String? = null,
+    val favorites: List<Pair<String, String>> = emptyList()
 ) {
     fun supports(action: Long) = actions and action != 0L
 }
@@ -37,8 +35,6 @@ internal class MediaSessions(context: Context, private val changed: () -> Unit) 
     private var available: List<MediaController> = emptyList()
     private var packageName: String? = null
     private var observing = false
-    /** Follow whichever app plays now (the home screen) instead of the one chosen with [select]. */
-    var followActive = false
     private val callback = object : MediaController.Callback() {
         override fun onPlaybackStateChanged(state: PlaybackState?) = changed()
         override fun onMetadataChanged(metadata: MediaMetadata?) = changed()
@@ -81,10 +77,7 @@ internal class MediaSessions(context: Context, private val changed: () -> Unit) 
     }
 
     private fun connect() {
-        // Android lists the most recently active session first.
-        val next = if (followActive) {
-            available.firstOrNull { it.playbackState?.state == PlaybackState.STATE_PLAYING } ?: available.firstOrNull()
-        } else available.firstOrNull { it.packageName == packageName }
+        val next = available.firstOrNull { it.packageName == packageName }
         if (controller?.sessionToken == next?.sessionToken) return
         controller?.unregisterCallback(callback)
         controller = next
@@ -123,8 +116,7 @@ internal class MediaSessions(context: Context, private val changed: () -> Unit) 
             metadata?.description?.iconBitmap,
             status, playback?.actions ?: 0, playing, duration,
             if (duration > 0 && progress >= 0) progress.coerceIn(0, duration) else -1,
-            favorites,
-            current.packageName,
+            favorites
         )
     }
 
