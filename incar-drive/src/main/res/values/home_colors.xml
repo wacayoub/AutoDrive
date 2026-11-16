@@ -3,7 +3,7 @@
     <color name="home_background_top">#0A0D14</color>
     <color name="home_background_bottom">#0F2147</color>
     <color name="home_sheet">#0F2147</color>
-    <color name="home_card">#D90F1524</color>
+    <color name="home_card">#A60F1524</color>
     <color name="home_card_border">#1FFFFFFF</color>
     <color name="home_text">#EEF2F7</color>
     <color name="home_muted">#8792A2</color>

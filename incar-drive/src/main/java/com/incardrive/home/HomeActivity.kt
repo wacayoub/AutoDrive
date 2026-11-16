@@ -811,7 +811,10 @@ class HomeActivity : Activity() {
     /** The background for this season and the weather outside, behind the cards. */
     private fun currentSky(): Sky {
         val city = info.city.value
-        val sun = SunPosition.at(Instant.now(), city.latitude, city.longitude)
+        // Debug builds only: a fixed time to preview the sky (« debug_sky_time », an ISO instant in the preferences).
+        val debugTime = if (applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0)
+            prefs.getString("debug_sky_time", null)?.let { runCatching { Instant.parse(it) }.getOrNull() } else null
+        val sun = SunPosition.at(debugTime ?: Instant.now(), city.latitude, city.longitude)
         return SkyPalette.of(info.weather.value?.condition, LocalDate.now().month, night, sun)
     }
 
