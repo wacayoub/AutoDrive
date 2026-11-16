@@ -816,11 +816,8 @@ class RadioActivity : ComponentActivity() {
         carScreen && !television && packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)
     }
 
-    /** Maps and YouTube buttons, shown with the player controls on the head unit only. */
-    private fun companionButtons(): List<ImageButton> = if (!carScreen || television) emptyList()
-        else CompanionApp.entries.map { app ->
-            transportButton(app.icon, "Ouvrir ${app.label}") { openCompanion(app) }
-        }
+    // The Maps and YouTube buttons were removed at the listener's request: the player keeps its own controls.
+    private fun companionButtons(): List<ImageButton> = emptyList()
     private val miniMode get() = MiniPlayerMode.restore(prefs)
     // Android's own picture-in-picture window, when the listener chose it and the system offers it.
     private val miniPlayerEnabled get() = miniPlayerSupported && miniMode == MiniPlayerMode.WINDOW
@@ -977,48 +974,53 @@ class RadioActivity : ComponentActivity() {
         renderRows()
     }
 
-    /** Opens Maps or YouTube: next to the radio in split screen, otherwise full screen with the radio in its mini player. */
-    private fun openCompanion(app: CompanionApp) {
-        val intent = app.launchIntent(this)?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) ?: run {
-            Toast.makeText(this, "${app.label} n’est pas installé sur cet appareil.", Toast.LENGTH_LONG).show()
-            return
-        }
-        if (miniMode == MiniPlayerMode.BUBBLE && !canFloat && !isInMultiWindowMode) {
-            // The bubble needs one permission from Android first; the app can still open without it.
-            val sheet = RadioSheet(this, "Bulle flottante", "Pour garder la radio visible au-dessus de ${app.label}")
-            sheet.option("Autoriser la bulle", "Android ouvre « Afficher par-dessus d’autres applis » : active la radio",
-                R.drawable.ic_app_maps, chevron = true) {
-                sheet.dismiss()
-                askOverlayPermission()
-            }
-            sheet.option("Ouvrir ${app.label} sans bulle", "La radio continue en arrière-plan", app.icon) {
-                sheet.dismiss()
-                launchCompanion(app, intent)
-            }
-            sheet.show()
-            return
-        }
-        launchCompanion(app, intent)
+    private fun bubbleAppsSummary(): String {
+        val count = BubbleApps.chosen(prefs).size
+        return (if (count == 1) "1 appli" else "$count applis") + if (BubbleApps.usageAllowed(this)) "" else " · accès à autoriser"
     }
 
-    private fun launchCompanion(app: CompanionApp, intent: Intent) {
-        if (isInMultiWindowMode) {
-            intent.addFlags(Intent.FLAG_ACTIVITY_LAUNCH_ADJACENT)
-        } else if (miniPlayerEnabled) {
-            runCatching { enterPictureInPictureMode(miniPlayerParams(miniPlaying == true)) }
+    /**
+     * Which apps get the bubble on top: Maps and Waze at first, then any app ticked here. Android must allow « usage
+     * access » for the radio to know which app is in front.
+     */
+    private fun showBubbleApps() {
+        val sheet = RadioSheet(this, "Bulle flottante", "La radio s’affiche au-dessus de ces applis")
+        if (!BubbleApps.usageAllowed(this)) {
+            sheet.option("Autoriser l’accès à l’utilisation", "Android : « Accès aux données d’utilisation » › Radio Maroc",
+                R.drawable.ic_settings_popup, chevron = true) {
+                sheet.dismiss()
+                val direct = Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS, "package:$packageName".toUri())
+                try {
+                    startActivity(direct)
+                } catch (_: ActivityNotFoundException) {
+                    runCatching { startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)) }
+                }
+            }
         }
-        try {
-            startActivity(intent)
-        } catch (_: ActivityNotFoundException) {
-            Toast.makeText(this, "${app.label} n’a pas pu s’ouvrir.", Toast.LENGTH_LONG).show()
+        sheet.caption("APPLIS")
+        val chosen = BubbleApps.chosen(prefs).toMutableSet()
+        @Suppress("DEPRECATION")
+        val apps = packageManager.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0)
+            .filter { it.activityInfo.packageName != packageName }
+            .map { it.activityInfo.packageName to it.loadLabel(packageManager).toString() }
+            .distinctBy { it.first }
+            .sortedWith(compareBy({ it.first !in chosen }, { it.second.lowercase() }))
+        apps.forEach { (pkg, name) ->
+            lateinit var row: View
+            row = sheet.option(name, null, selected = pkg in chosen) {
+                if (!chosen.remove(pkg)) chosen += pkg
+                BubbleApps.save(prefs, chosen.toSet())
+                sheet.markSelected(row, pkg in chosen)
+            }
         }
+        sheet.show()
     }
 
     private fun showMiniPlayerSettings() {
         val options = MiniPlayerMode.entries.filter { it != MiniPlayerMode.WINDOW || miniPlayerSupported }
         val details = options.map {
             when (it) {
-                MiniPlayerMode.BUBBLE -> "Une bulle transparente au-dessus de Maps, YouTube ou de l’accueil" +
+                MiniPlayerMode.BUBBLE -> "Une bulle transparente au-dessus de Maps, Waze et des applis choisies" +
                     if (canFloat) "" else " · autorisation Android à donner"
                 MiniPlayerMode.WINDOW -> "La petite fenêtre d’Android, si le boîtier l’affiche"
                 MiniPlayerMode.OFF -> "La radio continue en arrière-plan, sans fenêtre"
@@ -1052,6 +1054,8 @@ class RadioActivity : ComponentActivity() {
             if (carScreen && !television) add(Entry(R.drawable.ic_app_maps, "Mini-lecteur",
                 miniMode.label + if (miniMode == MiniPlayerMode.BUBBLE && !canFloat) " · à autoriser" else "",
                 ::showMiniPlayerSettings))
+            if (carScreen && !television && miniMode == MiniPlayerMode.BUBBLE) add(Entry(R.drawable.ic_settings_popup,
+                "Bulle flottante", bubbleAppsSummary(), ::showBubbleApps))
             add(Entry(R.drawable.ic_radio_update, "Mises à jour", version?.let { "Version $it" }, radioUpdates::show))
         }
         val sheet = RadioSheet(this, "Réglages", getString(R.string.app_name))

@@ -1,9 +1,9 @@
-Sur l’Incarlink, le mini-lecteur devient une bulle flottante qui fonctionne même quand le boîtier n’affiche pas la petite fenêtre d’Android. Quand tu ouvres Maps ou YouTube, ou que tu quittes la radio, une bulle transparente reste au-dessus des autres applications : logo, nom de la station, émission, et boutons précédent, lecture et suivant. Un appui sur le nom ramène la radio. Tu peux la déplacer du doigt, elle garde sa place, et ✕ la masque jusqu’à la prochaine ouverture de la radio.
+Sur l’Incarlink, la bulle flottante ne s’affiche plus partout : seulement au-dessus des applis que tu choisis. Au départ, Google Maps et Waze ; dans Réglages › Bulle flottante, coche les autres applis où tu veux garder la radio à l’écran. Pour savoir quelle appli est devant, Android demande une fois l’« accès aux données d’utilisation » : le bouton en haut de ce réglage y mène, active Radio Maroc & Coran. Sans cet accès, la bulle reste au-dessus de toutes les applis, comme avant.
 
-La première fois, la radio demande l’autorisation Android « Afficher par-dessus d’autres applis » : active-la pour Radio Maroc & Coran. Dans Réglages › Mini-lecteur, tu peux choisir la bulle flottante, la fenêtre Android ou aucun mini-lecteur.
+Les boutons Maps et YouTube à côté du lecteur sont retirés : le lecteur garde précédent, lecture, suivant et favori.
 
-Les titres vides envoyés par certains flux, comme « Unknown - Unknown », ne s’affichent plus.
+Quand l’accueil Incar Drive est devant, la bulle se masque, puisque l’accueil montre déjà la radio.
 
 Cette version se met à jour automatiquement depuis la 2.5.35 et les versions suivantes.
 
-Vérifié sur un émulateur Android 13 en 800 × 480 : bulle au-dessus de l’accueil et d’une autre application, changement de station, retour à la radio et déplacement. Reste à essayer sur l’Incarlink.
+Vérifié sur un émulateur Android 13 en 800 × 480 : bulle au-dessus d’une appli choisie, absente au-dessus d’une appli non choisie, réglage des applis. Reste à essayer sur l’Incarlink.

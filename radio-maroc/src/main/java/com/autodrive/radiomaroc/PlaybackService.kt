@@ -644,7 +644,39 @@ internal class PlaybackService : MediaLibraryService() {
         val item = activeItem ?: engine.currentMediaItem
         val base = item?.mediaMetadata
         val now = (programme?.title ?: icyTitle)?.takeUnless { it == base?.title?.toString() } ?: base?.subtitle
-        floating.render(!radioScreenActive && !homeVisible && item != null, base?.title, now, activeLogo, engine.playWhenReady)
+        floating.render(!radioScreenActive && !homeVisible && item != null && overChosenApp(), base?.title, now,
+            activeLogo, engine.playWhenReady)
+        watchForeground()
+    }
+
+    // The bubble only over the apps chosen in Réglages › Bulle flottante, once Android allows usage access.
+    private val foregroundCheck = android.os.Handler(android.os.Looper.getMainLooper())
+    private var watching = false
+    private var lastFront: String? = null
+
+    private fun overChosenApp(): Boolean {
+        if (!BubbleApps.usageAllowed(this)) return true
+        val front = BubbleApps.foreground(this) ?: return false
+        lastFront = front
+        return front in BubbleApps.chosen(radioPreferences)
+    }
+
+    /** While the radio plays away from its screen, looks every 1.5 s which app is in front. */
+    private fun watchForeground() {
+        val needed = MiniPlayerMode.restore(radioPreferences) == MiniPlayerMode.BUBBLE && !radioScreenActive &&
+            engine.playWhenReady && BubbleApps.usageAllowed(this)
+        if (needed == watching) return
+        watching = needed
+        if (needed) foregroundCheck.postDelayed(foregroundTick, 1_500) else foregroundCheck.removeCallbacks(foregroundTick)
+    }
+
+    private val foregroundTick = object : Runnable {
+        override fun run() {
+            if (!watching) return
+            val before = lastFront
+            if (BubbleApps.foreground(this@PlaybackService) != before) refreshFloating()
+            foregroundCheck.postDelayed(this, 1_500)
+        }
     }
 
     private fun setNetworkUnavailable(unavailable: Boolean) {
