@@ -21,7 +21,7 @@ import kotlin.math.sin
  * 120 and 180 km/h so the arc never pins. Above the chosen limit, arc, glow and figures turn red.
  */
 internal class SpeedGauge(context: Context, private val track: Int, private val from: Int, private val to: Int,
-    private val textColor: Int, private val mutedColor: Int) : View(context) {
+    private val textColor: Int, private val mutedColor: Int) : View(context), SpeedDial {
     private val density = resources.displayMetrics.density
     private val stroke = 9 * density
     private val condensed = Typeface.create("sans-serif-condensed", Typeface.NORMAL)
@@ -64,14 +64,14 @@ internal class SpeedGauge(context: Context, private val track: Int, private val 
     }
 
     /** Above this speed the arc and the number turn red; null turns the alert off. */
-    var limit: Int? = null
+    override var limit: Int? = null
         set(value) { field = value; invalidate() }
     val over get() = limit?.let { (speed ?: 0) > it } == true
     private var shown = 0f
     private var speed: Int? = null
     private var easing: ValueAnimator? = null
 
-    fun setSpeed(value: Int?) {
+    override fun setSpeed(value: Int?) {
         speed = value
         val target = (value ?: 0).toFloat()
         easing?.cancel()

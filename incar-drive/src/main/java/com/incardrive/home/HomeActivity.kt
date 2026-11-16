@@ -165,7 +165,7 @@ class HomeActivity : Activity() {
     private var mediaColor = Color.TRANSPARENT
     private var washFade: ValueAnimator? = null
     private var mediaSource: String? = null
-    private lateinit var gauge: SpeedGauge
+    private lateinit var gauge: SpeedDial
     private lateinit var speedStatus: TextView
     private lateinit var favoritesGrid: LinearLayout
     private lateinit var panelHost: FrameLayout
@@ -748,15 +748,18 @@ class HomeActivity : Activity() {
 
     private fun speedCard() = FrameLayout(this).apply {
         background = pressable(glass())
-        gauge = SpeedGauge(context, getColor(R.color.home_gauge_track), shade(accent, Color.BLACK, .25f),
-            shade(accent, Color.WHITE, .3f), text, muted)
+        // The driver's style: the road ahead with the speed over it, or the graduated dial.
+        val dial: View = if (prefs.getString(SPEED_STYLE, ROAD) == ROAD) RoadGauge(context, ROAD_BLUE, text, muted)
+            else SpeedGauge(context, getColor(R.color.home_gauge_track), shade(accent, Color.BLACK, .25f),
+                shade(accent, Color.WHITE, .3f), text, muted)
+        gauge = dial as SpeedDial
         gauge.limit = activeLimit()
-        addView(gauge, FrameLayout.LayoutParams(-1, -1).apply { setMargins(dp(4), dp(4), dp(4), dp(20)) })
+        addView(dial, FrameLayout.LayoutParams(-1, -1).apply { setMargins(dp(4), dp(4), dp(4), dp(20)) })
         // Altitude in the upper left corner, the limit as a road sign in the upper right.
         addView(column().apply {
             altitudeText = label("", 11, muted, 600)
-            addView(altitudeText)
-        }, FrameLayout.LayoutParams(-2, -2, Gravity.TOP or Gravity.START).apply { setMargins(dp(12), dp(10), 0, 0) })
+            addView(altitudeText, LinearLayout.LayoutParams(-1, -2))
+        }, FrameLayout.LayoutParams(dp(90), -2, Gravity.TOP or Gravity.START).apply { setMargins(dp(12), dp(10), 0, 0) })
         limitSign = LimitSign(context).apply { limit = activeLimit() }
         addView(limitSign,
             FrameLayout.LayoutParams(dp(34), dp(34), Gravity.TOP or Gravity.END).apply { setMargins(0, dp(8), dp(10), 0) })
@@ -1737,6 +1740,11 @@ class HomeActivity : Activity() {
                     }.show()
                 }
             })
+            addView(caps("Compteur de vitesse"), wrap().apply { topMargin = dp(6) })
+            addView(choices(listOf(ROAD, DIAL), prefs.getString(SPEED_STYLE, ROAD) ?: ROAD,
+                { if (it == ROAD) "Route" else "Cadran" }, { null }) {
+                prefs.edit().putString(SPEED_STYLE, it).apply()
+            }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8); bottomMargin = dp(12) })
             addView(caps("Navigation"), wrap().apply { topMargin = dp(6) })
             addView(row().apply {
                 gravity = Gravity.FILL
@@ -2099,6 +2107,11 @@ class HomeActivity : Activity() {
         const val CITY = "city"
         const val FAVORITES = "favorites"
         const val DOCK_APPS = "dock_apps"
+        const val SPEED_STYLE = "speed_style"
+        const val ROAD = "road"
+        // The ice blue of the lane lines on recent Japanese digital dashboards, like the driver's Toyota.
+        const val ROAD_BLUE = 0xFF8FD8FF.toInt()
+        const val DIAL = "dial"
         const val DOCK_SIZE = 5
         // First apps of the bottom bar: navigation, video and music, those that are installed.
         val DEFAULT_DOCK = listOf("com.google.android.apps.maps", "com.waze", "com.google.android.youtube",
