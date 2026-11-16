@@ -1,14 +1,20 @@
-<!-- AutoDrive home, Jour: warm ivory, frosted white cards, ink-black controls and an emerald accent. -->
+<!-- Incar Drive, Jour: warm ivory, frosted white cards, ink-black controls and an emerald accent (no blue). -->
 <resources>
     <color name="home_background_top">#F8F6F2</color>
     <color name="home_background_bottom">#EAE5DD</color>
-    <color name="home_card">#C7FFFFFF</color>
-    <color name="home_card_border">#B8D6CFC5</color>
+    <color name="home_card">#B8FFFFFF</color>
+    <color name="home_card_border">#B8FFFFFF</color>
     <color name="home_text">#16171A</color>
-    <color name="home_muted">#615C56</color>
+    <color name="home_muted">#6A645D</color>
     <color name="home_accent">#0B7A58</color>
     <color name="home_primary">#16171A</color>
     <color name="home_on_primary">#FFFFFF</color>
     <color name="home_chip">#99FFFFFF</color>
     <color name="home_ripple">#2016171A</color>
+    <color name="home_gauge_track">#1416171A</color>
+    <color name="home_gauge_from">#0B7A58</color>
+    <color name="home_gauge_to">#D9822B</color>
+    <color name="home_maps_from">#0B6B4F</color>
+    <color name="home_maps_to">#1FA67A</color>
+    <color name="home_dock_active">#16171A</color>
 </resources>
