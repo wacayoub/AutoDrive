@@ -95,11 +95,16 @@ internal class StatusIcons(private val home: HomeActivity) {
         row().apply {
             gravity = android.view.Gravity.CENTER_VERTICAL
             wifi = row().apply {
-                gravity = android.view.Gravity.BOTTOM
+                gravity = android.view.Gravity.CENTER_VERTICAL
                 fan = WifiFan(context, text, tint(text, 0x40))
                 addView(fan, LinearLayout.LayoutParams(dp(17), dp(14)))
-                wifiGeneration = label("", 9, text, 700)
-                addView(wifiGeneration, wrap().apply { marginStart = dp(1) })
+                // The Wi-Fi's generation in a badge, like the mobile network's.
+                wifiGeneration = label("", 10, onAccent, 700).apply {
+                    includeFontPadding = false
+                    setPadding(dp(4), dp(1), dp(4), dp(1))
+                    background = GradientDrawable().apply { cornerRadius = dp(4).toFloat(); setColor(accent) }
+                }
+                addView(wifiGeneration, wrap().apply { marginStart = dp(4) })
                 setOnClickListener { startSafely(Intent(Settings.Panel.ACTION_WIFI)) }
             }
             addView(wifi, wrap())
@@ -175,11 +180,16 @@ internal class StatusIcons(private val home: HomeActivity) {
         val bars4 = if (!onWifi) 0 else if (rssi == Int.MIN_VALUE) 4
             else runCatching { wifiManager?.calculateSignalLevel(rssi) }.getOrNull() ?: 4
         fan.level = if (!onWifi) 0 else (bars4.coerceIn(0, 4) * 3 + 2) / 4
-        val standard = (active?.transportInfo as? WifiInfo)?.takeIf { onWifi }?.let { info ->
-            when (runCatching { info.wifiStandard }.getOrNull()) {
+        // The connection's own description first; the Wi-Fi service's when that one is not given to apps.
+        @Suppress("DEPRECATION")
+        val info = if (!onWifi) null else (active?.transportInfo as? WifiInfo)
+            ?: runCatching { wifiManager?.connectionInfo }.getOrNull()
+        val standard = info?.let {
+            when (runCatching { it.wifiStandard }.getOrNull()) {
                 ScanResult.WIFI_STANDARD_11BE -> "7"
-                ScanResult.WIFI_STANDARD_11AX -> if (info.frequency >= 5925) "6E" else "6"
+                ScanResult.WIFI_STANDARD_11AX -> if (it.frequency >= 5925) "6E" else "6"
                 ScanResult.WIFI_STANDARD_11AC -> "5"
+                ScanResult.WIFI_STANDARD_11N -> "4"
                 else -> null
             }
         }
@@ -205,6 +215,15 @@ internal class StatusIcons(private val home: HomeActivity) {
                 home.runOnUiThread { if (::hotspot.isInitialized) hotspot.visibility = if (now) View.VISIBLE else View.GONE }
             }
         }.start()
+        // Debug builds only: « debug_status » previews Wi-Fi 6, 5G and the hotspot icon where the device has none.
+        if (home.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0 && home.prefs.contains("debug_status")) {
+            wifiGeneration.text = "6"
+            wifiGeneration.visibility = View.VISIBLE
+            network.text = "5G"
+            network.visibility = View.VISIBLE
+            mobile.visibility = View.VISIBLE
+            hotspot.visibility = View.VISIBLE
+        }
         // Bluetooth: shown when on.
         val btOn = runCatching { home.getSystemService(BluetoothManager::class.java)?.adapter?.isEnabled }.getOrNull() == true
         bluetooth.visibility = if (btOn) View.VISIBLE else View.GONE

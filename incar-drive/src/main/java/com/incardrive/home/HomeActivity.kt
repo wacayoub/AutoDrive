@@ -825,7 +825,7 @@ class HomeActivity : Activity() {
             addView(row().apply {
                 addView(greeting)
                 addView(status.view(), wrap().apply { marginStart = dp(14) })
-            })
+            }, wrap()) // as wide as its icons, not as the clock's row below: no icon is cut off
             addView(row().apply {
                 gravity = Gravity.BOTTOM
                 clock = label("--:--", 38, text, 300, condensed = true)
