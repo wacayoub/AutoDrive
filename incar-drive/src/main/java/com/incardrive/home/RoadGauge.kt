@@ -310,22 +310,23 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
         if (cameraMeters != null && !bend && !circle) drawCamera(canvas, cx, w, h, horizon)
 
         // A dark band at the bottom keeps the trip line readable over the road.
-        val band = 26 * density
+        val band = 30 * density
         roadPaint.shader = linear(0f, h - band, 0f, h, 0x000B1018, 0xD90B1018.toInt())
         canvas.drawRect(0f, h - band, w, h, roadPaint)
         // How close the turn (or the camera) is: a thin bar that fills over the last 500 m.
         val metres = if (cameraFirst) cameraMeters else liveMeters
         if (guiding && metres != null) {
             val left = 12 * density
-            val y = h - band - 3 * density
-            val fraction = (1f - metres.coerceAtMost(FAR_M) / FAR_M.toFloat()).coerceIn(.02f, 1f)
+            val thick = 6 * density
+            val y = h - band - thick
+            val fraction = (1f - metres.coerceAtMost(FAR_M) / FAR_M.toFloat()).coerceIn(.03f, 1f)
             arrowPaint.shader = null
-            arrowPaint.color = ColorUtils.setAlphaComponent(textColor, 0x26)
-            rect.set(left, y, w - left, y + 3 * density)
-            canvas.drawRoundRect(rect, 2 * density, 2 * density, arrowPaint)
+            arrowPaint.color = ColorUtils.setAlphaComponent(textColor, 0x33)
+            rect.set(left, y, w - left, y + thick)
+            canvas.drawRoundRect(rect, thick / 2, thick / 2, arrowPaint)
             arrowPaint.color = when { cameraFirst -> alert; arriving -> arriveColor; else -> guideColor }
-            rect.set(left, y, left + (w - 2 * left) * fraction, y + 3 * density)
-            canvas.drawRoundRect(rect, 2 * density, 2 * density, arrowPaint)
+            rect.set(left, y, left + (w - 2 * left) * fraction, y + thick)
+            canvas.drawRoundRect(rect, thick / 2, thick / 2, arrowPaint)
         }
         // Indicator on the side of a close turn, blinking.
         val blinkSide = if (bend && (liveMeters ?: 0) <= 300) (if (turn!!.turn == Turn.LEFT) -1 else 1) else 0

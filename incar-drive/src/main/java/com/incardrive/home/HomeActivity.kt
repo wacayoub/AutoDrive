@@ -1038,7 +1038,7 @@ class HomeActivity : Activity() {
         }
         addView(cameraBadge, FrameLayout.LayoutParams(-2, -2, Gravity.TOP or Gravity.CENTER_HORIZONTAL).apply { topMargin = dp(8) })
         // Over the road's dark band the trip line is light in both themes.
-        speedStatus = label("", 11, if (road) 0xE6FFFFFF.toInt() else muted, 600).apply { gravity = Gravity.CENTER }
+        speedStatus = label("", 12, if (road) Color.WHITE else muted, 700).apply { gravity = Gravity.CENTER }
         addView(speedStatus, FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM).apply { bottomMargin = dp(DRIVE_FOOTER + 6) })
         addView(mapsCard(), FrameLayout.LayoutParams(-1, dp(DRIVE_FOOTER), Gravity.BOTTOM))
         contentDescription = "Vitesse et trajet"
@@ -1072,7 +1072,7 @@ class HomeActivity : Activity() {
             }, LinearLayout.LayoutParams(dp(30), dp(30)))
             addView(column().apply {
                 navTitle = label("Naviguer", 15, text, 700, condensed = true)
-                navDetail = label(navigation.app().label, 11, muted, 500)
+                navDetail = label(navigation.app().label, 13, muted, 600)
                 addView(navTitle)
                 addView(navDetail)
             }, LinearLayout.LayoutParams(0, -2, 1f).apply { marginStart = dp(8) })
@@ -2570,7 +2570,7 @@ class HomeActivity : Activity() {
         const val DOCK_APPS = "dock_apps"
         const val SPEED_STYLE = "speed_style"
         // Height of the navigation foot of the driving card, in dp.
-        const val DRIVE_FOOTER = 74
+        const val DRIVE_FOOTER = 78
         const val CAR_COLOR = "car_color"
         val CAR_COLORS = linkedMapOf("Blanc" to 0xFFF2F5F9.toInt(), "Gris" to 0xFF9AA3AE.toInt(), "Noir" to 0xFF2A2F38.toInt(),
             "Rouge" to 0xFFC0272D.toInt(), "Bleu" to 0xFF2C5FA8.toInt())
