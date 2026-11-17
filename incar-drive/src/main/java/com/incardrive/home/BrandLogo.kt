@@ -2,13 +2,7 @@ package com.incardrive.home
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import android.graphics.Canvas
 import android.graphics.Color
-import android.graphics.LinearGradient
-import android.graphics.Paint
-import android.graphics.Path
-import android.graphics.Shader
-import android.graphics.Typeface
 import java.io.ByteArrayOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
@@ -16,7 +10,7 @@ import java.net.URL
 /**
  * The car maker's logo fetched on the driver's request from Wikimedia Commons, where it is published as a public
  * domain text logo (still a trademark: it is downloaded to the head unit for the driver's own screen, never bundled
- * in the app). The emblem becomes the car logo in chrome silver, the brand name the badge beside it.
+ * in the app). The emblem becomes the car logo in chrome silver.
  */
 internal object BrandLogo {
     // Toyota_carlogo.svg on Wikimedia Commons, rendered as a 960 px PNG: the emblem, then « TOYOTA ».
@@ -95,58 +89,5 @@ internal object BrandLogo {
             }
         }
         return Bitmap.createBitmap(pixels, w, h, Bitmap.Config.ARGB_8888)
-    }
-
-    /**
-     * A « HYBRID » badge drawn by Incar Drive: wide, slightly slanted chrome letters with a dark edge, and a blue
-     * sweep after the name, in the spirit of a hybrid car's boot badge. Drawn large so it shrinks cleanly.
-     */
-    fun hybridBadge(): Bitmap {
-        val height = 120
-        val text = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            typeface = Typeface.create(Typeface.create("sans-serif", Typeface.NORMAL), 800, false)
-            textSize = height * .82f
-            textSkewX = -.12f
-            textScaleX = 1.18f
-            letterSpacing = .04f
-        }
-        val word = "HYBRID"
-        val wordWidth = text.measureText(word)
-        val sweep = height * .42f
-        val width = (wordWidth + sweep + height * .2f).toInt()
-        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(bitmap)
-        val baseline = height * .86f
-        val x = height * .06f
-        // Dark edge, then the chrome face: bright top, a sharp horizon, a lighter bottom.
-        text.style = Paint.Style.STROKE
-        text.strokeWidth = height * .06f
-        text.strokeJoin = Paint.Join.ROUND
-        text.color = 0xFF1C2230.toInt()
-        canvas.drawText(word, x, baseline, text)
-        text.style = Paint.Style.FILL
-        text.shader = LinearGradient(0f, height * .14f, 0f, baseline, intArrayOf(
-            0xFFFFFFFF.toInt(), 0xFFE3E8EF.toInt(), 0xFF9AA4B4.toInt(), 0xFF6C7686.toInt(), 0xFFC9D0DA.toInt(),
-        ), floatArrayOf(0f, .42f, .5f, .62f, 1f), Shader.TileMode.CLAMP)
-        canvas.drawText(word, x, baseline, text)
-        // The blue sweep: a tall, slanted crescent after the name.
-        val left = x + wordWidth + height * .06f
-        val top = height * .12f
-        val path = Path().apply {
-            moveTo(left + sweep * .62f, top)
-            cubicTo(left + sweep * 1.15f, top + height * .2f, left + sweep * .9f, baseline - height * .1f, left + sweep * .18f, baseline)
-            cubicTo(left + sweep * .62f, baseline - height * .22f, left + sweep * .8f, top + height * .22f, left + sweep * .62f, top)
-            close()
-        }
-        val blue = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            shader = LinearGradient(0f, top, 0f, baseline, 0xFF6FA8FF.toInt(), 0xFF1F4FB8.toInt(), Shader.TileMode.CLAMP)
-        }
-        canvas.drawPath(path, blue)
-        blue.shader = null
-        blue.style = Paint.Style.STROKE
-        blue.strokeWidth = height * .025f
-        blue.color = 0xFFDCE8FF.toInt()
-        canvas.drawPath(path, blue)
-        return bitmap
     }
 }

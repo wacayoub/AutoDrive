@@ -30,8 +30,8 @@ class RoadAlertsTest {
     }
 
     @Test fun aLongMessageIsShortened() {
-        val alert = RoadAlerts.find(listOf("Accident signalé   sur le boulevard Mohammed VI en direction du centre-ville"))!!
-        assertTrue(alert.text.length <= 46)
+        val alert = RoadAlerts.find(listOf("Accident signalé   sur le boulevard Mohammed VI en direction du centre-ville de Casablanca"))!!
+        assertTrue(alert.text.length <= 64)
         assertTrue(alert.text.endsWith("…"))
         assertFalse(alert.text.contains("  "))
     }

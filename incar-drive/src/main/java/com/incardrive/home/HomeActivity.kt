@@ -175,7 +175,6 @@ class HomeActivity : Activity() {
     private lateinit var island: LinearLayout
     private lateinit var islandDot: View
     private lateinit var islandText: TextView
-    private lateinit var logoPlate: View
     // What the live island may show, most urgent first: over the limit, a speed camera, the next turn (when the
     // navigation card is out of sight), a prayer within a quarter of an hour.
     private var islandOver: String? = null
@@ -200,7 +199,6 @@ class HomeActivity : Activity() {
     private lateinit var ownMap: OwnMap
     private lateinit var wazeMap: WazeMap
     private lateinit var googleWeb: WazeMap
-    private lateinit var carBadge: CarLogo
     private lateinit var mediaResume: MediaResume
     private lateinit var widgets: WidgetBoard
     private lateinit var phone: PhoneLink
@@ -265,7 +263,6 @@ class HomeActivity : Activity() {
             if (waze != null) startSafely(waze) else Toast.makeText(this, "Waze n’est pas installé sur ce boîtier.", Toast.LENGTH_LONG).show()
         }
         ownMap = OwnMap(this) { if (NavWatch.nav.value != null) { if (!navigation.resume()) navMissing() } else if (!navigation.open()) navMissing() }
-        carBadge = CarLogo(this, "car_badge", 48)
         mediaResume = MediaResume(this)
         widgets = WidgetBoard(this)
         phone = PhoneLink(this)
@@ -363,7 +360,7 @@ class HomeActivity : Activity() {
             if (!isDefaultHome()) startSafely(Intent(Settings.ACTION_HOME_SETTINGS))
             return
         }
-        if (carLogo.onResult(requestCode, resultCode, data) || carBadge.onResult(requestCode, resultCode, data)) return
+        if (carLogo.onResult(requestCode, resultCode, data)) return
         if (!widgets.onResult(requestCode, resultCode) && !mapWidget.onResult(requestCode, resultCode)) {
             super.onActivityResult(requestCode, resultCode, data)
         }
@@ -727,12 +724,7 @@ class HomeActivity : Activity() {
         if (message == islandShown) return
         islandShown = message
         if (message == null) {
-            island.animate().alpha(0f).setDuration(180).withEndAction {
-                island.visibility = View.GONE
-                logoPlate.visibility = View.VISIBLE
-                logoPlate.alpha = 0f
-                logoPlate.animate().alpha(1f).setDuration(180).start()
-            }.start()
+            island.animate().alpha(0f).setDuration(180).withEndAction { island.visibility = View.GONE }.start()
             return
         }
         islandText.text = message
@@ -743,7 +735,6 @@ class HomeActivity : Activity() {
             setStroke(dp(1), color)
         }
         if (island.visibility != View.VISIBLE) {
-            logoPlate.visibility = View.GONE
             island.visibility = View.VISIBLE
             island.alpha = 0f
             island.scaleX = .85f
@@ -839,8 +830,8 @@ class HomeActivity : Activity() {
                 addView(date, wrap().apply { marginStart = dp(12); bottomMargin = dp(6) })
             }, wrap().apply { topMargin = dp(2) })
         }, LinearLayout.LayoutParams(-2, -2))
-        // The driver's car logo and badge (Réglages › Écran d’accueil), centred in the room between the clock and the
-        // buttons, so they never cover them.
+        // The middle of the bar belongs to the notifications (the island): alerts, the next turn, the prayer. The
+        // car's logo no longer sits here; it stays on the car of the « Route » card and in the welcome scene.
         addView(row().apply {
             gravity = Gravity.CENTER
             island = row().apply {
@@ -848,22 +839,11 @@ class HomeActivity : Activity() {
                 setPadding(dp(12), dp(6), dp(14), dp(6))
                 islandDot = View(context)
                 addView(islandDot, LinearLayout.LayoutParams(dp(8), dp(8)))
-                islandText = label("", 14, Color.WHITE, 700).apply { maxLines = 1 }
-                addView(islandText, wrap().apply { marginStart = dp(8) })
+                islandText = label("", 13, Color.WHITE, 700).apply { maxLines = 2 }
+                addView(islandText, LinearLayout.LayoutParams(-2, -2).apply { marginStart = dp(8) })
                 visibility = View.GONE
             }
             addView(island, wrap())
-            addView(row().apply {
-                logoPlate = this
-                gravity = Gravity.CENTER_VERTICAL
-                // Chrome logos vanish on the day theme's light sky: there they sit on a dark plate.
-                if (!night && (carLogo.chosen || carBadge.chosen)) {
-                    background = GradientDrawable().apply { cornerRadius = dp(14).toFloat(); setColor(0xE6182030.toInt()) }
-                    setPadding(dp(12), dp(5), dp(12), dp(5))
-                }
-                addView(carLogo.view(26), LinearLayout.LayoutParams(-2, dp(26)))
-                addView(carBadge.view(15), LinearLayout.LayoutParams(-2, dp(15)).apply { marginStart = dp(8) })
-            }, wrap())
         }, LinearLayout.LayoutParams(0, -1, 1f).apply { marginStart = dp(8); marginEnd = dp(8) })
         fun chip(content: LinearLayout.() -> Unit) = row().apply {
             background = glass(14)
@@ -1411,8 +1391,8 @@ class HomeActivity : Activity() {
             val parts = BrandLogo.toyota()
             runOnUiThread {
                 if (isDestroyed) return@runOnUiThread
-                if (parts != null && carLogo.set(parts.first) && carBadge.set(BrandLogo.hybridBadge())) {
-                    Toast.makeText(this, "Logo Toyota et badge HYBRID ajoutés", Toast.LENGTH_SHORT).show()
+                if (parts != null && carLogo.set(parts.first)) {
+                    Toast.makeText(this, "Logo Toyota ajouté sur la voiture", Toast.LENGTH_SHORT).show()
                     recreate()
                 } else Toast.makeText(this, "Le logo n’a pas pu être téléchargé : vérifie Internet et réessaie.",
                     Toast.LENGTH_LONG).show()
@@ -2530,10 +2510,9 @@ class HomeActivity : Activity() {
                     setOnClickListener { image.remove(); recreate() }
                 })
             }
-            addView(imageRow(carLogo, "Logo de la voiture en haut  ›", "Changer le logo de la voiture  ›"))
-            addView(imageRow(carBadge, "Badge à côté du logo (ex. Hybrid)  ›", "Changer le badge  ›"))
+            addView(imageRow(carLogo, "Logo sur la voiture du compteur  ›", "Changer le logo de la voiture  ›"))
             // No photo on the head unit? Incar Drive fetches the Toyota emblem itself, in silver, with a HYBRID badge.
-            addView(label("Logo Toyota argent + HYBRID  ›", 14, accent, 700).apply {
+            addView(label("Télécharger le logo Toyota argent  ›", 14, accent, 700).apply {
                 setPadding(0, dp(10), 0, dp(6))
                 setOnClickListener { downloadToyotaLogo() }
             })

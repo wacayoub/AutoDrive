@@ -25,7 +25,7 @@ internal object RoadAlerts {
             val isSerious = serious.containsMatchIn(line)
             if (!isSerious && !other.containsMatchIn(line)) continue
             val clean = line.replace(Regex("""\s+"""), " ").trim()
-            return RoadAlert(if (clean.length > 46) clean.take(45).trimEnd() + "…" else clean, isSerious)
+            return RoadAlert(if (clean.length > 64) clean.take(63).trimEnd() + "…" else clean, isSerious)
         }
         return null
     }
