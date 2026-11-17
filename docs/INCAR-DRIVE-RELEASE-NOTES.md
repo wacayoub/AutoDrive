@@ -1,13 +1,16 @@
-Incar Drive 1.0.10 — écran d’accueil pour l’Incarlink (Android 11 à 13, conçu pour 800 × 480).
+Incar Drive 1.0.11 — écran d’accueil pour l’Incarlink (Android 11 à 13, conçu pour 800 × 480).
 
 **Mettre à jour** : Réglages › Mises à jour, ou la proposition automatique.
 
 **Changements**
+- Thème « Système » fiable au démarrage : l’accueil revérifie jour ou nuit chaque minute et bascule tout seul. Avant, il décidait une seule fois à l’allumage ; si l’heure du boîtier était encore fausse à ce moment-là, il pouvait rester en sombre en plein jour (ou l’inverse). Pour un thème toujours identique, choisis « Jour » ou « Nuit » dans Réglages › Thème.
+
+Comprend aussi la 1.0.10 :
 - Thème nuit : les cartes Maps web et Waze passent en sombre, comme la carte d’Incar Drive ; le trafic garde ses couleurs.
 - Google Maps web à droite de l’accueil (nouveau choix) : le site de Google Maps avec son trafic en direct (lignes vertes, orange, rouges), gratuit, sans clé ni compte. Il est en direct : Incar Drive donne la position du boîtier au site de Google Maps, qui affiche ton point bleu et suit la voiture en continu. Si tu déplaces la carte au doigt, « Centrer » relance le suivi ; « Ouvrir Maps » lance l’appli pour le guidage. C’est le site web, pas l’appli : pas de guidage dans la carte ; il demande Internet et Android System WebView.
 - Carte Waze à droite de l’accueil (nouveau choix) : la carte web officielle de Waze, gratuite et sans compte, avec son trafic et les signalements de ses conducteurs. Elle se recentre sur la voiture tous les 400 m ; « Centrer » le fait tout de suite, « Ouvrir Waze » lance l’appli. Elle ne montre ni itinéraire ni guidage, et demande Internet et le composant Android System WebView. Réglages › Navigation › « À droite de l’accueil » : Maps web, Waze, Carte, Widget ou Favoris.
 
-Comprend aussi la 1.0.9 :
+Et la 1.0.9 :
 - Carte Incar Drive à droite de l’accueil, gratuite et sans compte : la carte OpenStreetMap autour de la voiture, avec ta position et ta direction, les radars, le zoom + / −, et la consigne de Google Maps ou Waze par-dessus pendant un guidage. Un toucher ouvre la navigation. Ce n’est pas Google Maps : pas de ligne d’itinéraire ; il faut Internet pour les zones jamais vues, les autres restent en mémoire. Réglages › Navigation › « À droite de l’accueil » : Carte, Widget Maps ou Favoris.
 - Trafic en direct sur la carte (option) : les bouchons en couleurs, fournis par TomTom avec ta propre clé gratuite (200 000 tuiles par mois, sans carte bancaire). Réglages › Navigation › « Ajouter le trafic en direct sur la carte » explique comment l’obtenir. Sans clé, la carte reste sans trafic.
 - Thème jour : le logo de la voiture et le badge sont posés sur une plaque sombre, pour rester visibles sur le ciel clair.

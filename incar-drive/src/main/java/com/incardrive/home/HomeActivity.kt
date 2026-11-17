@@ -467,6 +467,18 @@ class HomeActivity : Activity() {
         phone.render()
     }
 
+    /**
+     * With the « Système » theme, day or night is worked out from the clock when the screen is built. A head unit
+     * often boots with a wrong clock and corrects it a moment later (network, GPS), and the hour passes sunset while
+     * driving: so the answer is checked again every tick and the screen rebuilt when it has changed. Panels are left
+     * alone while open; the switch then happens when they close.
+     */
+    private fun followSystemTheme() {
+        if (Appearance.restore(prefs) != Appearance.SYSTEM || shownPage != Page.HOME || isFinishing || isDestroyed) return
+        val wanted = runCatching { SystemNight.isNight(applicationContext) }.getOrNull() ?: return
+        if (wanted != night) recreate()
+    }
+
     private val tick = object : Runnable {
         override fun run() {
             val now = LocalDateTime.now()
@@ -482,6 +494,7 @@ class HomeActivity : Activity() {
             renderPrayer()
             renderSky()
             status.render()
+            followSystemTheme()
             handler.postDelayed(this, 60_000L - System.currentTimeMillis() % 60_000L)
         }
     }
