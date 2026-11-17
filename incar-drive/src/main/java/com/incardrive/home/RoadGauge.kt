@@ -313,19 +313,25 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
         val band = 30 * density
         roadPaint.shader = linear(0f, h - band, 0f, h, 0x000B1018, 0xD90B1018.toInt())
         canvas.drawRect(0f, h - band, w, h, roadPaint)
-        // How close the turn (or the camera) is: a thin bar that fills over the last 500 m.
+        // The line under the trip summary, where the road meets the card's foot: plain in the road's colour when
+        // idle; while guiding it fills over the last 500 m before the turn (or the camera).
         val metres = if (cameraFirst) cameraMeters else liveMeters
-        if (guiding && metres != null) {
-            val left = 12 * density
-            val thick = 6 * density
-            val y = h - band - thick
-            val fraction = (1f - metres.coerceAtMost(FAR_M) / FAR_M.toFloat()).coerceIn(.03f, 1f)
+        run {
+            val left = 10 * density
+            val thick = 4 * density
+            val y = h - thick - 1.5f * density
             arrowPaint.shader = null
-            arrowPaint.color = ColorUtils.setAlphaComponent(textColor, 0x33)
-            rect.set(left, y, w - left, y + thick)
-            canvas.drawRoundRect(rect, thick / 2, thick / 2, arrowPaint)
-            arrowPaint.color = when { cameraFirst -> alert; arriving -> arriveColor; else -> guideColor }
-            rect.set(left, y, left + (w - 2 * left) * fraction, y + thick)
+            if (guiding && metres != null) {
+                val fraction = (1f - metres.coerceAtMost(FAR_M) / FAR_M.toFloat()).coerceIn(.03f, 1f)
+                arrowPaint.color = ColorUtils.setAlphaComponent(textColor, 0x33)
+                rect.set(left, y, w - left, y + thick)
+                canvas.drawRoundRect(rect, thick / 2, thick / 2, arrowPaint)
+                arrowPaint.color = when { cameraFirst -> alert; arriving -> arriveColor; else -> guideColor }
+                rect.set(left, y, left + (w - 2 * left) * fraction, y + thick)
+            } else {
+                arrowPaint.color = tone
+                rect.set(left, y, w - left, y + thick)
+            }
             canvas.drawRoundRect(rect, thick / 2, thick / 2, arrowPaint)
         }
         // Indicator on the side of a close turn, blinking.

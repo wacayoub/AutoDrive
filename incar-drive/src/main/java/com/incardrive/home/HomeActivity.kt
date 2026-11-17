@@ -1039,7 +1039,7 @@ class HomeActivity : Activity() {
         addView(cameraBadge, FrameLayout.LayoutParams(-2, -2, Gravity.TOP or Gravity.CENTER_HORIZONTAL).apply { topMargin = dp(8) })
         // Over the road's dark band the trip line is light in both themes.
         speedStatus = label("", 12, if (road) Color.WHITE else muted, 700).apply { gravity = Gravity.CENTER }
-        addView(speedStatus, FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM).apply { bottomMargin = dp(DRIVE_FOOTER + 6) })
+        addView(speedStatus, FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM).apply { bottomMargin = dp(DRIVE_FOOTER + if (road) 9 else 6) })
         addView(mapsCard(), FrameLayout.LayoutParams(-1, dp(DRIVE_FOOTER), Gravity.BOTTOM))
         contentDescription = "Vitesse et trajet"
         setOnClickListener {
@@ -1055,8 +1055,10 @@ class HomeActivity : Activity() {
      * guidance instead: the turn arrow, the distance to the turn, the instruction, the time left and the arrival.
      */
     private fun mapsCard() = column().apply {
-        // The foot of the driving card: no frame of its own, a hairline above it.
-        addView(View(context).apply { setBackgroundColor(tint(text, 0x1F)) }, LinearLayout.LayoutParams(-1, dp(1)))
+        // The foot of the driving card: no frame of its own; the road card draws the line above it. With a dial
+        // instead of the road, a hairline stands in.
+        addView(View(context).apply { setBackgroundColor(if (roadGauge == null) tint(text, 0x1F) else Color.TRANSPARENT) },
+            LinearLayout.LayoutParams(-1, dp(1)))
         setPadding(dp(8), 0, dp(8), dp(6))
         addView(row().apply {
             background = pressable(null, 12)
