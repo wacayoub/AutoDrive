@@ -37,8 +37,34 @@ class MediaAccessService : NotificationListenerService() {
 
     private fun refresh(active: List<StatusBarNotification>?) {
         CallWatch.refresh(active.orEmpty())
+        val wasGuiding = NavWatch.nav.value != null
         NavWatch.refresh(active.orEmpty(), this)
         bubble.render(NavWatch.nav.value, NavWatch.source)
+        if (!wasGuiding && NavWatch.nav.value != null) returnHome()
+    }
+
+    private val handler = android.os.Handler(android.os.Looper.getMainLooper())
+
+    /**
+     * With « Appli Maps » chosen for the home page, a few seconds after Google Maps starts guiding the home screen
+     * comes back by itself, as if the driver pressed Home: Maps then shrinks into its small window (when its
+     * picture-in-picture permission is on), which lands in the frame kept for it. Android lets an app holding the
+     * « display over other apps » permission bring its own screen forward; without it nothing happens. Waze has no
+     * small window, so it is left in front.
+     */
+    private fun returnHome() {
+        val prefs = getSharedPreferences(NavBubble.PREFS, MODE_PRIVATE)
+        if (!prefs.getBoolean("map_on_home", true) || prefs.getString("map_source", null) != "maps_app") return
+        handler.removeCallbacksAndMessages(null)
+        handler.postDelayed({
+            val maps = NavWatch.source != "com.waze"
+            if (NavWatch.nav.value != null && maps && !HomeVisibility.shown && android.provider.Settings.canDrawOverlays(this)) {
+                runCatching {
+                    startActivity(android.content.Intent(this, HomeActivity::class.java)
+                        .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+                }
+            }
+        }, 5_000)
     }
 }
 

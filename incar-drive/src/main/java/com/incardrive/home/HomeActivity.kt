@@ -175,6 +175,7 @@ class HomeActivity : Activity() {
     private lateinit var dockDivider: View
     private var guiding = false
     private var mapsFrame: View? = null
+    private var mapsAppCard: View? = null
     private lateinit var quick: QuickSettings
     internal lateinit var dialer: Dialer
     private lateinit var navigation: Navigation
@@ -576,6 +577,8 @@ class HomeActivity : Activity() {
                 // The live map (a Google Maps or Waze widget) takes the favourites' place when chosen; they move to page 2.
                 addView(when {
                     !mapOnHome() -> favoritesCard()
+                    mapSource() == MAPS_APP -> mapWidget.guideView(guiding = false) { if (!navigation.open()) navMissing() }
+                        .also { mapsAppCard = it }
                     mapSource() == WAZE_MAP -> wazeMap.view()
                     mapSource() == GOOGLE_WEB -> googleWeb.view()
                     ownMapOnHome() -> ownMap.view()
@@ -628,7 +631,7 @@ class HomeActivity : Activity() {
      * own: Android decides its exact place and size, the frame is laid out around that corner.
      */
     private fun placeMapsFrame() {
-        val wanted = guiding && mapOnHome() && mapSource() == MAPS_WIDGET && ::pager.isInitialized && pager.page == 0 && ::screenRoot.isInitialized
+        val wanted = guiding && mapOnHome() && (mapSource() == MAPS_WIDGET || mapSource() == MAPS_APP) && ::pager.isInitialized && pager.page == 0 && ::screenRoot.isInitialized
         if (!wanted) {
             mapsFrame?.let { screenRoot.removeView(it) }
             mapsFrame = null
@@ -647,7 +650,7 @@ class HomeActivity : Activity() {
     private fun frameMaps(retries: Int = 3) {
         run {
             if (mapsFrame != null || !guiding || pager.page != 0 || isDestroyed) return
-            val card = mapWidget.card?.takeIf { it.width > 0 && it.isShown } ?: return
+            val card = (if (mapSource() == MAPS_APP) mapsAppCard else mapWidget.card)?.takeIf { it.width > 0 && it.isShown } ?: return
             val page = generateSequence(card.parent as? View) { it.parent as? View }.firstOrNull { it.parent === pager }
             if (page != null && page.translationX != 0f) {
                 if (retries > 0) screenRoot.postDelayed({ frameMaps(retries - 1) }, 150)
@@ -1970,14 +1973,19 @@ class HomeActivity : Activity() {
             }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
             addView(label("À droite de l’accueil", 13, text, 700), wrap().apply { topMargin = dp(10) })
             val rightNow = if (!mapOnHome()) "favorites" else mapSource()
-            addView(choices(listOf(GOOGLE_WEB, WAZE_MAP, OWN_MAP, MAPS_WIDGET, "favorites"), rightNow,
-                { when (it) { GOOGLE_WEB -> "Maps web"; WAZE_MAP -> "Waze"; OWN_MAP -> "Carte"; MAPS_WIDGET -> "Widget"; else -> "Favoris" } }, { null }) {
-                prefs.edit().putBoolean(MAP_ON_HOME, it != "favorites")
-                    .apply { if (it != "favorites") putString(MAP_SOURCE, it) }.apply()
-            }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(6) })
-            addView(label("Maps web : le site de Google Maps avec son trafic · Waze : la carte web de Waze · " +
+            val rightNames = linkedMapOf(MAPS_APP to "Appli Maps", GOOGLE_WEB to "Maps web", WAZE_MAP to "Waze",
+                OWN_MAP to "Carte", MAPS_WIDGET to "Widget", "favorites" to "Favoris")
+            rightNames.keys.chunked(3).forEach { group ->
+                addView(choices(group, rightNow, { rightNames.getValue(it) }, { null }) {
+                    prefs.edit().putBoolean(MAP_ON_HOME, it != "favorites")
+                        .apply { if (it != "favorites") putString(MAP_SOURCE, it) }.apply()
+                }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(6) })
+            }
+            addView(label("Appli Maps : un cadre où la petite fenêtre de l’appli Google Maps vient se poser pendant le guidage ; " +
+                "l’accueil revient tout seul quand le guidage démarre · " +
+                "Maps web : le site de Google Maps avec son trafic · Waze : la carte web de Waze · " +
                 "Carte : celle d’Incar Drive (OpenStreetMap), avec les radars et la consigne de Maps · Widget : celui de Google Maps, s’il a la position",
-                11, muted).apply { maxLines = 3 },
+                11, muted).apply { maxLines = 5 },
                 LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(4) })
             val hasTraffic = !prefs.getString(OwnMap.TRAFFIC_KEY, null).isNullOrBlank()
             addView(label(if (hasTraffic) "Trafic en direct sur la carte : activé  ›" else "Ajouter le trafic en direct sur la carte  ›",
@@ -2318,6 +2326,7 @@ class HomeActivity : Activity() {
         const val OWN_MAP = "own"
         const val MAPS_WIDGET = "widget"
         const val WAZE_MAP = "waze"
+        const val MAPS_APP = "maps_app"
         const val GOOGLE_WEB = "google_web"
         const val PREFS = "incar_drive_home"
         const val APPEARANCE = "appearance"
