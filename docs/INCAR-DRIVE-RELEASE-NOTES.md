@@ -4,6 +4,7 @@ Incar Drive 1.0.14 — écran d’accueil pour l’Incarlink (Android 11 à 13, 
 
 **Changements**
 - Cadre Google Maps pendant le guidage : le haut du cadre affiche le prochain virage en grand (flèche, distance, consigne, temps restant et heure d’arrivée), juste au-dessus de la petite fenêtre de Maps. La carte de navigation du milieu garde alors Maison, Travail et tes lieux.
+- Bulle de guidage : elle ne s’affiche plus au-dessus de Google Maps ou de Waze eux-mêmes, où elle répétait leur écran ; elle reste au-dessus des autres applis ouvertes depuis l’accueil. Elle n’écrit plus la distance deux fois.
 
 Comprend aussi la 1.0.13 :
 - Îlot en direct au milieu de la barre du haut : une pastille qui remplace le logo le temps d’une alerte, puis s’efface. En rouge au-dessus de la limite (« 56 km/h · limite 40 ») et à l’approche d’un radar ; en bleu pour le prochain virage quand la carte de navigation n’est pas à l’écran (page 2, panneau ouvert) ; en vert pour une prière dans moins de 15 minutes.

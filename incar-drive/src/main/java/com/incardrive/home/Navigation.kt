@@ -40,6 +40,7 @@ internal class Navigation(private val activity: Activity, private val prefs: Sha
     private fun start(intent: Intent?): Boolean = intent?.let {
         try {
             activity.startActivity(it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            HomeVisibility.front = it.component?.packageName ?: it.`package`
             true
         } catch (_: ActivityNotFoundException) {
             false

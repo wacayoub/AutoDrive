@@ -1850,6 +1850,7 @@ class HomeActivity : Activity() {
     internal fun startSafely(intent: Intent) {
         try {
             startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            HomeVisibility.front = intent.component?.packageName ?: intent.`package`
         } catch (_: ActivityNotFoundException) {
             Toast.makeText(this, "Cette application n’a pas pu s’ouvrir.", Toast.LENGTH_LONG).show()
         } catch (_: SecurityException) {

@@ -104,6 +104,7 @@ internal class AppLinks(private val activity: Activity) {
 
     private fun start(intent: Intent): Boolean = try {
         activity.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        HomeVisibility.front = intent.component?.packageName ?: intent.`package`
         true
     } catch (_: ActivityNotFoundException) {
         false

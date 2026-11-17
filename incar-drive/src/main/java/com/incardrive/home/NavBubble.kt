@@ -46,16 +46,22 @@ internal class NavBubble(private val context: Context) {
     /** Shows the guidance while it lasts and Incar Drive's home screen is away; hides it otherwise. */
     fun render(nav: NavInfo?, packageName: String?) {
         if (nav == null) dismissed = false
-        if (nav == null || dismissed || HomeVisibility.shown || !enabled) {
+        // Over the navigation app itself the bubble would only repeat what that app already shows.
+        val overNavigation = HomeVisibility.front != null && (HomeVisibility.front == packageName || HomeVisibility.front in NAVIGATION_APPS)
+        if (nav == null || dismissed || HomeVisibility.shown || overNavigation || !enabled) {
             hide()
             return
         }
         val view = card ?: build(packageName) ?: return
         if (nav.arrow != null) arrow.setImageDrawable(nav.arrow) else arrow.setImageResource(R.drawable.ic_home_navigation)
         arrow.rotation = if (nav.arrow != null) 0f else 45f
-        step.text = nav.step ?: nav.remaining ?: "Guidage"
-        instruction.text = nav.instruction.orEmpty()
-        instruction.visibility = if (nav.instruction.isNullOrBlank()) View.GONE else View.VISIBLE
+        val title = nav.step ?: nav.remaining ?: "Guidage"
+        step.text = title
+        // The second line only when it adds something: Maps sometimes repeats the distance there.
+        fun plain(value: String) = value.filterNot { it.isWhitespace() }.lowercase()
+        val line = nav.instruction?.takeIf { it.isNotBlank() && plain(it) != plain(title) }
+        instruction.text = line.orEmpty()
+        instruction.visibility = if (line == null) View.GONE else View.VISIBLE
         eta.text = listOfNotNull(nav.remaining?.takeIf { nav.step != null }, nav.arrival).joinToString("\n")
         eta.visibility = if (eta.text.isNullOrEmpty()) View.GONE else View.VISIBLE
         view.tag = packageName
@@ -152,6 +158,7 @@ internal class NavBubble(private val context: Context) {
                 MotionEvent.ACTION_UP -> {
                     if (dragging) prefs.edit().putInt(X, params.x).putInt(Y, params.y).apply()
                     else (card?.tag as? String ?: packageName)?.let { pkg ->
+                        HomeVisibility.front = pkg
                         context.packageManager.getLaunchIntentForPackage(pkg)
                             ?.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
                             ?.let { runCatching { context.startActivity(it) } }
@@ -171,11 +178,18 @@ internal class NavBubble(private val context: Context) {
         const val ENABLED = "nav_bubble"
         const val X = "nav_bubble_x"
         const val Y = "nav_bubble_y"
+        val NAVIGATION_APPS = setOf("com.google.android.apps.maps", "com.waze")
     }
 }
 
 /** Whether Incar Drive's home screen is on screen, so the bubble steps aside there (the card shows the guidance). */
 internal object HomeVisibility {
     @Volatile var shown = false
+    /**
+     * The app last opened from the home screen, which as the launcher starts nearly all of them: how the bubble
+     * knows the navigation app itself is in front, without asking for Android's usage access. Null when unknown.
+     */
+    @Volatile var front: String? = null
+        set(value) { field = value; changed?.invoke() }
     var changed: (() -> Unit)? = null
 }
