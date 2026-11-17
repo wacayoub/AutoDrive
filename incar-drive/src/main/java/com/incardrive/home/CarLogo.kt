@@ -13,11 +13,12 @@ import java.io.File
 import kotlin.math.max
 
 /**
- * The driver's own car logo at the left of the top bar. Incar Drive ships no brand logo: the driver picks an image
+ * The driver's own car logo at the left of the top bar (and a second image, a badge such as « Hybrid », beside it). Incar Drive ships no brand logo: the driver picks an image
  * on the head unit (Android's document picker), which is kept, scaled down, in the app's private files.
  */
-internal class CarLogo(private val home: HomeActivity) {
-    private val file get() = File(home.filesDir, "car_logo.png")
+internal class CarLogo(private val home: HomeActivity, private val name: String = "car_logo",
+    private val request: Int = 47) {
+    private val file get() = File(home.filesDir, "$name.png")
     private var view: ImageView? = null
 
     val chosen get() = file.isFile
@@ -44,12 +45,12 @@ internal class CarLogo(private val home: HomeActivity) {
         val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("image/*")
         try {
             @Suppress("DEPRECATION")
-            home.startActivityForResult(intent, REQUEST)
+            home.startActivityForResult(intent, request)
         } catch (_: ActivityNotFoundException) {
             try {
                 @Suppress("DEPRECATION")
                 home.startActivityForResult(Intent(Intent.ACTION_GET_CONTENT).addCategory(Intent.CATEGORY_OPENABLE)
-                    .setType("image/*"), REQUEST)
+                    .setType("image/*"), request)
             } catch (_: ActivityNotFoundException) {
                 Toast.makeText(home, "Aucun sélecteur d’images sur ce boîtier.", Toast.LENGTH_LONG).show()
             }
@@ -62,7 +63,7 @@ internal class CarLogo(private val home: HomeActivity) {
     }
 
     fun onResult(requestCode: Int, resultCode: Int, data: Intent?): Boolean {
-        if (requestCode != REQUEST) return false
+        if (requestCode != request) return false
         val uri = data?.data
         if (resultCode == Activity.RESULT_OK && uri != null) {
             if (save(uri)) home.recreate()
@@ -89,7 +90,4 @@ internal class CarLogo(private val home: HomeActivity) {
         true
     }.getOrDefault(false)
 
-    private companion object {
-        const val REQUEST = 47
-    }
 }

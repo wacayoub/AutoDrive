@@ -29,7 +29,8 @@ internal interface SpeedDial {
  * like the number.
  */
 internal class RoadGauge(context: Context, private val accent: Int, private val textColor: Int,
-    private val mutedColor: Int, private val badge: android.graphics.Bitmap? = null) : View(context), SpeedDial {
+    private val mutedColor: Int, private val badge: android.graphics.Bitmap? = null,
+    private val sideBadge: android.graphics.Bitmap? = null) : View(context), SpeedDial {
     private val density = resources.displayMetrics.density
     private val alert = 0xFFFF4D4F.toInt()
     private val valuePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -223,6 +224,15 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
             val wide = (tall * logo.width / logo.height.coerceAtLeast(1)).coerceAtMost(carW * .32f)
             rect.set(cx - wide / 2, lightTop - tall - carH * .01f, cx + wide / 2, lightTop - carH * .01f)
             canvas.drawBitmap(logo, null, rect, badgePaint)
+        }
+        // A second badge (« Hybrid »…) on the right of the boot, beside the plate.
+        sideBadge?.let { mark ->
+            val wide = carW * .26f
+            val tall = (wide * mark.height / mark.width.coerceAtLeast(1)).coerceAtMost(carH * .1f)
+            val left = cx + carW * .16f
+            val top = lightTop + carH * .2f
+            rect.set(left, top, left + wide, top + tall)
+            canvas.drawBitmap(mark, null, rect, badgePaint)
         }
     }
 
