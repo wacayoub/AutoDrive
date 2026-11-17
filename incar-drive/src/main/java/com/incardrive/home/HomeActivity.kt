@@ -598,9 +598,6 @@ class HomeActivity : Activity() {
     }
 
     private fun topBar() = row().apply {
-        // The driver's car logo, when chosen in Réglages › Écran d’accueil.
-        addView(carLogo.view(), LinearLayout.LayoutParams(-2, dp(46)).apply { marginEnd = dp(10) })
-        addView(carBadge.view(), LinearLayout.LayoutParams(-2, dp(18)).apply { gravity = Gravity.CENTER_VERTICAL; marginEnd = dp(12) })
         addView(column().apply {
             greeting = caps("")
             addView(row().apply {
@@ -614,7 +611,14 @@ class HomeActivity : Activity() {
                 date = label("", 14, muted, 500)
                 addView(date, wrap().apply { marginStart = dp(12); bottomMargin = dp(6) })
             }, wrap().apply { topMargin = dp(2) })
-        }, LinearLayout.LayoutParams(0, -2, 1f))
+        }, LinearLayout.LayoutParams(-2, -2))
+        // The driver's car logo and badge (Réglages › Écran d’accueil), centred in the room between the clock and the
+        // buttons, so they never cover them.
+        addView(row().apply {
+            gravity = Gravity.CENTER
+            addView(carLogo.view(32), LinearLayout.LayoutParams(-2, dp(32)))
+            addView(carBadge.view(18), LinearLayout.LayoutParams(-2, dp(18)).apply { marginStart = dp(10) })
+        }, LinearLayout.LayoutParams(0, -1, 1f).apply { marginStart = dp(8); marginEnd = dp(8) })
         fun chip(content: LinearLayout.() -> Unit) = row().apply {
             background = glass(14)
             setPadding(dp(14), 0, dp(16), 0)
@@ -763,7 +767,7 @@ class HomeActivity : Activity() {
             brand != null -> BrandGauge(context, brand, text, muted)
             styleName == DIAL -> SpeedGauge(context, getColor(R.color.home_gauge_track), shade(accent, Color.BLACK, .25f),
                 shade(accent, Color.WHITE, .3f), text, muted)
-            else -> RoadGauge(context, ROAD_BLUE, text, muted, carLogo.bitmap(), carBadge.bitmap())
+            else -> RoadGauge(context, ROAD_BLUE, text, muted, carLogo.bitmap())
         }
         gauge = dial as SpeedDial
         gauge.limit = activeLimit()

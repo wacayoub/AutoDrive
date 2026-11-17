@@ -23,20 +23,26 @@ internal class CarLogo(private val home: HomeActivity, private val name: String 
 
     val chosen get() = file.isFile
 
-    fun view(): View = ImageView(home).apply {
+    private var heightPx = 0
+
+    /** The image at [heightDp] high, shrunk beforehand so its edges stay clean. */
+    fun view(heightDp: Int): View = ImageView(home).apply {
         view = this
+        heightPx = (heightDp * home.resources.displayMetrics.density).toInt()
         scaleType = ImageView.ScaleType.FIT_CENTER
-        adjustViewBounds = true
         contentDescription = "Logo de la voiture"
         render()
     }
 
     /** The chosen logo, also worn by the car of the « Route » speed style; null when none is chosen. */
-    fun bitmap(): Bitmap? = if (chosen) runCatching { BitmapFactory.decodeFile(file.path) }.getOrNull() else null
+    fun bitmap(): Bitmap? = if (chosen) runCatching {
+        // Mipmaps let the screen shrink the image smoothly, without jagged edges, at any size.
+        BitmapFactory.decodeFile(file.path)?.apply { setHasMipMap(true) }
+    }.getOrNull() else null
 
     private fun render() {
         val image = view ?: return
-        val bitmap = bitmap()
+        val bitmap = bitmap()?.let { fit(it, heightPx) }
         image.setImageBitmap(bitmap)
         image.visibility = if (bitmap != null) View.VISIBLE else View.GONE
     }
@@ -90,4 +96,21 @@ internal class CarLogo(private val home: HomeActivity, private val name: String 
         true
     }.getOrDefault(false)
 
+
+    companion object {
+        /**
+         * [source] scaled to [heightPx] high, keeping its proportions: halved step by step, each step averaging four
+         * pixels, then a last smooth step to the exact size. A single big reduction would skip pixels and leave
+         * jagged or broken strokes, as on thin letters.
+         */
+        fun fit(source: Bitmap, heightPx: Int): Bitmap {
+            if (heightPx <= 0 || source.height <= heightPx) return source
+            var image = source
+            while (image.height / 2 >= heightPx) {
+                image = Bitmap.createScaledBitmap(image, (image.width / 2).coerceAtLeast(1), image.height / 2, true)
+            }
+            val width = (image.width.toLong() * heightPx / image.height).toInt().coerceAtLeast(1)
+            return Bitmap.createScaledBitmap(image, width, heightPx, true)
+        }
+    }
 }

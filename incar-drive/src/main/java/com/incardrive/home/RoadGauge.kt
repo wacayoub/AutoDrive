@@ -29,8 +29,7 @@ internal interface SpeedDial {
  * like the number.
  */
 internal class RoadGauge(context: Context, private val accent: Int, private val textColor: Int,
-    private val mutedColor: Int, private val badge: android.graphics.Bitmap? = null,
-    private val sideBadge: android.graphics.Bitmap? = null) : View(context), SpeedDial {
+    private val mutedColor: Int, private val badge: android.graphics.Bitmap? = null) : View(context), SpeedDial {
     private val density = resources.displayMetrics.density
     private val alert = 0xFFFF4D4F.toInt()
     private val valuePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -219,21 +218,22 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
         rect.set(cx - carW * .12f, lightTop + carH * .18f, cx + carW * .12f, lightTop + carH * .3f)
         canvas.drawRoundRect(rect, carH * .02f, carH * .02f, carPaint)
         // The driver's car logo on the boot, between the window and the light, when one is chosen.
-        badge?.let { logo ->
-            val tall = carH * .17f
-            val wide = (tall * logo.width / logo.height.coerceAtLeast(1)).coerceAtMost(carW * .32f)
+        badge?.let { original ->
+            val logo = fitted(original, carH * .2f, carW * .32f)
+            val tall = logo.height.toFloat()
+            val wide = logo.width.toFloat()
             rect.set(cx - wide / 2, lightTop - tall - carH * .01f, cx + wide / 2, lightTop - carH * .01f)
             canvas.drawBitmap(logo, null, rect, badgePaint)
         }
-        // A second badge (« Hybrid »…) on the right of the boot, beside the plate.
-        sideBadge?.let { mark ->
-            val wide = carW * .26f
-            val tall = (wide * mark.height / mark.width.coerceAtLeast(1)).coerceAtMost(carH * .1f)
-            val left = cx + carW * .16f
-            val top = lightTop + carH * .2f
-            rect.set(left, top, left + wide, top + tall)
-            canvas.drawBitmap(mark, null, rect, badgePaint)
-        }
+    }
+
+    // Each badge shrunk once to the size it is drawn at, so its edges stay clean.
+    private val fittedCache = HashMap<android.graphics.Bitmap, android.graphics.Bitmap>()
+
+    private fun fitted(source: android.graphics.Bitmap, maxHeight: Float, maxWidth: Float): android.graphics.Bitmap {
+        val height = minOf(maxHeight, maxWidth * source.height / source.width.coerceAtLeast(1)).roundToInt().coerceAtLeast(1)
+        fittedCache[source]?.takeIf { it.height == height }?.let { return it }
+        return CarLogo.fit(source, height).also { fittedCache[source] = it }
     }
 
     private companion object {
