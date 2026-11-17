@@ -63,6 +63,15 @@ internal class CarLogo(private val home: HomeActivity, private val name: String 
         }
     }
 
+    /** Keeps [bitmap] as this image, at most 512 px on its long side. */
+    fun set(bitmap: Bitmap): Boolean = runCatching {
+        val scale = 512f / max(bitmap.width, bitmap.height)
+        val image = if (scale < 1f) Bitmap.createScaledBitmap(bitmap, (bitmap.width * scale).toInt().coerceAtLeast(1),
+            (bitmap.height * scale).toInt().coerceAtLeast(1), true) else bitmap
+        file.outputStream().use { image.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        true
+    }.getOrDefault(false)
+
     fun remove() {
         file.delete()
         render()

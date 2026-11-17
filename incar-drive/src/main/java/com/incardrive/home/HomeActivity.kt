@@ -996,6 +996,21 @@ class HomeActivity : Activity() {
         placesRow.visibility = View.GONE
     }
 
+    private fun downloadToyotaLogo() {
+        Toast.makeText(this, "Téléchargement du logo Toyota…", Toast.LENGTH_SHORT).show()
+        Thread {
+            val parts = BrandLogo.toyota()
+            runOnUiThread {
+                if (isDestroyed) return@runOnUiThread
+                if (parts != null && carLogo.set(parts.first) && carBadge.set(parts.second)) {
+                    Toast.makeText(this, "Logo Toyota ajouté", Toast.LENGTH_SHORT).show()
+                    recreate()
+                } else Toast.makeText(this, "Le logo n’a pas pu être téléchargé : vérifie Internet et réessaie.",
+                    Toast.LENGTH_LONG).show()
+            }
+        }.start()
+    }
+
     private fun destination(place: Place) = prefs.getString(place.key, null)?.takeIf { it.isNotBlank() }
 
 
@@ -2034,6 +2049,11 @@ class HomeActivity : Activity() {
             }
             addView(imageRow(carLogo, "Logo de la voiture en haut  ›", "Changer le logo de la voiture  ›"))
             addView(imageRow(carBadge, "Badge à côté du logo (ex. Hybrid)  ›", "Changer le badge  ›"))
+            // No photo on the head unit? Incar Drive fetches the Toyota logo itself (emblem and name).
+            addView(label("Télécharger le logo Toyota  ›", 14, accent, 700).apply {
+                setPadding(0, dp(10), 0, dp(6))
+                setOnClickListener { downloadToyotaLogo() }
+            })
             addView(label(if (isDefaultHome()) "Incar Drive est l’écran d’accueil par défaut" else "Définir Incar Drive par défaut  ›",
                 14, if (isDefaultHome()) muted else text, 700).apply {
                 setPadding(0, dp(10), 0, dp(6))
