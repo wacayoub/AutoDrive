@@ -1067,9 +1067,17 @@ class HomeActivity : Activity() {
         addView(statsTop, LinearLayout.LayoutParams(-1, dp(34)))
         // The trip, in a style of its own: one slim line, small labels and bold values, so it never reads like
         // the arrival's cells.
-        tripLine = label("", 12, text, 700).apply {
+        tripLine = row().apply {
             gravity = Gravity.CENTER
-            maxLines = 1
+            // Time, distance, average speed: each with its own coloured icon instead of a word.
+            listOf(R.drawable.ic_home_clock to navColor, R.drawable.ic_home_distance to prayerColor,
+                R.drawable.ic_home_speed to appsColor).forEachIndexed { index, (icon, color) ->
+                addView(ImageView(context).apply {
+                    setImageResource(icon)
+                    imageTintList = ColorStateList.valueOf(color)
+                }, LinearLayout.LayoutParams(dp(15), dp(15)).apply { if (index > 0) marginStart = dp(12) })
+                addView(label("", 12, text, 700).apply { maxLines = 1 }, wrap().apply { marginStart = dp(4) })
+            }
             contentDescription = "Trajet en cours"
             setOnClickListener { if (lastNav != null) { if (!navigation.resume()) navMissing() } else showTrip() }
         }
@@ -1125,7 +1133,7 @@ class HomeActivity : Activity() {
     private lateinit var navIcon: ImageView
     private lateinit var navRow: View
     private lateinit var statsTop: LinearLayout
-    private lateinit var tripLine: TextView
+    private lateinit var tripLine: LinearLayout
     private var footMessage = false
 
     /** Three cells side by side, each a value in bold over a small label, with hairlines between them. */
@@ -1151,24 +1159,15 @@ class HomeActivity : Activity() {
         }
     }
 
-    /** « TRAJET 24 h 40 · 10 km · MOY. 0 km/h »: the labels small and muted, the values bold. */
-    private fun tripText(): CharSequence {
+    /** The trip's time, distance and average speed, beside their icons. */
+    private fun renderTrip() {
         val current = trip.trip
         val elapsed = current.startedAt.takeIf { it > 0 }?.let { System.currentTimeMillis() - it }?.coerceAtLeast(0) ?: 0
-        val out = android.text.SpannableStringBuilder()
-        fun small(word: String) {
-            val start = out.length
-            out.append(word)
-            out.setSpan(android.text.style.RelativeSizeSpan(.72f), start, out.length, 0)
-            out.setSpan(android.text.style.ForegroundColorSpan(muted), start, out.length, 0)
+        val average = current.averageKmh?.let { "$it km/h" } ?: "—"
+        listOf(hours(elapsed), kilometres(current.meters), average).forEachIndexed { index, value ->
+            (tripLine.getChildAt(index * 2 + 1) as TextView).text = value
         }
-        small("TRAJET  ")
-        out.append(hours(elapsed))
-        small("   ·   ")
-        out.append(kilometres(current.meters))
-        small("   ·   MOY.  ")
-        out.append(current.averageKmh?.let { "$it km/h" } ?: "—")
-        return out
+        tripLine.contentDescription = "Trajet ${hours(elapsed)}, ${kilometres(current.meters)}, moyenne $average"
     }
 
     /**
@@ -1184,7 +1183,7 @@ class HomeActivity : Activity() {
         statsTop.visibility = if (roadGuides) View.VISIBLE else View.GONE
         if (roadGuides) statsTop.stats(Triple(nav!!.arrival ?: "—", "Arrivée", nav.flow?.color),
             Triple(nav.remaining ?: "—", "Restant", nav.flow?.color), Triple(nav.distance ?: "—", "Distance", null))
-        tripLine.text = tripText()
+        renderTrip()
         tripLine.visibility = if (footMessage && !roadGuides) View.INVISIBLE else View.VISIBLE
         // Under the arrival's cells the trip sits in a pill; alone, it is a plain line.
         tripLine.background = if (roadGuides) pressable(GradientDrawable().apply {
