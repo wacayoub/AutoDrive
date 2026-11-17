@@ -201,7 +201,27 @@ internal object NavWatch {
         if (state.value == null || sbn.packageName != source) return false
         val info = read(sbn, context) ?: return false
         state.value = info
+        // The guidance notification may itself word an alert; one it carried before goes when it no longer does.
+        val found = RoadAlerts.find(texts(sbn))
+        if (found != null) { alertState.value = found; alertFromGuidance = true }
+        else if (alertFromGuidance) { alertState.value = null; alertFromGuidance = false }
         return true
+    }
+
+    private val alertState = MutableStateFlow<RoadAlert?>(null)
+    /** An accident, a slowdown, works… as the navigation app words it in one of its notifications; null when none. */
+    val alert: StateFlow<RoadAlert?> = alertState
+    private var alertFromGuidance = false
+
+    private fun fromNavigation(sbn: StatusBarNotification, context: android.content.Context?) = sbn.packageName in navigationApps ||
+        (sbn.packageName == "com.android.shell" && sbn.tag?.startsWith("nav-test") == true && context != null &&
+            context.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0)
+
+    private fun texts(sbn: StatusBarNotification): List<String> {
+        val extras = sbn.notification?.extras ?: return emptyList()
+        return listOf(Notification.EXTRA_TITLE, Notification.EXTRA_TEXT, Notification.EXTRA_SUB_TEXT,
+            Notification.EXTRA_BIG_TEXT, Notification.EXTRA_INFO_TEXT)
+            .mapNotNull { extras.getCharSequence(it)?.toString()?.trim()?.takeIf(String::isNotEmpty) }
     }
 
     private val duration = Regex("""(?i)\b(\d{1,2}\s*h(?:\s*\d{1,2}\s*min)?|\d{1,3}\s*min)\b""")
@@ -212,10 +232,15 @@ internal object NavWatch {
         val found = active.asSequence().mapNotNull { sbn -> read(sbn, context)?.let { it to sbn.packageName } }.firstOrNull()
         source = found?.second
         state.value = found?.first
+        // Any notification of the navigation app may carry the alert: the guidance one, or one of its own.
+        val alerting = active.firstOrNull { fromNavigation(it, context) && RoadAlerts.find(texts(it)) != null }
+        alertState.value = alerting?.let { RoadAlerts.find(texts(it)) }
+        alertFromGuidance = alerting != null && read(alerting, context) != null
     }
 
     fun clear() {
         state.value = null
+        alertState.value = null
     }
 
     private fun read(sbn: StatusBarNotification, context: android.content.Context?): NavInfo? {

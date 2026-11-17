@@ -183,6 +183,8 @@ class HomeActivity : Activity() {
     private var islandTurn: String? = null
     private var islandPrayer: String? = null
     private var islandShown: String? = null
+    // An accident, a slowdown, works… as Google Maps or Waze word it in their notification.
+    private var islandAlert: RoadAlert? = null
     private var quiet: QuietMode? = null
     // The « Route » speed card, which also draws the guidance and the speed cameras; null with the other styles.
     private var roadGauge: RoadGauge? = null
@@ -418,6 +420,16 @@ class HomeActivity : Activity() {
         tasks.launch { info.prayerCalendars.collect { renderPrayer() } }
         tasks.launch { CallWatch.call.collect { renderCall(it) } }
         tasks.launch { NavWatch.nav.collect { renderNav(it) } }
+        tasks.launch {
+            NavWatch.alert.collect { alert ->
+                // One short tone when a new alert comes in, like for a speed camera.
+                if (alert != null && alert.text != islandAlert?.text) {
+                    runCatching { ToneGenerator(AudioManager.STREAM_NOTIFICATION, 80).startTone(ToneGenerator.TONE_PROP_BEEP, 300) }
+                }
+                islandAlert = alert
+                renderIsland()
+            }
+        }
         updatesUi.follow(tasks)
         widgets.start()
         mapWidget.start()
@@ -707,6 +719,7 @@ class HomeActivity : Activity() {
         val (message, color) = when {
             islandOver != null -> islandOver to 0xFFE5262E.toInt()
             islandCamera != null -> islandCamera to 0xFFE5262E.toInt()
+            islandAlert != null -> islandAlert!!.text to (if (islandAlert!!.serious) 0xFFE5262E.toInt() else 0xFFFF9F1A.toInt())
             islandTurn != null -> islandTurn to navColor
             islandPrayer != null -> islandPrayer to prayerColor
             else -> null to 0
