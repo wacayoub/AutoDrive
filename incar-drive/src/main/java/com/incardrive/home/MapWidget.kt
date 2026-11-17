@@ -33,8 +33,9 @@ internal class MapWidget(private val home: HomeActivity) {
     private val host = AppWidgetHost(home, HOST_ID)
     private var pending: Int? = null
     private lateinit var frame: FrameLayout
-    private var guiding = false
-    private var guideFrame: View? = null
+
+    /** The card on the home page, once built. */
+    val card: View? get() = if (::frame.isInitialized) frame else null
 
     private val widgetId get() = home.prefs.getInt(KEY, 0).takeIf { it != 0 && manager.getAppWidgetInfo(it) != null }
 
@@ -63,55 +64,46 @@ internal class MapWidget(private val home: HomeActivity) {
     }
 
     /**
-     * During guidance Google Maps' own small window (picture-in-picture, placed by Android at the bottom right) sits
-     * over this card. The widget behind it then gives way to a plain frame, so the window looks set into the card;
-     * when the window is not open, the frame offers to open Maps.
+     * The frame shown during guidance in place of this card, reaching down to the bottom of the screen: Google Maps'
+     * own small window (picture-in-picture), which Android puts at the bottom right, then sits inside it. When the
+     * window is not open, the frame offers to open Maps.
      */
-    fun guide(active: Boolean, openMaps: () -> Unit) {
-        if (!::frame.isInitialized || active == guiding && guideFrame != null == active) return
-        guiding = active
-        this.openMaps = openMaps
-        guideFrame?.let { frame.removeView(it) }
-        guideFrame = null
-        if (!active) return
-        guideFrame = with(home) {
-            FrameLayout(this).apply {
-                background = GradientDrawable().apply {
-                    cornerRadius = dp(16).toFloat()
-                    setColor(if (night) 0xFF0F1622.toInt() else 0xFFE9EEF3.toInt())
-                }
-                isClickable = true
-                addView(column().apply {
-                    addView(row().apply {
-                        gravity = Gravity.CENTER_VERTICAL
-                        addView(ImageView(context).apply {
-                            setImageResource(R.drawable.ic_home_navigation)
-                            imageTintList = ColorStateList.valueOf(navColor)
-                            rotation = 45f
-                        }, LinearLayout.LayoutParams(dp(18), dp(18)))
-                        addView(label("Google Maps", 13, text, 700), wrap().apply { marginStart = dp(6) })
-                    })
-                    addView(label("Guidage en cours", 11, muted, 500), wrap().apply { topMargin = dp(2) })
-                    addView(label("Ouvrir Maps  ›", 13, onAccent, 700).apply {
-                        gravity = Gravity.CENTER
-                        setPadding(dp(12), dp(7), dp(12), dp(7))
-                        background = pressable(GradientDrawable().apply {
-                            cornerRadius = dp(14).toFloat()
-                            setColor(navColor)
-                        }, 14)
-                        contentDescription = "Ouvrir Google Maps"
-                        setOnClickListener { openMaps() }
-                    }, wrap().apply { topMargin = dp(10) })
-                }, FrameLayout.LayoutParams(-2, -2, Gravity.TOP or Gravity.START).apply { setMargins(dp(12), dp(10), 0, 0) })
+    fun guideView(openMaps: () -> Unit): View = with(home) {
+        FrameLayout(this).apply {
+            background = GradientDrawable().apply {
+                cornerRadius = dp(16).toFloat()
+                setColor(if (night) 0xFF0F1622.toInt() else 0xFFE9EEF3.toInt())
+                setStroke(dp(1), tint(navColor, 0x55))
             }
+            isClickable = true
+            addView(column().apply {
+                addView(row().apply {
+                    gravity = Gravity.CENTER_VERTICAL
+                    addView(ImageView(context).apply {
+                        setImageResource(R.drawable.ic_home_navigation)
+                        imageTintList = ColorStateList.valueOf(navColor)
+                        rotation = 45f
+                    }, LinearLayout.LayoutParams(dp(18), dp(18)))
+                    addView(label("Google Maps", 13, text, 700), wrap().apply { marginStart = dp(6) })
+                })
+                addView(label("Guidage en cours", 11, muted, 500), wrap().apply { topMargin = dp(2) })
+                addView(label("Ouvrir Maps  ›", 13, onAccent, 700).apply {
+                    gravity = Gravity.CENTER
+                    setPadding(dp(12), dp(7), dp(12), dp(7))
+                    background = pressable(GradientDrawable().apply {
+                        cornerRadius = dp(14).toFloat()
+                        setColor(navColor)
+                    }, 14)
+                    contentDescription = "Ouvrir Google Maps"
+                    setOnClickListener { openMaps() }
+                }, wrap().apply { topMargin = dp(10) })
+            }, FrameLayout.LayoutParams(-2, -2, Gravity.TOP or Gravity.START).apply { setMargins(dp(12), dp(10), 0, 0) })
         }
-        frame.addView(guideFrame, FrameLayout.LayoutParams(-1, -1))
     }
 
     fun render() {
         if (!::frame.isInitialized) return
         frame.removeAllViews()
-        guideFrame = null
         val id = widgetId
         val info = id?.let { manager.getAppWidgetInfo(it) }
         if (id != null && info != null) {
@@ -128,7 +120,6 @@ internal class MapWidget(private val home: HomeActivity) {
             }, FrameLayout.LayoutParams(home.dp(30), home.dp(30), Gravity.TOP or Gravity.END).apply {
                 setMargins(0, home.dp(6), home.dp(6), 0)
             })
-            reguide()
             return
         }
         frame.addView(with(home) {
@@ -150,13 +141,6 @@ internal class MapWidget(private val home: HomeActivity) {
                 setOnClickListener { choose() }
             }
         }, FrameLayout.LayoutParams(-1, -1))
-        reguide()
-    }
-
-    private var openMaps: () -> Unit = {}
-
-    private fun reguide() {
-        if (guiding) { guiding = false; guide(true, openMaps) }
     }
 
     /** Tells the widget its real size, so Maps draws its map to fit. */

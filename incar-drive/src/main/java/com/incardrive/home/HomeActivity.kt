@@ -171,6 +171,10 @@ class HomeActivity : Activity() {
     private lateinit var panelHost: FrameLayout
     private val dockItems = mutableMapOf<Page, View>()
     private lateinit var dockApps: LinearLayout
+    private lateinit var dockBar: LinearLayout
+    private lateinit var dockDivider: View
+    private var guiding = false
+    private var mapsFrame: View? = null
     private lateinit var quick: QuickSettings
     internal lateinit var dialer: Dialer
     private lateinit var navigation: Navigation
@@ -526,7 +530,7 @@ class HomeActivity : Activity() {
         val backdrop = skyBackdrop()
         val content = column().apply {
             addView(topBar(), LinearLayout.LayoutParams(-1, dp(54)))
-            pager = SwipePager(context) { page -> markDots(page) }.apply {
+            pager = SwipePager(context) { page -> markDots(page); placeMapsFrame() }.apply {
                 clipChildren = true
                 addPage(row().apply {
                     gravity = Gravity.FILL
@@ -574,6 +578,61 @@ class HomeActivity : Activity() {
                 panelHost.setPadding(bars.left + dp(14), bars.top + dp(8), bars.right + dp(14), bars.bottom + dp(62))
                 callBanner.setPadding(bars.left + dp(14), bars.top + dp(8), bars.right + dp(14), 0)
                 insets
+            }
+        }
+    }
+
+    /**
+     * During guidance on the first page, the right card becomes a frame reaching down to the bottom of the screen,
+     * where Android puts Google Maps' small window, and the dock shortens to end before it. The window stays Maps'
+     * own: Android decides its exact place and size, the frame is laid out around that corner.
+     */
+    private fun placeMapsFrame() {
+        val wanted = guiding && mapOnHome() && ::pager.isInitialized && pager.page == 0 && ::screenRoot.isInitialized
+        if (!wanted) {
+            mapsFrame?.let { screenRoot.removeView(it) }
+            mapsFrame = null
+            if (::dockBar.isInitialized) {
+                (dockBar.layoutParams as? LinearLayout.LayoutParams)?.let { if (it.rightMargin != 0) { it.setMargins(0, 0, 0, 0); dockBar.requestLayout() } }
+                dockApps.visibility = View.VISIBLE
+                dockDivider.visibility = View.VISIBLE
+            }
+            return
+        }
+        if (mapsFrame != null) return
+        // After the page has finished sliding in (260 ms), so the card is measured where it rests.
+        screenRoot.postDelayed({ frameMaps() }, 320)
+    }
+
+    private fun frameMaps(retries: Int = 3) {
+        run {
+            if (mapsFrame != null || !guiding || pager.page != 0 || isDestroyed) return
+            val card = mapWidget.card?.takeIf { it.width > 0 && it.isShown } ?: return
+            val page = generateSequence(card.parent as? View) { it.parent as? View }.firstOrNull { it.parent === pager }
+            if (page != null && page.translationX != 0f) {
+                if (retries > 0) screenRoot.postDelayed({ frameMaps(retries - 1) }, 150)
+                return
+            }
+            val root = IntArray(2).also { screenRoot.getLocationInWindow(it) }
+            val at = IntArray(2).also { card.getLocationInWindow(it) }
+            val dockAt = IntArray(2).also { dockBar.getLocationInWindow(it) }
+            val left = at[0] - root[0]
+            val top = at[1] - root[1]
+            val bottom = dockAt[1] - root[1] + dockBar.height
+            val dockRight = dockAt[0] - root[0] + dockBar.width
+            val frame = mapWidget.guideView { if (!navigation.resume()) navMissing() }
+            mapsFrame = frame
+            // Above the cards, under the panels and the call banner.
+            screenRoot.addView(frame, 1, FrameLayout.LayoutParams(card.width, bottom - top).apply {
+                leftMargin = left
+                topMargin = top
+            })
+            dockApps.visibility = View.GONE
+            dockDivider.visibility = View.GONE
+            (dockBar.layoutParams as? LinearLayout.LayoutParams)?.let {
+                // The right margin itself: a margin « end » set after the first layout is not applied.
+                it.setMargins(0, 0, dockRight - left + dp(10), 0)
+                dockBar.requestLayout()
             }
         }
     }
@@ -960,7 +1019,8 @@ class HomeActivity : Activity() {
      * large, the instruction, and the time left with the arrival on the right. The places row makes way for it.
      */
     private fun renderNav(nav: NavInfo?) {
-        if (mapOnHome()) mapWidget.guide(nav != null) { if (!navigation.resume()) navMissing() }
+        guiding = nav != null
+        placeMapsFrame()
         if (!::navTitle.isInitialized) return
         if (nav == null) {
             navIcon.setImageResource(R.drawable.ic_home_navigation)
@@ -1096,6 +1156,7 @@ class HomeActivity : Activity() {
     }
 
     private fun dock() = row().apply {
+        dockBar = this
         background = glass(18)
         elevation = dp(6).toFloat()
         gravity = Gravity.CENTER_VERTICAL
@@ -1120,7 +1181,8 @@ class HomeActivity : Activity() {
         addView(item(Page.APPS, R.drawable.ic_home_apps, "Applis", appsColor) { showApps(editing = false) }, LinearLayout.LayoutParams(0, -1, 1f))
         addView(item(Page.SETTINGS, R.drawable.ic_home_settings, "Réglages", muted) { showSettings() }, LinearLayout.LayoutParams(0, -1, 1.15f))
         // …then the driver's apps, as logos, like the dock of a phone.
-        addView(View(context).apply { setBackgroundColor(tint(text, 0x26)) },
+        dockDivider = View(context).apply { setBackgroundColor(tint(text, 0x26)) }
+        addView(dockDivider,
             LinearLayout.LayoutParams(dp(1), dp(24)).apply { marginStart = dp(6); marginEnd = dp(6) })
         dockApps = row().apply { gravity = Gravity.CENTER_VERTICAL }
         addView(dockApps, LinearLayout.LayoutParams(-2, -1))
