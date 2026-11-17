@@ -69,6 +69,16 @@ internal class WazeMap(private val home: HomeActivity, private val google: Boole
                 }
             }
             page.setBackgroundColor(if (night) 0xFF121A26.toInt() else 0xFFE6E9ED.toInt())
+            // Night theme: the light web map inverted with its hues turned back, so the ground goes dark while the
+            // traffic stays green, orange and red.
+            if (night) page.setLayerType(View.LAYER_TYPE_HARDWARE, android.graphics.Paint().apply {
+                colorFilter = android.graphics.ColorMatrixColorFilter(android.graphics.ColorMatrix(floatArrayOf(
+                    .574f, -1.43f, -.144f, 0f, 255f,
+                    -.426f, -.43f, -.144f, 0f, 255f,
+                    -.426f, -1.43f, .856f, 0f, 255f,
+                    0f, 0f, 0f, 1f, 0f,
+                )).apply { postConcat(android.graphics.ColorMatrix().apply { setScale(.86f, .88f, .95f, 1f) }) })
+            })
             page.webViewClient = object : WebViewClient() {
                 // The map only: any link out of Waze's embed is ignored.
                 override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {

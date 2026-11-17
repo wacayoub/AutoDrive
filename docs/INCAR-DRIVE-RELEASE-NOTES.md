@@ -3,6 +3,7 @@ Incar Drive 1.0.10 — écran d’accueil pour l’Incarlink (Android 11 à 13, 
 **Mettre à jour** : Réglages › Mises à jour, ou la proposition automatique.
 
 **Changements**
+- Thème nuit : les cartes Maps web et Waze passent en sombre, comme la carte d’Incar Drive ; le trafic garde ses couleurs.
 - Google Maps web à droite de l’accueil (nouveau choix) : le site de Google Maps avec son trafic en direct (lignes vertes, orange, rouges), gratuit, sans clé ni compte. Il est en direct : Incar Drive donne la position du boîtier au site de Google Maps, qui affiche ton point bleu et suit la voiture en continu. Si tu déplaces la carte au doigt, « Centrer » relance le suivi ; « Ouvrir Maps » lance l’appli pour le guidage. C’est le site web, pas l’appli : pas de guidage dans la carte ; il demande Internet et Android System WebView.
 - Carte Waze à droite de l’accueil (nouveau choix) : la carte web officielle de Waze, gratuite et sans compte, avec son trafic et les signalements de ses conducteurs. Elle se recentre sur la voiture tous les 400 m ; « Centrer » le fait tout de suite, « Ouvrir Waze » lance l’appli. Elle ne montre ni itinéraire ni guidage, et demande Internet et le composant Android System WebView. Réglages › Navigation › « À droite de l’accueil » : Maps web, Waze, Carte, Widget ou Favoris.
 
