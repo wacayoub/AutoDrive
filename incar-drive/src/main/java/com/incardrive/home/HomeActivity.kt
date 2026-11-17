@@ -1040,8 +1040,8 @@ class HomeActivity : Activity() {
         addView(cameraBadge, FrameLayout.LayoutParams(-2, -2, Gravity.TOP or Gravity.CENTER_HORIZONTAL).apply { topMargin = dp(8) })
         // Over the road's dark band the trip line is light in both themes.
         // The trip summary is the first line of the card's foot, under the road's line.
-        speedStatus = label("", 12, text, 700).apply { gravity = Gravity.CENTER }
-        addView(speedStatus, FrameLayout.LayoutParams(-1, dp(18), Gravity.BOTTOM).apply { bottomMargin = dp(DRIVE_FOOTER - 21) })
+        speedStatus = label("", 12, text, 700).apply { gravity = Gravity.CENTER; visibility = View.INVISIBLE }
+        addView(speedStatus, FrameLayout.LayoutParams(-1, dp(34), Gravity.BOTTOM).apply { bottomMargin = dp(DRIVE_FOOTER - 40) })
         addView(mapsCard(), FrameLayout.LayoutParams(-1, dp(DRIVE_FOOTER), Gravity.BOTTOM))
         contentDescription = "Vitesse et trajet"
         setOnClickListener {
@@ -1061,8 +1061,23 @@ class HomeActivity : Activity() {
         // instead of the road, a hairline stands in.
         addView(View(context).apply { setBackgroundColor(if (roadGauge == null) tint(text, 0x1F) else Color.TRANSPARENT) },
             LinearLayout.LayoutParams(-1, dp(1)))
-        setPadding(dp(8), dp(19), dp(8), dp(6))
+        setPadding(dp(8), dp(4), dp(8), dp(6))
+        statsTop = statRow(13, 9)
+        addView(statsTop, LinearLayout.LayoutParams(-1, dp(34)))
+        statsBottom = statRow(12, 9).apply {
+            visibility = View.GONE
+            background = pressable(GradientDrawable().apply {
+                cornerRadius = dp(12).toFloat()
+                setColor(getColor(R.color.home_chip))
+                setStroke(dp(1), getColor(R.color.home_card_border))
+            }, 12)
+            contentDescription = "Trajet en cours. Toucher pour ouvrir la navigation."
+            setOnClickListener { if (!navigation.resume()) navMissing() }
+        }
+        addView(statsBottom, LinearLayout.LayoutParams(-1, 0, 1f).apply { topMargin = dp(6) })
         addView(row().apply {
+            navRow = this
+            visibility = View.GONE
             background = pressable(null, 12)
             setPadding(dp(8), 0, dp(4), 0)
             addView(FrameLayout(context).apply {
@@ -1104,11 +1119,67 @@ class HomeActivity : Activity() {
             isHorizontalScrollBarEnabled = false
             addView(row().also { placesStrip = it })
         }
-        addView(placesRow, LinearLayout.LayoutParams(-1, dp(32)).apply { topMargin = dp(2) })
+        addView(placesRow, LinearLayout.LayoutParams(-1, 0, 1f).apply { topMargin = dp(8); bottomMargin = dp(4) })
         renderPlaces()
     }
 
     private lateinit var navIcon: ImageView
+    private lateinit var navRow: View
+    private lateinit var statsTop: LinearLayout
+    private lateinit var statsBottom: LinearLayout
+    private var footMessage = false
+
+    /** Three cells side by side, each a value in bold over a small label, with hairlines between them. */
+    private fun statRow(valueSize: Int, labelSize: Int) = row().apply {
+        gravity = Gravity.CENTER_VERTICAL
+        repeat(3) { index ->
+            if (index > 0) addView(View(context).apply { setBackgroundColor(tint(text, 0x24)) }, LinearLayout.LayoutParams(dp(1), dp(20)))
+            addView(column().apply {
+                gravity = Gravity.CENTER_HORIZONTAL
+                addView(label("", valueSize, text, 700, condensed = true).apply { gravity = Gravity.CENTER; includeFontPadding = false })
+                addView(label("", labelSize, muted, 600).apply { gravity = Gravity.CENTER; letterSpacing = .08f; includeFontPadding = false },
+                    wrap().apply { topMargin = dp(2) })
+            }, LinearLayout.LayoutParams(0, -2, 1f))
+        }
+    }
+
+    /** Fills a [statRow]: each cell's value, its label, and a colour for the value (null = the text colour). */
+    private fun LinearLayout.stats(vararg cells: Triple<String, String, Int?>) {
+        cells.forEachIndexed { index, (value, name, color) ->
+            val cell = getChildAt(index * 2) as LinearLayout
+            (cell.getChildAt(0) as TextView).apply { this.text = value; setTextColor(color ?: this@HomeActivity.text) }
+            (cell.getChildAt(1) as TextView).text = name.uppercase(Locale.FRENCH)
+        }
+    }
+
+    private fun tripCells(): Array<Triple<String, String, Int?>> {
+        val current = trip.trip
+        val elapsed = current.startedAt.takeIf { it > 0 }?.let { System.currentTimeMillis() - it }?.coerceAtLeast(0) ?: 0
+        return arrayOf(Triple(hours(elapsed), "Trajet", null), Triple(kilometres(current.meters), "Distance", null),
+            Triple(current.averageKmh?.let { "$it km/h" } ?: "—", "Moyenne", null))
+    }
+
+    /**
+     * The foot of the driving card. Idle: the trip in three cells, then the destinations. While the « Route » card
+     * guides: the arrival (in Google Maps' traffic colour), the time and the distance left, then the trip. With a
+     * dial style, which cannot draw the turn, the turn's row stays under the trip.
+     */
+    private fun renderFoot() {
+        if (!::statsTop.isInitialized) return
+        val nav = lastNav
+        val roadGuides = nav != null && roadGauge != null
+        statsTop.visibility = if (footMessage) View.INVISIBLE else View.VISIBLE
+        speedStatus.visibility = if (footMessage) View.VISIBLE else View.INVISIBLE
+        if (roadGuides) {
+            statsTop.stats(Triple(nav!!.arrival ?: "—", "Arrivée", nav.flow?.color ?: navColor),
+                Triple(nav.remaining ?: "—", "Restant", nav.flow?.color), Triple(nav.distance ?: "—", "Distance", null))
+            statsBottom.stats(*tripCells())
+        } else statsTop.stats(*tripCells())
+        val framed = roadGauge == null && mapOnHome() && (mapSource() == MAPS_WIDGET || mapSource() == MAPS_APP)
+        statsBottom.visibility = if (roadGuides) View.VISIBLE else View.GONE
+        navRow.visibility = if (nav != null && roadGauge == null && !framed) View.VISIBLE else View.GONE
+        placesRow.visibility = if (nav == null || (roadGauge == null && framed)) View.VISIBLE else View.GONE
+    }
     private lateinit var navEta: TextView
     private lateinit var navChevron: ImageView
     private lateinit var placesRow: View
@@ -1126,7 +1197,7 @@ class HomeActivity : Activity() {
             setImageResource(icon)
             imageTintList = ColorStateList.valueOf(iconColor)
         }, LinearLayout.LayoutParams(dp(15), dp(15)))
-        addView(label(title, 12, text, 700), wrap().apply { marginStart = dp(6) })
+        addView(label(title, 13, text, 700), wrap().apply { marginStart = dp(6) })
         contentDescription = title
         setOnClickListener { action() }
         long?.let { handler -> setOnLongClickListener { handler(); true } }
@@ -1139,6 +1210,14 @@ class HomeActivity : Activity() {
         placesStrip.removeAllViews()
         fun add(view: View) = placesStrip.addView(view, LinearLayout.LayoutParams(-2, -1).apply {
             if (placesStrip.childCount > 0) marginStart = dp(6)
+        })
+        add(chip(R.drawable.ic_home_navigation, "Naviguer", Color.WHITE, { if (!navigation.open()) navMissing() }).apply {
+            background = pressable(GradientDrawable().apply { cornerRadius = dp(12).toFloat(); setColor(navColor) }, 12)
+            (getChildAt(0) as ImageView).rotation = 45f
+            // The icon alone, so Maison and Travail stay in view beside it.
+            getChildAt(1).visibility = View.GONE
+            setPadding(dp(14), 0, dp(14), 0)
+            contentDescription = "Naviguer : choisir une destination"
         })
         Place.entries.forEach { place -> add(chip(place.icon, place.label, navColor, { goTo(place) }, { editPlace(place) })) }
         myPlaces().forEach { saved ->
@@ -1225,6 +1304,7 @@ class HomeActivity : Activity() {
         renderTurnIsland()
         quiet?.turn(nav)
         mapWidget.guideUpdate(nav)
+        renderFoot()
         if (!::navTitle.isInitialized) return
         // With the Maps frame on the right, the guidance is shown large there: this card keeps its destinations.
         val inFrame = roadGauge == null && mapOnHome() && (mapSource() == MAPS_WIDGET || mapSource() == MAPS_APP)
@@ -1240,28 +1320,10 @@ class HomeActivity : Activity() {
             navDetail.setTextColor(muted)
             navEta.visibility = View.GONE
             navChevron.visibility = View.VISIBLE
-            placesRow.visibility = View.VISIBLE
             return
         }
-        if (roadGauge != null) {
-            // The « Route » card already draws the turn and its distance on the road: its foot says where the trip
-            // stands instead (the arrival in the traffic's colour, the time and the distance left), never the turn again.
-            navIcon.setImageResource(R.drawable.ic_home_navigation)
-            navIcon.imageTintList = ColorStateList.valueOf(nav.flow?.color ?: navColor)
-            navIcon.rotation = 45f
-            navTitle.text = nav.arrival?.let { "Arrivée $it" } ?: nav.remaining ?: "Guidage"
-            navTitle.maxLines = 1
-            navTitle.setTextColor(nav.flow?.color ?: text)
-            val left = listOfNotNull(nav.remaining?.takeIf { nav.arrival != null }, nav.distance?.let { "$it restants" })
-                .joinToString(" · ")
-            navDetail.text = left.ifBlank { currentStreet?.let { "Sur $it" } ?: navigation.app().label }
-            navDetail.maxLines = 2
-            navDetail.setTextColor(text)
-            navEta.visibility = View.GONE
-            navChevron.visibility = View.VISIBLE
-            placesRow.visibility = View.GONE
-            return
-        }
+        // The « Route » card draws the turn on the road and its foot shows the trip in cells: nothing more here.
+        if (roadGauge != null) return
         if (nav.arrow != null) {
             navIcon.setImageDrawable(nav.arrow)
             navIcon.rotation = 0f
@@ -1282,7 +1344,6 @@ class HomeActivity : Activity() {
         navEta.setTextColor(nav.flow?.color ?: navColor)
         navEta.visibility = if (navEta.text.isNullOrEmpty()) View.GONE else View.VISIBLE
         navChevron.visibility = View.GONE
-        placesRow.visibility = View.GONE
     }
 
     /** The traffic layer needs the driver's own free TomTom key: explained and typed here, kept on the head unit. */
@@ -1610,19 +1671,24 @@ class HomeActivity : Activity() {
         if (!gps.permitted()) {
             gauge.setSpeed(null)
             speedStatus.text = "Toucher pour activer le GPS"
+            footMessage = true
+            renderFoot()
             return
         }
         val state = gps.snapshot()
         gauge.setSpeed(state.speed.kmh)
         altitudeText.text = state.altitude?.let { "≈ $it m" }.orEmpty()
-        speedStatus.text = when (state.status) {
+        val message = when (state.status) {
             "Precise location off" -> "Localisation précise désactivée"
             "GPS unavailable" -> "GPS indisponible"
             "GPS disabled" -> "GPS désactivé"
             "Waiting for GPS" -> "Recherche du GPS…"
             "Mock location ignored" -> "Position simulée ignorée"
-            else -> tripSummary()
+            else -> null
         }
+        speedStatus.text = message.orEmpty()
+        footMessage = message != null
+        renderFoot()
         renderRoadCorner()
         // One beep each time the speed passes the chosen limit, again only after dropping 3 km/h below it.
         val limit = gauge.limit
@@ -2574,7 +2640,7 @@ class HomeActivity : Activity() {
         const val DOCK_APPS = "dock_apps"
         const val SPEED_STYLE = "speed_style"
         // Height of the navigation foot of the driving card, in dp.
-        const val DRIVE_FOOTER = 96
+        const val DRIVE_FOOTER = 92
         const val CAR_COLOR = "car_color"
         val CAR_COLORS = linkedMapOf("Blanc" to 0xFFF2F5F9.toInt(), "Gris" to 0xFF9AA3AE.toInt(), "Noir" to 0xFF2A2F38.toInt(),
             "Rouge" to 0xFFC0272D.toInt(), "Bleu" to 0xFF2C5FA8.toInt())
