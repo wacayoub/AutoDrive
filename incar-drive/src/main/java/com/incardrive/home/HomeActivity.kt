@@ -1078,6 +1078,32 @@ class HomeActivity : Activity() {
         placesRow.visibility = View.GONE
     }
 
+    /** The traffic layer needs the driver's own free TomTom key: explained and typed here, kept on the head unit. */
+    private fun askTrafficKey() {
+        val field = android.widget.EditText(this).apply {
+            setText(prefs.getString(OwnMap.TRAFFIC_KEY, null).orEmpty())
+            hint = "Clé TomTom"
+            isSingleLine = true
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Trafic en direct")
+            .setMessage("Les bouchons en couleurs sur la carte viennent de TomTom, gratuit jusqu’à 200 000 tuiles par mois, " +
+                "sans carte bancaire.\n\n1. Sur un téléphone ou un PC : developer.tomtom.com, crée un compte gratuit.\n" +
+                "2. Copie ta clé (« API key »).\n3. Tape-la ici.\n\nLaisse vide pour retirer le trafic.")
+            .setView(FrameLayout(this).apply {
+                setPadding(dp(20), dp(4), dp(20), 0)
+                addView(field, FrameLayout.LayoutParams(-1, -2))
+            })
+            .setPositiveButton("Enregistrer") { _, _ ->
+                val key = field.text.toString().trim()
+                prefs.edit().apply { if (key.isEmpty()) remove(OwnMap.TRAFFIC_KEY) else putString(OwnMap.TRAFFIC_KEY, key) }.apply()
+                recreate()
+            }
+            .setNegativeButton("Annuler", null)
+            .show()
+    }
+
     private fun downloadToyotaLogo() {
         Toast.makeText(this, "Téléchargement du logo Toyota…", Toast.LENGTH_SHORT).show()
         Thread {
@@ -1918,6 +1944,12 @@ class HomeActivity : Activity() {
             addView(label("Carte : celle d’Incar Drive (OpenStreetMap, gratuite), avec ta position, les radars et la consigne de Maps · " +
                 "Widget Maps : le trafic de Google Maps, s’il a la position", 11, muted).apply { maxLines = 3 },
                 LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(4) })
+            val hasTraffic = !prefs.getString(OwnMap.TRAFFIC_KEY, null).isNullOrBlank()
+            addView(label(if (hasTraffic) "Trafic en direct sur la carte : activé  ›" else "Ajouter le trafic en direct sur la carte  ›",
+                14, if (hasTraffic) text else accent, 700).apply {
+                setPadding(0, dp(10), 0, dp(6))
+                setOnClickListener { askTrafficKey() }
+            })
             // Google Maps' own small window (picture-in-picture) during guidance: it is Maps' feature, allowed per app
             // in Android's settings; this row opens Maps' app page there and explains the two steps.
             addView(row().apply {

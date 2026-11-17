@@ -57,7 +57,15 @@ internal class OwnMap(private val home: HomeActivity, private val open: () -> Un
                 override fun getOutline(view: View, outline: Outline) =
                     outline.setRoundRect(0, 0, view.width, view.height, dp(16).toFloat())
             }
-            val map = TileView(context, night, navColor).also { tiles = it }
+            val trafficKey = prefs.getString(TRAFFIC_KEY, null)?.trim()?.takeIf { it.isNotEmpty() }
+            val credit = label("", 9, if (night) 0xB3FFFFFF.toInt() else 0xB3000000.toInt(), 500)
+            fun credits(note: String?) {
+                credit.text = listOfNotNull("© OpenStreetMap", "© TomTom".takeIf { trafficKey != null }, note).joinToString(" · ")
+            }
+            credits(null)
+            val map = TileView(context, night, navColor, trafficKey) { refused ->
+                credits(if (refused) "clé trafic refusée" else null)
+            }.also { tiles = it }
             map.contentDescription = "Carte autour de la voiture. Toucher pour ouvrir la navigation."
             map.setOnClickListener { open() }
             addView(map, FrameLayout.LayoutParams(-1, -1))
@@ -98,7 +106,7 @@ internal class OwnMap(private val home: HomeActivity, private val open: () -> Un
                 setOnClickListener { open() }
             }
             addView(guide, FrameLayout.LayoutParams(-1, -2, Gravity.TOP).apply { setMargins(dp(8), dp(8), dp(8), 0) })
-            addView(label("© OpenStreetMap", 9, if (night) 0xB3FFFFFF.toInt() else 0xB3000000.toInt(), 500).apply {
+            addView(credit.apply {
                 setPadding(dp(4), dp(1), dp(4), dp(1))
                 background = GradientDrawable().apply {
                     cornerRadius = dp(4).toFloat()
@@ -141,7 +149,74 @@ internal class OwnMap(private val home: HomeActivity, private val open: () -> Un
 
     /** The tiles, the cameras and the car. North is up; the car's arrow turns with its heading. */
     @SuppressLint("ViewConstructor")
-    private class TileView(context: Context, night: Boolean, private val carColor: Int) : View(context) {
+    private class TileView(context: Context, private val night: Boolean, private val carColor: Int,
+        private val trafficKey: String?, private val trafficRefused: (Boolean) -> Unit) : View(context) {
+        // Live traffic (TomTom's flow tiles, with the driver's own free key): kept three minutes in memory only.
+        private val traffic = object : LruCache<String, Pair<Bitmap, Long>>(32) {}
+        private val trafficLoading = HashSet<String>()
+        private var trafficBlockedUntil = 0L
+        private val trafficPaint = Paint(Paint.FILTER_BITMAP_FLAG)
+        private val refresh = object : Runnable {
+            override fun run() {
+                invalidate()
+                if (isAttachedToWindow && trafficKey != null) postDelayed(this, 60_000)
+            }
+        }
+
+        override fun onAttachedToWindow() {
+            super.onAttachedToWindow()
+            if (trafficKey != null) postDelayed(refresh, 60_000)
+        }
+
+        override fun onDetachedFromWindow() {
+            removeCallbacks(refresh)
+            super.onDetachedFromWindow()
+        }
+
+        private fun trafficTile(z: Int, x: Int, y: Int): Bitmap? {
+            val key = trafficKey ?: return null
+            val name = "$z/$x/$y"
+            val now = System.currentTimeMillis()
+            val known = traffic.get(name)
+            if (known != null && now - known.second < TRAFFIC_FRESH_MS) return known.first
+            if (name !in trafficLoading && now >= trafficBlockedUntil && isShown) {
+                trafficLoading += name
+                pool.execute {
+                    var status = 0
+                    val bitmap = runCatching {
+                        val style = if (night) "relative0-dark" else "relative0"
+                        val connection = URL("https://api.tomtom.com/traffic/map/4/tile/flow/$style/$z/$x/$y.png?key=$key")
+                            .openConnection() as HttpURLConnection
+                        try {
+                            connection.connectTimeout = 8_000
+                            connection.readTimeout = 12_000
+                            status = connection.responseCode
+                            if (status == 200) connection.inputStream.use { BitmapFactory.decodeStream(it) } else null
+                        } finally {
+                            connection.disconnect()
+                        }
+                    }.getOrNull()
+                    main.post {
+                        trafficLoading -= name
+                        when {
+                            bitmap != null -> {
+                                traffic.put(name, bitmap to System.currentTimeMillis())
+                                trafficRefused(false)
+                                invalidate()
+                            }
+                            // A refused key or a spent allowance: stop asking for a while instead of hammering.
+                            status == 401 || status == 403 || status == 429 -> {
+                                trafficBlockedUntil = System.currentTimeMillis() + 10 * 60_000
+                                trafficRefused(status != 429)
+                            }
+                            else -> trafficBlockedUntil = System.currentTimeMillis() + 30_000
+                        }
+                    }
+                }
+            }
+            return known?.first
+        }
+
         private val density = resources.displayMetrics.density
         // Tiles are 256 px squares; on denser screens they are enlarged so street names stay readable.
         private val tileSize = (256 * density.coerceAtLeast(1f)).toInt()
@@ -223,10 +298,10 @@ internal class OwnMap(private val home: HomeActivity, private val open: () -> Un
                     val top = ((ty - centerY) * tileSize + carY).toFloat()
                     if (ty in 0 until count) {
                         val bitmap = tile(zoom, ((tx % count) + count) % count, ty)
-                        if (bitmap != null) {
-                            rect.set(left, top, left + tileSize, top + tileSize)
-                            canvas.drawBitmap(bitmap, null, rect, tilePaint)
-                        }
+                        val wrapped = ((tx % count) + count) % count
+                        rect.set(left, top, left + tileSize, top + tileSize)
+                        if (bitmap != null) canvas.drawBitmap(bitmap, null, rect, tilePaint)
+                        trafficTile(zoom, wrapped, ty)?.let { canvas.drawBitmap(it, null, rect, trafficPaint) }
                     }
                     tx++
                 }
@@ -317,6 +392,12 @@ internal class OwnMap(private val home: HomeActivity, private val open: () -> Un
         private companion object {
             const val RETRY_MS = 30_000L
             const val MAX_TILE_BYTES = 512 * 1024
+            const val TRAFFIC_FRESH_MS = 180_000L
         }
+    }
+
+    companion object {
+        /** The driver's own TomTom key for the traffic layer, typed once in the settings; none = no traffic. */
+        const val TRAFFIC_KEY = "traffic_key"
     }
 }
