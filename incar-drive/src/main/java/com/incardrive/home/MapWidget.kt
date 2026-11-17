@@ -68,7 +68,7 @@ internal class MapWidget(private val home: HomeActivity) {
      * own small window (picture-in-picture), which Android puts at the bottom right, then sits inside it. When the
      * window is not open, the frame offers to open Maps.
      */
-    fun guideView(guiding: Boolean = true, openMaps: () -> Unit): View = with(home) {
+    fun guideView(guiding: Boolean = true, showTurn: Boolean = true, openMaps: () -> Unit): View = with(home) {
         FrameLayout(this).apply {
             background = GradientDrawable().apply {
                 cornerRadius = dp(16).toFloat()
@@ -87,7 +87,8 @@ internal class MapWidget(private val home: HomeActivity) {
                 setOnClickListener { openMaps() }
             }
             addView(column().apply {
-                if (!guiding) {
+                // No turn here when the « Route » card already draws it: only what this frame is for.
+                if (!guiding || !showTurn) {
                     addView(row().apply {
                         gravity = Gravity.CENTER_VERTICAL
                         addView(ImageView(context).apply {
@@ -97,7 +98,8 @@ internal class MapWidget(private val home: HomeActivity) {
                         }, LinearLayout.LayoutParams(dp(18), dp(18)))
                         addView(label("Google Maps", 13, text, 700), wrap().apply { marginStart = dp(6) })
                     })
-                    addView(label("Lance un guidage : la fenêtre de Maps se place ici", 11, muted, 500).apply { maxLines = 3 },
+                    addView(label(if (guiding) "Guidage en cours" else "Lance un guidage : la fenêtre de Maps se place ici", 11, muted, 500)
+                        .apply { maxLines = 3 },
                         wrap().apply { topMargin = dp(2) })
                     addView(openButton(), wrap().apply { topMargin = dp(10) })
                     return@apply

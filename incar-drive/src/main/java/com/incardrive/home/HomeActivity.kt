@@ -245,8 +245,6 @@ class HomeActivity : Activity() {
             info.usePosition(fix.latitude, fix.longitude)
             if (kmh != null) trafficMeter.add(System.currentTimeMillis(), kmh)
             roadGauge?.flow = trafficMeter.flow(roadLimit)
-            // The distance to the turn, counted down live by the road card between the navigation app's updates.
-            if (lastNav != null && ::navTitle.isInitialized) roadGauge?.liveStep()?.let { navTitle.text = it }
             ownMap.position(fix.latitude, fix.longitude, fix.bearing.takeIf { fix.hasBearing() && (kmh ?: 0) >= 5 })
             wazeMap.position(fix.latitude, fix.longitude)
             googleWeb.position(fix.latitude, fix.longitude)
@@ -685,7 +683,7 @@ class HomeActivity : Activity() {
             val top = at[1] - root[1]
             val bottom = dockAt[1] - root[1] + dockBar.height
             val dockRight = dockAt[0] - root[0] + dockBar.width
-            val frame = mapWidget.guideView { if (!navigation.resume()) navMissing() }
+            val frame = mapWidget.guideView(showTurn = roadGauge == null) { if (!navigation.resume()) navMissing() }
             mapsFrame = frame
             // Above the cards, under the panels and the call banner.
             screenRoot.addView(frame, 1, FrameLayout.LayoutParams(card.width, bottom - top).apply {
@@ -1216,7 +1214,8 @@ class HomeActivity : Activity() {
     private fun renderNav(nav: NavInfo?) {
         guiding = nav != null
         placeMapsFrame()
-        ownMap.guide(nav)
+        // The turn is shown once: on the road of the « Route » card when that style is on, else on the map.
+        ownMap.guide(nav.takeIf { roadGauge == null })
         lastNav = nav
         roadGauge?.guide(nav)
         renderRoadCorner()
@@ -1225,7 +1224,8 @@ class HomeActivity : Activity() {
         mapWidget.guideUpdate(nav)
         if (!::navTitle.isInitialized) return
         // With the Maps frame on the right, the guidance is shown large there: this card keeps its destinations.
-        val inFrame = mapOnHome() && (mapSource() == MAPS_WIDGET || mapSource() == MAPS_APP)
+        val inFrame = roadGauge == null && mapOnHome() && (mapSource() == MAPS_WIDGET || mapSource() == MAPS_APP)
+        navTitle.setTextColor(text)
         if (nav == null || inFrame) {
             navIcon.setImageResource(R.drawable.ic_home_navigation)
             navIcon.imageTintList = ColorStateList.valueOf(navColor)
@@ -1238,6 +1238,25 @@ class HomeActivity : Activity() {
             navEta.visibility = View.GONE
             navChevron.visibility = View.VISIBLE
             placesRow.visibility = View.VISIBLE
+            return
+        }
+        if (roadGauge != null) {
+            // The « Route » card already draws the turn and its distance on the road: its foot says where the trip
+            // stands instead (the arrival in the traffic's colour, the time and the distance left), never the turn again.
+            navIcon.setImageResource(R.drawable.ic_home_navigation)
+            navIcon.imageTintList = ColorStateList.valueOf(nav.flow?.color ?: navColor)
+            navIcon.rotation = 45f
+            navTitle.text = nav.arrival?.let { "Arrivée $it" } ?: nav.remaining ?: "Guidage"
+            navTitle.maxLines = 1
+            navTitle.setTextColor(nav.flow?.color ?: text)
+            val left = listOfNotNull(nav.remaining?.takeIf { nav.arrival != null }, nav.distance?.let { "$it restants" })
+                .joinToString(" · ")
+            navDetail.text = left.ifBlank { currentStreet?.let { "Sur $it" } ?: navigation.app().label }
+            navDetail.maxLines = 2
+            navDetail.setTextColor(text)
+            navEta.visibility = View.GONE
+            navChevron.visibility = View.VISIBLE
+            placesRow.visibility = View.GONE
             return
         }
         if (nav.arrow != null) {

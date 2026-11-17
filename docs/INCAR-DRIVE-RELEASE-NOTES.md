@@ -7,6 +7,7 @@ Incar Drive 1.0.15 — écran d’accueil pour l’Incarlink (Android 11 à 13, 
 - Sens du virage lu dans la flèche de Maps : sur certains boîtiers, la notification de Maps ne contient aucun mot, seulement la distance et l’image de la flèche. Incar Drive lit maintenant la forme de cette flèche (gauche, droite, tout droit, demi-tour) ; avant, la carte restait sur « tout droit ».
 - Trafic : un arrêt à un feu ou avant un virage ne colore plus la route en rouge ; seul un vrai bouchon (à l’arrêt la plupart du temps, en avançant par à-coups) le fait.
 - La notification de guidage est lue plus vite.
+- Guidage affiché une seule fois : avec le compteur Route, le virage et sa distance sont sur la route. Le pied de la carte ne les répète plus : il donne l’heure d’arrivée (en couleur selon le trafic), le temps et la distance restants. La carte de droite et le cadre Maps n’affichent plus le virage une deuxième fois.
 
 Comprend aussi la 1.0.14 :
 - Une seule carte pour conduire : le compteur et la carte de navigation ne font plus qu’un. En haut, la vitesse, la route et le guidage ; au pied de la même carte, « Naviguer », Maison, Travail et tes lieux, ou pendant un guidage la distance, la consigne complète, le temps restant et l’heure d’arrivée en couleur.
