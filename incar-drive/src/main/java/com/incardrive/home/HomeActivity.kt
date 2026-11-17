@@ -984,7 +984,7 @@ class HomeActivity : Activity() {
         navTitle.text = title
         // A second line that adds something: the instruction, else the street, never the title again.
         // Maps writes « 8.5 km » with non-breaking or narrow spaces: compare without any kind of space.
-        fun plain(value: String) = value.filterNot { it.isWhitespace() || it == ' ' || it == ' ' || it == ' ' }.lowercase()
+        fun plain(value: String) = value.filterNot { it.isWhitespace() }.lowercase() // isWhitespace covers U+00A0, U+202F
         fun differs(value: String?) = value?.takeIf { it.isNotBlank() && plain(it) != plain(title) }
         navDetail.text = differs(nav.instruction)
             ?: currentStreet?.let { "Sur $it" }
