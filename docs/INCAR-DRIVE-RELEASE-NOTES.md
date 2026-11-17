@@ -3,6 +3,7 @@ Incar Drive 1.0.18 — écran d’accueil pour l’Incarlink (Android 11 à 13, 
 **Mettre à jour** : Réglages › Mises à jour, ou la proposition automatique.
 
 **Changements**
+- Carte OpenStreetMap améliorée : elle tourne avec la voiture, la route devant toi en haut (touche la boussole pour remettre le nord en haut) ; elle glisse en douceur au lieu de sauter à chaque position ; le zoom s’adapte à la vitesse (plus près en ville, plus large sur route rapide) ; tu peux la déplacer au doigt pour regarder autour, puis « Recentrer » (elle revient seule après 15 secondes) ; le nom de la rue où tu roules s’affiche en bas.
 - Ciel réel derrière la route : le fond de la carte de conduite suit le soleil et la météo du jour. Le soleil se lève à gauche, monte, puis se couche à droite, avec les couleurs de l’aube, du plein jour, du couchant et de la nuit étoilée ; des nuages passent quand le ciel est couvert, la pluie ou la neige tombent quand il y en a. La route, les phares et les chiffres passent en mode nuit quand il fait nuit dehors, quel que soit le thème choisi.
 
 Comprend aussi la 1.0.17 :

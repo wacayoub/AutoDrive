@@ -81,6 +81,24 @@ internal class OwnMap(private val home: HomeActivity, private val open: () -> Un
                     contentDescription = description
                     setOnClickListener { map.zoomBy(step) }
                 }
+                // The compass: its needle shows the north; a touch switches between the road ahead up and the north up.
+                val compass = zoom("N", "Orientation de la carte", 0).apply {
+                    textSize = 13f
+                    setTextColor(0xFFE5262E.toInt())
+                    // Round, so it turns cleanly with the map.
+                    background = pressable(GradientDrawable().apply {
+                        shape = GradientDrawable.OVAL
+                        setColor(if (night) 0xD9141C2A.toInt() else 0xE6FFFFFF.toInt())
+                        setStroke(dp(1), tint(home.text, 0x22))
+                    }, 17)
+                    setOnClickListener {
+                        map.headingUp = !map.headingUp
+                        prefs.edit().putBoolean(HEADING_UP, map.headingUp).apply()
+                    }
+                }
+                map.headingUp = prefs.getBoolean(HEADING_UP, true)
+                map.onRotated = { degrees -> if (compass.rotation != -degrees) compass.rotation = -degrees }
+                addView(compass, LinearLayout.LayoutParams(dp(34), dp(34)).apply { bottomMargin = dp(6) })
                 addView(zoom("+", "Zoomer", 1), LinearLayout.LayoutParams(dp(34), dp(34)))
                 addView(zoom("−", "Dézoomer", -1), LinearLayout.LayoutParams(dp(34), dp(34)).apply { topMargin = dp(6) })
             }, FrameLayout.LayoutParams(-2, -2, Gravity.END or Gravity.CENTER_VERTICAL).apply { marginEnd = dp(8) })
@@ -106,6 +124,28 @@ internal class OwnMap(private val home: HomeActivity, private val open: () -> Un
                 setOnClickListener { open() }
             }
             addView(guide, FrameLayout.LayoutParams(-1, -2, Gravity.TOP).apply { setMargins(dp(8), dp(8), dp(8), 0) })
+            fun pill(title: String) = label(title, 12, home.text, 700).apply {
+                maxLines = 1
+                setPadding(dp(10), dp(5), dp(10), dp(5))
+                background = pressable(GradientDrawable().apply {
+                    cornerRadius = dp(12).toFloat()
+                    setColor(if (night) 0xE6141C2A.toInt() else 0xF2FFFFFF.toInt())
+                    setStroke(dp(1), tint(home.text, 0x22))
+                }, 12)
+                visibility = View.GONE
+            }
+            // The street under the car, at the foot of the map.
+            streetChip = pill("")
+            addView(streetChip, FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply {
+                setMargins(dp(40), 0, dp(40), dp(22))
+            })
+            // Shown during a look around: back on the car.
+            val recentre = pill("Recentrer").apply {
+                setTextColor(navColor)
+                setOnClickListener { map.recentre() }
+            }
+            map.onPanned = { away -> recentre.visibility = if (away) View.VISIBLE else View.GONE }
+            addView(recentre, FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply { setMargins(0, 0, 0, dp(56)) })
             addView(credit.apply {
                 setPadding(dp(4), dp(1), dp(4), dp(1))
                 background = GradientDrawable().apply {
@@ -117,7 +157,21 @@ internal class OwnMap(private val home: HomeActivity, private val open: () -> Un
     }
 
     /** The car's position and, when it moves, its heading in degrees from north. */
-    fun position(latitude: Double, longitude: Double, bearing: Float?) = tiles?.moveTo(latitude, longitude, bearing)
+    fun position(latitude: Double, longitude: Double, bearing: Float?, kmh: Int?) {
+        // Debug builds only: « debug_bearing » turns the map where the emulator's GPS gives no heading.
+        val forced = if (home.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0 &&
+            home.prefs.contains("debug_bearing")) home.prefs.getInt("debug_bearing", 0).toFloat() else null
+        tiles?.moveTo(latitude, longitude, forced ?: bearing, kmh)
+    }
+
+    /** The street the car is on, shown at the foot of the map; null hides it. */
+    fun street(name: String?) {
+        val chip = streetChip ?: return
+        chip.text = name.orEmpty()
+        chip.visibility = if (name.isNullOrBlank()) View.GONE else View.VISIBLE
+    }
+
+    private var streetChip: TextView? = null
 
     fun cameras(list: List<Camera>) {
         tiles?.cameras = list
@@ -240,10 +294,34 @@ internal class OwnMap(private val home: HomeActivity, private val open: () -> Un
         private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
         private val arrow = Path()
         private val rect = RectF()
+        // Where the car is and where it heads, as the navigation reports it…
         private var latitude = Double.NaN
         private var longitude = Double.NaN
-        private var bearing: Float? = null
+        private var bearing = 0f
+        // …and what is drawn now, which glides towards it instead of jumping at each GPS fix.
+        private var shownLat = Double.NaN
+        private var shownLon = Double.NaN
+        private var shownBearing = 0f
         private var zoom = 16
+        // A zoom chosen with + / − holds for a minute; then the zoom follows the speed again.
+        private var manualZoomUntil = 0L
+        /** The map turns so that the road ahead points up; false keeps the north up. */
+        var headingUp = true
+            set(value) { field = value; invalidate() }
+        /** How far the map is turned now, in degrees, for the compass. */
+        val turned get() = if (headingUp) shownBearing else 0f
+        // The driver's look around, in pixels of the map at this zoom; back on the car after a while.
+        private var panX = 0f
+        private var panY = 0f
+        private var pannedAt = 0L
+        var onPanned: ((Boolean) -> Unit)? = null
+        var onRotated: ((Float) -> Unit)? = null
+        private val slop = android.view.ViewConfiguration.get(context).scaledTouchSlop
+        private var downX = 0f
+        private var downY = 0f
+        private var lastX = 0f
+        private var lastY = 0f
+        private var dragging = false
 
         var cameras: List<Camera> = emptyList()
             set(value) { field = value; invalidate() }
@@ -256,16 +334,62 @@ internal class OwnMap(private val home: HomeActivity, private val open: () -> Un
             }
         }
 
-        fun moveTo(lat: Double, lon: Double, heading: Float?) {
+        fun moveTo(lat: Double, lon: Double, heading: Float?, kmh: Int?) {
             latitude = lat
             longitude = lon
             if (heading != null) bearing = heading
+            if (shownLat.isNaN()) { shownLat = lat; shownLon = lon; shownBearing = bearing }
+            // Closer in town, wider on fast roads.
+            if (kmh != null && System.currentTimeMillis() > manualZoomUntil) {
+                val wanted = when { kmh < 35 -> 17; kmh < 75 -> 16; kmh < 105 -> 15; else -> 14 }
+                if (wanted != zoom) { zoom = wanted; panX = 0f; panY = 0f }
+            }
             invalidate()
         }
 
         fun zoomBy(step: Int) {
             zoom = (zoom + step).coerceIn(12, 18)
+            manualZoomUntil = System.currentTimeMillis() + 60_000
+            panX = 0f
+            panY = 0f
             invalidate()
+        }
+
+        /** Back on the car after a look around. */
+        fun recentre() {
+            panX = 0f
+            panY = 0f
+            onPanned?.invoke(false)
+            invalidate()
+        }
+
+        @SuppressLint("ClickableViewAccessibility")
+        override fun onTouchEvent(event: android.view.MotionEvent): Boolean {
+            when (event.actionMasked) {
+                android.view.MotionEvent.ACTION_DOWN -> {
+                    downX = event.x; downY = event.y; lastX = event.x; lastY = event.y
+                    dragging = false
+                    // The map keeps its drags: the home pages do not slide under the finger.
+                    parent?.requestDisallowInterceptTouchEvent(true)
+                }
+                android.view.MotionEvent.ACTION_MOVE -> {
+                    if (!dragging && (kotlin.math.abs(event.x - downX) > slop || kotlin.math.abs(event.y - downY) > slop)) dragging = true
+                    if (dragging) {
+                        // The finger's move on screen, turned back into the map's own directions.
+                        val angle = Math.toRadians(turned.toDouble())
+                        val dx = event.x - lastX
+                        val dy = event.y - lastY
+                        panX -= (dx * cos(angle) - dy * kotlin.math.sin(angle)).toFloat()
+                        panY -= (dx * kotlin.math.sin(angle) + dy * cos(angle)).toFloat()
+                        pannedAt = System.currentTimeMillis()
+                        onPanned?.invoke(true)
+                        invalidate()
+                    }
+                    lastX = event.x; lastY = event.y
+                }
+                android.view.MotionEvent.ACTION_UP -> if (!dragging) performClick()
+            }
+            return true
         }
 
         private fun worldX(lon: Double, z: Int) = (lon + 180.0) / 360.0 * (1 shl z)
@@ -283,35 +407,58 @@ internal class OwnMap(private val home: HomeActivity, private val open: () -> Un
                 canvas.drawText("En attente du GPS…", width / 2f, height / 2f, paint)
                 return
             }
-            // The car sits a little below the middle, to show more of the road ahead when heading north.
+            // Glide towards the latest fix and heading (the shortest way round for the heading).
+            shownLat += (latitude - shownLat) * .12
+            shownLon += (longitude - shownLon) * .12
+            val turn = ((bearing - shownBearing + 540f) % 360f) - 180f
+            shownBearing = (shownBearing + turn * .1f + 360f) % 360f
+            val settled = kotlin.math.abs(latitude - shownLat) < 2e-7 && kotlin.math.abs(longitude - shownLon) < 2e-7 &&
+                kotlin.math.abs(turn) < .4f
+            // A look around ends by itself after fifteen seconds.
+            if ((panX != 0f || panY != 0f) && !dragging && System.currentTimeMillis() - pannedAt > 15_000) recentre()
+            onRotated?.invoke(turned)
+
+            // Heading up, the car sits low in the card to show the road ahead; north up, near the middle.
             val carX = width / 2f
-            val carY = height * .56f
-            val centerX = worldX(longitude, zoom)
-            val centerY = worldY(latitude, zoom)
-            val firstX = floor(centerX - carX / tileSize).toInt()
-            val firstY = floor(centerY - carY / tileSize).toInt()
+            val carY = height * (if (headingUp) .68f else .56f)
+            val centerX = worldX(shownLon, zoom) + panX / tileSize
+            val centerY = worldY(shownLat, zoom) + panY / tileSize
+            // Tiles enough to cover the card whichever way it is turned.
+            val reach = kotlin.math.hypot(maxOf(carX, width - carX).toDouble(), maxOf(carY, height - carY).toDouble()) / tileSize
             val count = 1 shl zoom
-            var ty = firstY
-            while ((ty - centerY) * tileSize + carY < height) {
-                var tx = firstX
-                while ((tx - centerX) * tileSize + carX < width) {
-                    val left = ((tx - centerX) * tileSize + carX).toFloat()
-                    val top = ((ty - centerY) * tileSize + carY).toFloat()
+            canvas.save()
+            canvas.rotate(-turned, carX, carY)
+            var ty = floor(centerY - reach).toInt()
+            val lastY = floor(centerY + reach).toInt()
+            val lastX = floor(centerX + reach).toInt()
+            while (ty <= lastY) {
+                var tx = floor(centerX - reach).toInt()
+                while (tx <= lastX) {
                     if (ty in 0 until count) {
-                        val bitmap = tile(zoom, ((tx % count) + count) % count, ty)
+                        val left = ((tx - centerX) * tileSize + carX).toFloat()
+                        val top = ((ty - centerY) * tileSize + carY).toFloat()
                         val wrapped = ((tx % count) + count) % count
-                        rect.set(left, top, left + tileSize, top + tileSize)
-                        if (bitmap != null) canvas.drawBitmap(bitmap, null, rect, tilePaint)
+                        // One pixel over the edge, so no seam shows between turned tiles.
+                        rect.set(left, top, left + tileSize + 1, top + tileSize + 1)
+                        tile(zoom, wrapped, ty)?.let { canvas.drawBitmap(it, null, rect, tilePaint) }
                         trafficTile(zoom, wrapped, ty)?.let { canvas.drawBitmap(it, null, rect, trafficPaint) }
                     }
                     tx++
                 }
                 ty++
             }
-            // Speed cameras: a red disc with a white rim.
+            canvas.restore()
+            // A point of the map on the screen, turned like the map.
+            val angle = Math.toRadians(-turned.toDouble())
+            fun screen(lat: Double, lon: Double): Pair<Float, Float> {
+                val dx = (worldX(lon, zoom) - centerX) * tileSize
+                val dy = (worldY(lat, zoom) - centerY) * tileSize
+                return (carX + dx * cos(angle) - dy * kotlin.math.sin(angle)).toFloat() to
+                    (carY + dx * kotlin.math.sin(angle) + dy * cos(angle)).toFloat()
+            }
+            // Speed cameras: a red disc with a white rim, upright whichever way the map is turned.
             for (camera in cameras) {
-                val x = ((worldX(camera.longitude, zoom) - centerX) * tileSize + carX).toFloat()
-                val y = ((worldY(camera.latitude, zoom) - centerY) * tileSize + carY).toFloat()
+                val (x, y) = screen(camera.latitude, camera.longitude)
                 if (x < -20 || y < -20 || x > width + 20 || y > height + 20) continue
                 paint.color = Color.WHITE
                 canvas.drawCircle(x, y, 8 * density, paint)
@@ -321,22 +468,25 @@ internal class OwnMap(private val home: HomeActivity, private val open: () -> Un
                 canvas.drawRect(x - 3 * density, y - 2 * density, x + 2 * density, y + 2 * density, paint)
                 canvas.drawCircle(x + 3 * density, y, 1.6f * density, paint)
             }
-            // The car: a halo, a white disc and an arrow turned to its heading.
+            // The car, where it really is (off centre during a look around): a halo, a white disc, an arrow that
+            // points up when the map turns with it, to its heading otherwise.
+            val (x, y) = screen(shownLat, shownLon)
             paint.color = (carColor and 0x00FFFFFF) or 0x33000000
-            canvas.drawCircle(carX, carY, 20 * density, paint)
+            canvas.drawCircle(x, y, 22 * density, paint)
             paint.color = Color.WHITE
-            canvas.drawCircle(carX, carY, 11 * density, paint)
+            canvas.drawCircle(x, y, 12 * density, paint)
             paint.color = carColor
             canvas.save()
-            canvas.rotate(bearing ?: 0f, carX, carY)
+            canvas.rotate(if (headingUp) 0f else shownBearing, x, y)
             arrow.reset()
-            arrow.moveTo(carX, carY - 8 * density)
-            arrow.lineTo(carX + 6 * density, carY + 6 * density)
-            arrow.lineTo(carX, carY + 3 * density)
-            arrow.lineTo(carX - 6 * density, carY + 6 * density)
+            arrow.moveTo(x, y - 9 * density)
+            arrow.lineTo(x + 7 * density, y + 7 * density)
+            arrow.lineTo(x, y + 3.5f * density)
+            arrow.lineTo(x - 7 * density, y + 7 * density)
             arrow.close()
             canvas.drawPath(arrow, paint)
             canvas.restore()
+            if (!settled && isShown) postInvalidateOnAnimation()
         }
 
         private fun tile(z: Int, x: Int, y: Int): Bitmap? {
@@ -400,5 +550,6 @@ internal class OwnMap(private val home: HomeActivity, private val open: () -> Un
     companion object {
         /** The driver's own TomTom key for the traffic layer, typed once in the settings; none = no traffic. */
         const val TRAFFIC_KEY = "traffic_key"
+        const val HEADING_UP = "map_heading_up"
     }
 }

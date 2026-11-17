@@ -244,7 +244,7 @@ class HomeActivity : Activity() {
         }
         gps.onFix = { fix, kmh ->
             info.usePosition(fix.latitude, fix.longitude)
-            ownMap.position(fix.latitude, fix.longitude, fix.bearing.takeIf { fix.hasBearing() && (kmh ?: 0) >= 5 })
+            ownMap.position(fix.latitude, fix.longitude, fix.bearing.takeIf { fix.hasBearing() && (kmh ?: 0) >= 5 }, kmh)
             wazeMap.position(fix.latitude, fix.longitude)
             googleWeb.position(fix.latitude, fix.longitude)
             followRoad(fix, kmh)
@@ -1829,6 +1829,7 @@ class HomeActivity : Activity() {
         // The street under the car, shown on the navigation card when not guiding.
         if (road?.name != currentStreet) {
             currentStreet = road?.name
+            ownMap.street(currentStreet)
             if (NavWatch.nav.value == null) renderNav(null)
         }
         renderCamera(roadLimits.cameraAhead(fix.latitude, fix.longitude, bearing), kmh)
