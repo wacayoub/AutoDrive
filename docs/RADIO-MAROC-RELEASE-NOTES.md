@@ -1,3 +1,5 @@
+Sur l’accueil Incar Drive, la petite fenêtre de la radio ne s’affiche plus : la carte média de l’accueil montre déjà la station et ses boutons, et la place reste libre pour la fenêtre de Google Maps. La radio continue de jouer. Au-dessus des autres applis, la petite fenêtre reste comme avant.
+
 Avec l’accueil Incar Drive, la radio repart toute seule : au démarrage de la voiture, Incar Drive relance la dernière station écoutée, sans ouvrir la radio ni appuyer sur Lecture. Le bouton « Écouter Radio Maroc & Coran » de l’accueil fait de même en un appui. Seul Incar Drive, signé avec la même clé que la radio, peut la démarrer ainsi.
 
 Sur l’Incarlink, l’heure, la météo et la salat ne s’affichent plus dans la radio : l’accueil Incar Drive les montre déjà, et les onglets gagnent la place. Sur téléphone, elles restent. La radio reconnaît le boîtier à ses applis d’origine (Bluetooth, réglages) ou au style « Incarlink ».

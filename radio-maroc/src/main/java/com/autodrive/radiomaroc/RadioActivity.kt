@@ -341,8 +341,26 @@ class RadioActivity : ComponentActivity() {
         super.attachBaseContext(context)
     }
 
+    // Incar Drive's home screen already shows the radio on its media card: the floating window steps aside there.
+    private var homeScreenShown = false
+    private var homeScreenWatched = false
+    private val homeScreenReceiver = object : android.content.BroadcastReceiver() {
+        override fun onReceive(context: android.content.Context, intent: Intent) {
+            homeScreenShown = intent.getBooleanExtra("visible", false)
+            leaveWindowOnHome()
+        }
+    }
+
+    /** Closes the floating window over Incar Drive's home screen; the radio keeps playing. */
+    private fun leaveWindowOnHome() {
+        if (homeScreenShown && isInPictureInPictureMode) runCatching { moveTaskToBack(true) }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        androidx.core.content.ContextCompat.registerReceiver(this, homeScreenReceiver,
+            android.content.IntentFilter(PlaybackService.HOME_VISIBLE), androidx.core.content.ContextCompat.RECEIVER_EXPORTED)
+        homeScreenWatched = true
         if (CrashReport.pending(this)) {
             // The radio closed last time: show the report instead of running into the same error again.
             reportOnly = true
@@ -515,6 +533,7 @@ class RadioActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        if (homeScreenWatched) runCatching { unregisterReceiver(homeScreenReceiver) }
         if (reportOnly) {
             super.onDestroy()
             return
@@ -986,6 +1005,7 @@ class RadioActivity : ComponentActivity() {
         // Switch between the floating logo and the full screen.
         setContentView(withMiniPlayer(screen()))
         renderRows()
+        if (isInPictureInPictureMode) window.decorView.post { leaveWindowOnHome() }
     }
 
     private fun bubbleAppsSummary(): String {
