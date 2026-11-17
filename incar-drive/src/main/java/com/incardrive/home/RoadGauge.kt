@@ -310,7 +310,8 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
         if (cameraMeters != null && !bend && !circle) drawCamera(canvas, cx, w, h, horizon)
 
         // A dark band at the bottom keeps the trip line readable over the road.
-        val band = 30 * density
+        // A short shade at the road's foot, under the car.
+        val band = 12 * density
         roadPaint.shader = linear(0f, h - band, 0f, h, 0x000B1018, 0xD90B1018.toInt())
         canvas.drawRect(0f, h - band, w, h, roadPaint)
         // The line under the trip summary, where the road meets the card's foot: plain in the road's colour when

@@ -1015,7 +1015,7 @@ class HomeActivity : Activity() {
         // The foot of the card belongs to the navigation: the road stops above it, a dial sits above it.
         (dial as? RoadGauge)?.footer(dp(DRIVE_FOOTER).toFloat(), if (night) 0xF00B1018.toInt() else 0xF5F2F5F8.toInt())
         addView(dial, FrameLayout.LayoutParams(-1, -1).apply {
-            if (!road) setMargins(dp(4), dp(4), dp(4), dp(DRIVE_FOOTER + 20))
+            if (!road) setMargins(dp(4), dp(4), dp(4), dp(DRIVE_FOOTER + 4))
         })
         // Altitude in the upper left corner, the limit as a road sign in the upper right.
         addView(column().apply {
@@ -1038,8 +1038,9 @@ class HomeActivity : Activity() {
         }
         addView(cameraBadge, FrameLayout.LayoutParams(-2, -2, Gravity.TOP or Gravity.CENTER_HORIZONTAL).apply { topMargin = dp(8) })
         // Over the road's dark band the trip line is light in both themes.
-        speedStatus = label("", 12, if (road) Color.WHITE else muted, 700).apply { gravity = Gravity.CENTER }
-        addView(speedStatus, FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM).apply { bottomMargin = dp(DRIVE_FOOTER + if (road) 9 else 6) })
+        // The trip summary is the first line of the card's foot, under the road's line.
+        speedStatus = label("", 12, text, 700).apply { gravity = Gravity.CENTER }
+        addView(speedStatus, FrameLayout.LayoutParams(-1, dp(18), Gravity.BOTTOM).apply { bottomMargin = dp(DRIVE_FOOTER - 21) })
         addView(mapsCard(), FrameLayout.LayoutParams(-1, dp(DRIVE_FOOTER), Gravity.BOTTOM))
         contentDescription = "Vitesse et trajet"
         setOnClickListener {
@@ -1059,7 +1060,7 @@ class HomeActivity : Activity() {
         // instead of the road, a hairline stands in.
         addView(View(context).apply { setBackgroundColor(if (roadGauge == null) tint(text, 0x1F) else Color.TRANSPARENT) },
             LinearLayout.LayoutParams(-1, dp(1)))
-        setPadding(dp(8), 0, dp(8), dp(6))
+        setPadding(dp(8), dp(19), dp(8), dp(6))
         addView(row().apply {
             background = pressable(null, 12)
             setPadding(dp(8), 0, dp(4), 0)
@@ -2572,7 +2573,7 @@ class HomeActivity : Activity() {
         const val DOCK_APPS = "dock_apps"
         const val SPEED_STYLE = "speed_style"
         // Height of the navigation foot of the driving card, in dp.
-        const val DRIVE_FOOTER = 78
+        const val DRIVE_FOOTER = 96
         const val CAR_COLOR = "car_color"
         val CAR_COLORS = linkedMapOf("Blanc" to 0xFFF2F5F9.toInt(), "Gris" to 0xFF9AA3AE.toInt(), "Noir" to 0xFF2A2F38.toInt(),
             "Rouge" to 0xFFC0272D.toInt(), "Bleu" to 0xFF2C5FA8.toInt())
