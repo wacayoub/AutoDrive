@@ -184,6 +184,8 @@ class HomeActivity : Activity() {
     private var islandPrayer: String? = null
     private var islandShown: String? = null
     private var quiet: QuietMode? = null
+    // The « Route » speed card, which also draws the guidance and the speed cameras; null with the other styles.
+    private var roadGauge: RoadGauge? = null
     private lateinit var dockDivider: View
     private var guiding = false
     private var mapsFrame: View? = null
@@ -1000,7 +1002,12 @@ class HomeActivity : Activity() {
             brand != null -> BrandGauge(context, brand, text, muted)
             styleName == DIAL -> SpeedGauge(context, getColor(R.color.home_gauge_track), shade(accent, Color.BLACK, .25f),
                 shade(accent, Color.WHITE, .3f), text, muted)
-            else -> RoadGauge(context, ROAD_BLUE, text, muted, carLogo.bitmap())
+            else -> RoadGauge(context, ROAD_BLUE, text, muted, carLogo.bitmap(), carColor(), night).also {
+                roadGauge = it
+                currentSky().let { sky -> it.sky(sky.top, sky.mid) }
+                it.guide(NavWatch.nav.value)
+                debugCamera()?.let { metres -> it.camera(metres, 60) }
+            }
         }
         gauge = dial as SpeedDial
         gauge.limit = activeLimit()
@@ -1139,6 +1146,8 @@ class HomeActivity : Activity() {
     }
 
     /** Whether the live map replaces the favourites on the first page (Réglages › Navigation › Carte sur l’accueil). */
+    private fun carColor() = prefs.getInt(CAR_COLOR, CAR_COLORS.getValue("Blanc"))
+
     private fun mapOnHome() = prefs.getBoolean(MAP_ON_HOME, true)
 
     /** Incar Drive's own OpenStreetMap map rather than Google Maps' widget, when a map is on the home page. */
@@ -1202,6 +1211,8 @@ class HomeActivity : Activity() {
         placeMapsFrame()
         ownMap.guide(nav)
         lastNav = nav
+        roadGauge?.guide(nav)
+        renderRoadCorner()
         renderTurnIsland()
         quiet?.turn(nav)
         mapWidget.guideUpdate(nav)
@@ -1286,6 +1297,25 @@ class HomeActivity : Activity() {
     }
 
     private var lastNav: NavInfo? = null
+
+    /** Debug builds only: a camera at « debug_camera » metres, to preview it on the road without driving past one. */
+    private fun debugCamera(): Int? =
+        if (applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0 && prefs.contains("debug_camera"))
+            prefs.getInt("debug_camera", 200) else null
+
+    /**
+     * On the « Route » card, guidance and cameras take the top left corner and the bottom line: the altitude steps
+     * aside and the trip summary gives way to the time left and the arrival.
+     */
+    private fun renderRoadCorner() {
+        if (roadGauge == null || !::altitudeText.isInitialized) return
+        val busy = lastNav != null || islandCamera != null
+        altitudeText.visibility = if (busy) View.INVISIBLE else View.VISIBLE
+        lastNav?.let { nav ->
+            listOfNotNull(nav.remaining, nav.arrival?.let { "arrivée $it" }, nav.distance).joinToString(" · ")
+                .takeIf { it.isNotBlank() }?.let { speedStatus.text = it }
+        }
+    }
 
     /** The next turn goes to the island only where the navigation card is not on screen: page 2 or under a panel. */
     private fun renderTurnIsland() {
@@ -1501,6 +1531,7 @@ class HomeActivity : Activity() {
     private fun skyBackdrop(): CockpitBackdrop {
         val sky = currentSky()
         shownSky = sky
+        roadGauge?.sky(sky.top, sky.mid)
         return CockpitBackdrop(sky.top, sky.mid, sky.bottom, accent, getColor(R.color.home_grid), if (night) 0x26 else 0x30,
             sky.glow, sky.sunX, sky.sunY, sky.sunSize, sky.stars)
     }
@@ -1561,6 +1592,7 @@ class HomeActivity : Activity() {
             "Mock location ignored" -> "Position simulée ignorée"
             else -> tripSummary()
         }
+        renderRoadCorner()
         // One beep each time the speed passes the chosen limit, again only after dropping 3 km/h below it.
         val limit = gauge.limit
         val kmh = state.speed.kmh ?: 0
@@ -1687,12 +1719,20 @@ class HomeActivity : Activity() {
             cameraBadge.visibility = View.GONE
             if (ahead == null) warnedCamera = null
             islandCamera = null
+            roadGauge?.camera(debugCamera(), debugCamera()?.let { 60 })
+            renderRoadCorner()
             renderIsland()
             return
         }
         val (camera, meters) = ahead
         cameraBadge.text = listOfNotNull("Radar ${(meters / 10) * 10} m", camera.limit?.let { "$it" }).joinToString(" · ")
         islandCamera = cameraBadge.text.toString()
+        // The « Route » card draws the camera on the roadside itself: no badge over it.
+        roadGauge?.let {
+            it.camera(meters, camera.limit)
+            cameraBadge.visibility = View.GONE
+        }
+        renderRoadCorner()
         renderIsland()
         cameraBadge.visibility = View.VISIBLE
         if (warnedCamera != camera) {
@@ -2098,6 +2138,11 @@ class HomeActivity : Activity() {
                     prefs.edit().putString(SPEED_STYLE, it).apply()
                 }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8); if (index == 1) bottomMargin = dp(12) })
             }
+            addView(label("Couleur de la voiture (compteur Route)", 13, text, 700), wrap().apply { topMargin = dp(2) })
+            addView(choices(CAR_COLORS.keys.toList(), CAR_COLORS.entries.firstOrNull { it.value == carColor() }?.key ?: "Blanc",
+                { it }, { CAR_COLORS[it] }) {
+                prefs.edit().putInt(CAR_COLOR, CAR_COLORS.getValue(it)).apply()
+            }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(6); bottomMargin = dp(12) })
             addView(caps("Navigation"), wrap().apply { topMargin = dp(6) })
             addView(row().apply {
                 gravity = Gravity.FILL
@@ -2497,6 +2542,9 @@ class HomeActivity : Activity() {
         const val FAVORITES = "favorites"
         const val DOCK_APPS = "dock_apps"
         const val SPEED_STYLE = "speed_style"
+        const val CAR_COLOR = "car_color"
+        val CAR_COLORS = linkedMapOf("Blanc" to 0xFFF2F5F9.toInt(), "Gris" to 0xFF9AA3AE.toInt(), "Noir" to 0xFF2A2F38.toInt(),
+            "Rouge" to 0xFFC0272D.toInt(), "Bleu" to 0xFF2C5FA8.toInt())
         const val ROAD = "road"
         // The ice blue of the lane lines on recent Japanese digital dashboards, like the driver's Toyota.
         const val ROAD_BLUE = 0xFF8FD8FF.toInt()

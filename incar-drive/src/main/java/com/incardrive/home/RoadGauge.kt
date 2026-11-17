@@ -3,6 +3,7 @@ package com.incardrive.home
 import android.animation.ValueAnimator
 import android.content.Context
 import android.graphics.Canvas
+import android.graphics.Color
 import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Path
@@ -29,7 +30,55 @@ internal interface SpeedDial {
  * like the number.
  */
 internal class RoadGauge(context: Context, private val accent: Int, private val textColor: Int,
-    private val mutedColor: Int, private val badge: android.graphics.Bitmap? = null) : View(context), SpeedDial {
+    private val mutedColor: Int, private val badge: android.graphics.Bitmap? = null,
+    private val bodyColor: Int = 0xFFF2F5F9.toInt(), private val night: Boolean = true) : View(context), SpeedDial {
+    private val guideColor = 0xFF3B8CFF.toInt()
+    private val arriveColor = 0xFF1D9E75.toInt()
+    private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val arrowPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val linePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeCap = Paint.Cap.ROUND
+        strokeJoin = Paint.Join.ROUND
+    }
+
+    // What the navigation app asks next, drawn on the road; null when it is not guiding.
+    private var maneuver: Maneuver? = null
+    private var turnIcon: android.graphics.drawable.Drawable? = null
+    private var stepText: String? = null
+    // The speed camera ahead: its distance in metres and its limit.
+    private var cameraMeters: Int? = null
+    private var cameraLimit: Int? = null
+    private var skyTop = 0xFF0A1020.toInt()
+    private var skyBottom = 0xFF1B2C4A.toInt()
+
+    /** The next instruction of Google Maps or Waze, or null when guidance stops. */
+    fun guide(nav: NavInfo?) {
+        maneuver = nav?.let { Maneuver.of(it.instruction, it.step ?: it.instruction) }
+        turnIcon = nav?.arrow
+        stepText = nav?.let { it.step ?: it.remaining }
+        invalidate()
+    }
+
+    /** The speed camera ahead on this road, or null. */
+    fun camera(meters: Int?, limit: Int?) {
+        cameraMeters = meters
+        cameraLimit = limit
+        invalidate()
+    }
+
+    /** The sky of the moment, behind the horizon. */
+    fun sky(top: Int, bottom: Int) {
+        if (top == skyTop && bottom == skyBottom) return
+        skyTop = top
+        skyBottom = bottom
+        invalidate()
+    }
+
+    /** The turn is drawn on the road only once it is close; before that the road stays straight. */
+    private val close get() = (maneuver?.meters ?: 0) <= NEAR_M
+    private val cameraFirst get() = cameraMeters != null && (maneuver == null || cameraMeters!! < (maneuver?.meters ?: Int.MAX_VALUE))
+
     private val density = resources.displayMetrics.density
     private val alert = 0xFFFF4D4F.toInt()
     private val valuePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -87,17 +136,91 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
         val w = width.toFloat()
         val h = height.toFloat()
         if (w < 40 * density || h < 40 * density) return
+        val turn = maneuver
+        val guiding = turn != null || cameraMeters != null
+        val arriving = turn?.turn == Turn.ARRIVE
         val tone = if (over) alert else accent
         val cx = w / 2f
-        // The figure on top, then the horizon just under its unit.
-        val size = min(h * .27f, w * .3f)
-        val baseline = maxOf(size * .95f + 6 * density, h * .35f)
-        val horizon = baseline + 20 * density
-        // A soft glow where the road meets the sky.
+        // The figure on top, then the horizon just under it; while guiding the figure is smaller and to the right,
+        // leaving the left for the instruction and more of the card for the road.
+        val size = if (guiding) min(h * .2f, w * .22f) else min(h * .27f, w * .3f)
+        val baseline = if (guiding) size + 8 * density else maxOf(size * .95f + 6 * density, h * .35f)
+        val horizon = if (guiding) maxOf(h * .36f, baseline + 16 * density) else baseline + 20 * density
+        val road = h - horizon
+        // The sky of the moment above the horizon, then a soft glow where the road meets it.
+        roadPaint.shader = LinearGradient(0f, 0f, 0f, horizon, ColorUtils.setAlphaComponent(skyTop, 0xB0),
+            ColorUtils.setAlphaComponent(skyBottom, 0xB0), Shader.TileMode.CLAMP)
+        canvas.drawRect(0f, 0f, w, horizon, roadPaint)
         glowPaint.shader = RadialGradient(cx, horizon, w * .55f, ColorUtils.setAlphaComponent(tone, 0x26),
             ColorUtils.setAlphaComponent(tone, 0), Shader.TileMode.CLAMP)
         canvas.drawRect(0f, 0f, w, h, glowPaint)
-        // The road: dark asphalt from a point at the horizon to past both sides under the car.
+
+        val now = System.nanoTime()
+        if (lastFrame != 0L) travel = (travel + shown * (now - lastFrame) / 1e9f * .05f) % 2f
+        lastFrame = now
+        val bend = turn != null && close && (turn.turn == Turn.LEFT || turn.turn == Turn.RIGHT)
+        val circle = turn != null && close && turn.turn == Turn.ROUNDABOUT
+        when {
+            bend -> drawBend(canvas, w, horizon, road, tone, left = turn!!.turn == Turn.LEFT)
+            circle -> drawRoundabout(canvas, w, horizon, road, tone, turn!!.exit)
+            else -> {
+                drawStraight(canvas, w, h, horizon, tone)
+                when (turn?.turn) {
+                    Turn.UTURN -> drawUTurn(canvas, cx, horizon, road, w)
+                    Turn.ARRIVE -> drawFlag(canvas, cx, horizon, road)
+                    null -> Unit
+                    else -> if (!cameraFirst) drawAhead(canvas, cx, horizon, road, w)
+                }
+            }
+        }
+        if (cameraMeters != null && !bend && !circle) drawCamera(canvas, cx, w, h, horizon)
+        // The street to take, on a road sign over the far end of the turn.
+        if ((bend || circle) && turn?.street != null) drawStreetSign(canvas, w, horizon, road, turn.street, left = turn.turn == Turn.LEFT)
+
+        // A dark band at the bottom keeps the trip line readable over the road.
+        val band = 26 * density
+        roadPaint.shader = LinearGradient(0f, h - band, 0f, h, 0x000B1018, 0xD90B1018.toInt(), Shader.TileMode.CLAMP)
+        canvas.drawRect(0f, h - band, w, h, roadPaint)
+        // How close the turn (or the camera) is: a thin bar that fills over the last 500 m.
+        val metres = if (cameraFirst) cameraMeters else turn?.meters
+        if (guiding && metres != null) {
+            val left = 12 * density
+            val y = h - band - 3 * density
+            val fraction = (1f - metres.coerceAtMost(FAR_M) / FAR_M.toFloat()).coerceIn(.02f, 1f)
+            arrowPaint.shader = null
+            arrowPaint.color = ColorUtils.setAlphaComponent(textColor, 0x26)
+            rect.set(left, y, w - left, y + 3 * density)
+            canvas.drawRoundRect(rect, 2 * density, 2 * density, arrowPaint)
+            arrowPaint.color = when { cameraFirst -> alert; arriving -> arriveColor; else -> guideColor }
+            rect.set(left, y, left + (w - 2 * left) * fraction, y + 3 * density)
+            canvas.drawRoundRect(rect, 2 * density, 2 * density, arrowPaint)
+        }
+        // Indicator on the side of a close turn, blinking.
+        val blinkSide = if (bend && (turn?.meters ?: 0) <= 300) (if (turn!!.turn == Turn.LEFT) -1 else 1) else 0
+        val blinkOn = blinkSide != 0 && (System.nanoTime() / 450_000_000L) % 2L == 0L
+        drawCar(canvas, cx, h - band + 3 * density, min(w * .28f, 84 * density), if (blinkOn) blinkSide else 0)
+
+        // The speed.
+        valuePaint.textSize = size
+        valuePaint.color = if (over) alert else textColor
+        valuePaint.setShadowLayer(10 * density, 0f, 0f, ColorUtils.setAlphaComponent(tone, 0x80))
+        val speedX = if (guiding) w * .64f else cx
+        canvas.drawText(speed?.let { shown.roundToInt().toString() } ?: "—", speedX, baseline, valuePaint)
+        if (!guiding) {
+            unitPaint.textSize = 10 * density
+            canvas.drawText("KM/H", cx, baseline + 13 * density, unitPaint)
+        } else drawPill(canvas, turn, arriving)
+
+        when {
+            shown > .5f && isShown && windowVisibility == VISIBLE -> postInvalidateDelayed(33)
+            blinkSide != 0 && isShown && windowVisibility == VISIBLE -> { lastFrame = 0L; postInvalidateDelayed(225) }
+            else -> lastFrame = 0L
+        }
+    }
+
+    /** The straight road to the horizon: asphalt, lit curbs, white edge lines, lane marks and reflector posts. */
+    private fun drawStraight(canvas: Canvas, w: Float, h: Float, horizon: Float, tone: Int) {
+        val cx = w / 2f
         val far = w * .035f
         val near = w * .78f
         fun half(y: Float) = far + (near - far) * ((y - horizon) / (h - horizon))
@@ -112,7 +235,6 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
         roadPaint.shader = LinearGradient(0f, horizon, 0f, h, ColorUtils.setAlphaComponent(tone, 0),
             ColorUtils.setAlphaComponent(tone, 0x2E), Shader.TileMode.CLAMP)
         canvas.drawPath(path, roadPaint)
-        // Lit curbs in the dashboard blue (red above the limit), with a halo.
         edgePaint.shader = LinearGradient(0f, horizon, 0f, h, ColorUtils.setAlphaComponent(tone, 0x10),
             ColorUtils.setAlphaComponent(tone, 0x50), Shader.TileMode.CLAMP)
         edgePaint.strokeWidth = 7 * density
@@ -122,16 +244,12 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
         edgePaint.strokeWidth = 2.2f * density
         canvas.drawLine(cx - far, horizon, cx - near, h, edgePaint)
         canvas.drawLine(cx + far, horizon, cx + near, h, edgePaint)
-        // Solid white edge lines just inside the curbs.
         edgePaint.shader = LinearGradient(0f, horizon, 0f, h, ColorUtils.setAlphaComponent(textColor, 0x10),
             ColorUtils.setAlphaComponent(textColor, 0xB0), Shader.TileMode.CLAMP)
         edgePaint.strokeWidth = 1.6f * density
         canvas.drawLine(cx - far * .86f, horizon, cx - near * .86f, h, edgePaint)
         canvas.drawLine(cx + far * .86f, horizon, cx + near * .86f, h, edgePaint)
-        // Lane marks and reflector posts at even depths (screen height ∝ 1 / distance), moving with the speed.
-        val now = System.nanoTime()
-        if (lastFrame != 0L) travel = (travel + shown * (now - lastFrame) / 1e9f * .05f) % 2f
-        lastFrame = now
+        edgePaint.shader = null
         var step = 0
         while (step < 16) {
             val z0 = 1f + step - (travel % 1f)
@@ -162,19 +280,359 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
                 canvas.drawRect(x - wide * .5f, y0 - tall, x + wide * .5f, y0 - tall * .75f, markPaint)
             }
         }
-        // A dark band at the bottom keeps the trip line readable over the road.
-        val band = 26 * density
-        roadPaint.shader = LinearGradient(0f, h - band, 0f, h, 0x000B1018, 0xD90B1018.toInt(), Shader.TileMode.CLAMP)
-        canvas.drawRect(0f, h - band, w, h, roadPaint)
-        drawCar(canvas, cx, h - band + 3 * density, min(w * .32f, 92 * density))
-        // The speed above the road.
-        valuePaint.textSize = size
-        valuePaint.color = if (over) alert else textColor
-        valuePaint.setShadowLayer(10 * density, 0f, 0f, ColorUtils.setAlphaComponent(tone, 0x80))
-        canvas.drawText(speed?.let { shown.roundToInt().toString() } ?: "—", cx, baseline, valuePaint)
-        unitPaint.textSize = 10 * density
-        canvas.drawText("KM/H", cx, baseline + 13 * density, unitPaint)
-        if (shown > .5f && isShown && windowVisibility == VISIBLE) postInvalidateDelayed(33) else lastFrame = 0L
+    }
+
+    /** Going straight on while guiding: a blue arrow lying on the car's lane. */
+    private fun drawAhead(canvas: Canvas, cx: Float, horizon: Float, road: Float, w: Float) {
+        path.reset()
+        path.moveTo(cx, horizon + road * .1f)
+        path.lineTo(cx + w * .075f, horizon + road * .27f)
+        path.lineTo(cx + w * .03f, horizon + road * .27f)
+        path.lineTo(cx + w * .048f, horizon + road * .52f)
+        path.lineTo(cx - w * .048f, horizon + road * .52f)
+        path.lineTo(cx - w * .03f, horizon + road * .27f)
+        path.lineTo(cx - w * .075f, horizon + road * .27f)
+        path.close()
+        arrowPaint.shader = null
+        arrowPaint.color = guideColor
+        canvas.drawPath(path, arrowPaint)
+    }
+
+    /**
+     * A turn that is close: the road itself bends to that side and the arrow follows it, with chevrons running
+     * along it. Drawn for a right turn and mirrored for a left one.
+     */
+    private fun drawBend(canvas: Canvas, w: Float, horizon: Float, road: Float, tone: Int, left: Boolean) {
+        fun x(f: Float) = w * f
+        fun y(f: Float) = horizon + road * f
+        canvas.save()
+        if (left) canvas.scale(-1f, 1f, w / 2f, 0f)
+        path.reset()
+        path.moveTo(x(.02f), y(1f))
+        path.lineTo(x(.367f), y(.284f))
+        path.cubicTo(x(.43f), y(.137f), x(.508f), y(.084f), x(.625f), y(.084f))
+        path.lineTo(x(1f), y(.084f))
+        path.lineTo(x(1f), y(.4f))
+        path.lineTo(x(.696f), y(.4f))
+        path.cubicTo(x(.633f), y(.4f), x(.608f), y(.453f), x(.592f), y(.547f))
+        path.lineTo(x(.98f), y(1f))
+        path.close()
+        roadPaint.shader = null
+        roadPaint.color = 0xF01C2535.toInt()
+        canvas.drawPath(path, roadPaint)
+        roadPaint.color = ColorUtils.setAlphaComponent(tone, 0x22)
+        canvas.drawPath(path, roadPaint)
+        // The two curbs.
+        linePaint.strokeWidth = 2.4f * density
+        linePaint.color = tone
+        path.reset()
+        path.moveTo(x(.02f), y(1f))
+        path.lineTo(x(.367f), y(.284f))
+        path.cubicTo(x(.43f), y(.137f), x(.508f), y(.084f), x(.625f), y(.084f))
+        path.lineTo(x(1f), y(.084f))
+        canvas.drawPath(path, linePaint)
+        path.reset()
+        path.moveTo(x(.98f), y(1f))
+        path.lineTo(x(.605f), y(.57f))
+        path.cubicTo(x(.6f), y(.47f), x(.63f), y(.4f), x(.696f), y(.4f))
+        path.lineTo(x(1f), y(.4f))
+        canvas.drawPath(path, linePaint)
+        // The arrow, from the car into the turn.
+        path.reset()
+        path.moveTo(x(.483f), y(.663f))
+        path.lineTo(x(.492f), y(.421f))
+        path.cubicTo(x(.496f), y(.295f), x(.542f), y(.242f), x(.625f), y(.242f))
+        path.lineTo(x(.775f), y(.242f))
+        path.lineTo(x(.775f), y(.147f))
+        path.lineTo(x(.883f), y(.295f))
+        path.lineTo(x(.775f), y(.442f))
+        path.lineTo(x(.775f), y(.347f))
+        path.lineTo(x(.625f), y(.347f))
+        path.cubicTo(x(.567f), y(.347f), x(.5375f), y(.379f), x(.533f), y(.463f))
+        path.lineTo(x(.5375f), y(.663f))
+        path.close()
+        arrowPaint.shader = null
+        arrowPaint.color = guideColor
+        canvas.drawPath(path, arrowPaint)
+        // Chevrons running towards the arrow's head.
+        arrowPaint.color = 0xE6DCEBFF.toInt()
+        val phase = if (shown > .5f) travel % 1f else (System.nanoTime() / 900_000_000.0 % 1.0).toFloat()
+        for (index in 0 until 3) {
+            val f = .6f + ((index + phase) % 3f) * .05f
+            path.reset()
+            path.moveTo(x(f), y(.265f))
+            path.lineTo(x(f + .022f), y(.295f))
+            path.lineTo(x(f), y(.325f))
+            path.close()
+            canvas.drawPath(path, arrowPaint)
+        }
+        canvas.restore()
+    }
+
+    /**
+     * A roundabout that is close: the ring, the roads joining it and the arrow going round (anticlockwise, as where
+     * traffic keeps right) to the exit the instruction counts: first to the right, second straight on, third to the
+     * left; when it gives no number, the arrow leaves up and to the right.
+     */
+    private fun drawRoundabout(canvas: Canvas, w: Float, horizon: Float, road: Float, tone: Int, exit: Int?) {
+        val cx = w / 2f
+        val cy = horizon + road * .27f
+        val r = min(road * .3f, w * .2f)
+        roadPaint.shader = null
+        roadPaint.color = 0xF01C2535.toInt()
+        // The road the car is on, and the three others.
+        path.reset()
+        path.moveTo(cx - w * .09f, horizon + road)
+        path.lineTo(cx - r * .32f, cy + r * .8f)
+        path.lineTo(cx + r * .32f, cy + r * .8f)
+        path.lineTo(cx + w * .09f, horizon + road)
+        path.close()
+        canvas.drawPath(path, roadPaint)
+        canvas.drawRect(0f, cy - r * .3f, cx - r * .8f, cy + r * .3f, roadPaint)
+        canvas.drawRect(cx + r * .8f, cy - r * .3f, w, cy + r * .3f, roadPaint)
+        canvas.drawRect(cx - r * .26f, horizon - r * .1f, cx + r * .26f, cy - r * .8f, roadPaint)
+        canvas.drawCircle(cx, cy, r, roadPaint)
+        linePaint.color = tone
+        linePaint.strokeWidth = 2.4f * density
+        canvas.drawCircle(cx, cy, r, linePaint)
+        roadPaint.color = 0xFF0F1A2C.toInt()
+        canvas.drawCircle(cx, cy, r * .42f, roadPaint)
+        linePaint.strokeWidth = 1.8f * density
+        canvas.drawCircle(cx, cy, r * .42f, linePaint)
+        // The arrow: in at the bottom, round the ring, out at the exit.
+        val out = when (exit) { 1 -> 0f; 2 -> -90f; 3 -> -180f; null -> -45f; else -> -225f }
+        val ring = r * .71f
+        rect.set(cx - ring, cy - ring, cx + ring, cy + ring)
+        path.reset()
+        path.moveTo(cx, horizon + road * .62f)
+        path.lineTo(cx, cy + ring)
+        path.arcTo(rect, 90f, out - 90f)
+        val angle = Math.toRadians(out.toDouble())
+        val dx = Math.cos(angle).toFloat()
+        val dy = Math.sin(angle).toFloat()
+        val endX = cx + dx * r * 1.2f
+        val endY = cy + dy * r * 1.2f
+        path.lineTo(endX, endY)
+        linePaint.color = guideColor
+        linePaint.strokeWidth = w * .034f
+        canvas.drawPath(path, linePaint)
+        val head = w * .055f
+        path.reset()
+        path.moveTo(endX + dx * head, endY + dy * head)
+        path.lineTo(endX - dy * head * .8f, endY + dx * head * .8f)
+        path.lineTo(endX + dy * head * .8f, endY - dx * head * .8f)
+        path.close()
+        arrowPaint.shader = null
+        arrowPaint.color = guideColor
+        canvas.drawPath(path, arrowPaint)
+        if (exit != null) {
+            // The exit's number beside the arrow's head, clear of the figures above.
+            val bx = endX - dy * head * 1.7f + dx * head * .3f
+            val by = endY + kotlin.math.abs(dx) * head * 1.7f + dy * head * .3f
+            canvas.drawCircle(bx, by, 9 * density, arrowPaint)
+            textPaint.color = Color.WHITE
+            textPaint.textAlign = Paint.Align.CENTER
+            textPaint.typeface = Typeface.DEFAULT_BOLD
+            textPaint.textSize = 11 * density
+            canvas.drawText(exit.toString(), bx, by + 4 * density, textPaint)
+        }
+    }
+
+    /** A U-turn: up the lane, round to the left and back down. */
+    private fun drawUTurn(canvas: Canvas, cx: Float, horizon: Float, road: Float, w: Float) {
+        val right = cx + w * .03f
+        val left = cx - w * .12f
+        val top = horizon + road * .16f
+        path.reset()
+        path.moveTo(right, horizon + road * .58f)
+        path.lineTo(right, top + road * .12f)
+        rect.set(left, top, right, top + road * .24f)
+        path.arcTo(rect, 0f, -180f)
+        path.lineTo(left, horizon + road * .44f)
+        linePaint.color = guideColor
+        linePaint.strokeWidth = w * .036f
+        canvas.drawPath(path, linePaint)
+        val head = w * .055f
+        path.reset()
+        path.moveTo(left, horizon + road * .44f + head)
+        path.lineTo(left - head * .8f, horizon + road * .44f)
+        path.lineTo(left + head * .8f, horizon + road * .44f)
+        path.close()
+        arrowPaint.shader = null
+        arrowPaint.color = guideColor
+        canvas.drawPath(path, arrowPaint)
+    }
+
+    /** The destination: a green flag standing on the road ahead. */
+    private fun drawFlag(canvas: Canvas, cx: Float, horizon: Float, road: Float) {
+        val foot = horizon + road * .14f
+        val tall = 30 * density
+        linePaint.color = Color.WHITE
+        linePaint.strokeWidth = 2.2f * density
+        canvas.drawLine(cx, foot, cx, foot - tall, linePaint)
+        path.reset()
+        path.moveTo(cx, foot - tall)
+        path.lineTo(cx + 22 * density, foot - tall + 7 * density)
+        path.lineTo(cx, foot - tall + 14 * density)
+        path.close()
+        arrowPaint.shader = null
+        arrowPaint.color = arriveColor
+        canvas.drawPath(path, arrowPaint)
+        canvas.drawCircle(cx, foot, 5 * density, arrowPaint)
+        linePaint.strokeWidth = 1.6f * density
+        canvas.drawCircle(cx, foot, 5 * density, linePaint)
+    }
+
+    /** The speed camera on the right verge and its limit on the left, nearer as the car approaches; a red zone on the road. */
+    private fun drawCamera(canvas: Canvas, cx: Float, w: Float, h: Float, horizon: Float) {
+        val metres = cameraMeters ?: return
+        val t = (1f - metres.coerceAtMost(FAR_M) / FAR_M.toFloat()).coerceIn(0f, 1f)
+        val road = h - horizon
+        val y = horizon + road * (.1f + .42f * t)
+        val half = w * .035f + (w * .78f - w * .035f) * ((y - horizon) / road)
+        val scale = .55f + .65f * t
+        // The zone before the camera, in red on the roadway.
+        path.reset()
+        val y0 = y - road * .07f
+        val half0 = w * .035f + (w * .78f - w * .035f) * ((y0 - horizon) / road)
+        path.moveTo(cx - half0, y0)
+        path.lineTo(cx + half0, y0)
+        path.lineTo(cx + half, y)
+        path.lineTo(cx - half, y)
+        path.close()
+        arrowPaint.shader = null
+        arrowPaint.color = 0x59FF2B2B
+        canvas.drawPath(path, arrowPaint)
+        // The camera on its pole.
+        val x = cx + half + 8 * density * scale
+        val pole = 22 * density * scale
+        linePaint.color = 0xFFC9CDD3.toInt()
+        linePaint.strokeWidth = 2 * density * scale
+        canvas.drawLine(x, y, x, y - pole, linePaint)
+        val bw = 26 * density * scale
+        val bh = 18 * density * scale
+        rect.set(x - bw / 2, y - pole - bh, x + bw / 2, y - pole)
+        arrowPaint.color = Color.WHITE
+        canvas.drawRoundRect(rect, 4 * density * scale, 4 * density * scale, arrowPaint)
+        rect.inset(1.6f * density * scale, 1.6f * density * scale)
+        arrowPaint.color = 0xFFE5262E.toInt()
+        canvas.drawRoundRect(rect, 3 * density * scale, 3 * density * scale, arrowPaint)
+        arrowPaint.color = Color.WHITE
+        rect.set(x - bw * .3f, y - pole - bh * .7f, x + bw * .08f, y - pole - bh * .3f)
+        canvas.drawRoundRect(rect, density, density, arrowPaint)
+        canvas.drawCircle(x + bw * .24f, y - pole - bh * .5f, bh * .12f, arrowPaint)
+        // Its limit as a road sign on the other verge.
+        val limit = cameraLimit ?: return
+        val lx = cx - half - 8 * density * scale
+        canvas.drawLine(lx, y, lx, y - pole, linePaint)
+        val radius = 11 * density * scale
+        arrowPaint.color = Color.WHITE
+        canvas.drawCircle(lx, y - pole - radius, radius, arrowPaint)
+        linePaint.color = 0xFFE5262E.toInt()
+        linePaint.strokeWidth = 3 * density * scale
+        canvas.drawCircle(lx, y - pole - radius, radius - 1.5f * density * scale, linePaint)
+        textPaint.color = 0xFF222222.toInt()
+        textPaint.textAlign = Paint.Align.CENTER
+        textPaint.typeface = Typeface.DEFAULT_BOLD
+        textPaint.textSize = 10 * density * scale
+        canvas.drawText(limit.toString(), lx, y - pole - radius + 3.6f * density * scale, textPaint)
+    }
+
+    /** The street to take, white on green like a road sign, over the far end of the turn. */
+    private fun drawStreetSign(canvas: Canvas, w: Float, horizon: Float, road: Float, street: String, left: Boolean) {
+        textPaint.typeface = Typeface.DEFAULT_BOLD
+        textPaint.textAlign = Paint.Align.CENTER
+        textPaint.textSize = 11 * density
+        val name = if (street.length > 20) street.take(19) + "…" else street
+        val label = if (left) "← $name" else "$name →"
+        val wide = min(textPaint.measureText(label) + 14 * density, w * .5f)
+        val bottom = horizon + road * .084f - 5 * density
+        val centre = if (left) w * .04f + wide / 2 else w * .96f - wide / 2
+        rect.set(centre - wide / 2, bottom - 20 * density, centre + wide / 2, bottom)
+        arrowPaint.shader = null
+        arrowPaint.color = Color.WHITE
+        canvas.drawRoundRect(rect, 4 * density, 4 * density, arrowPaint)
+        rect.inset(1.2f * density, 1.2f * density)
+        arrowPaint.color = 0xFF0B6B3A.toInt()
+        canvas.drawRoundRect(rect, 3 * density, 3 * density, arrowPaint)
+        textPaint.color = Color.WHITE
+        canvas.save()
+        canvas.clipRect(rect)
+        canvas.drawText(label, centre, bottom - 6.5f * density, textPaint)
+        canvas.restore()
+    }
+
+    /** Top left: the navigation app's own arrow, the distance, and in a word what comes (or the camera). */
+    private fun drawPill(canvas: Canvas, turn: Maneuver?, arriving: Boolean) {
+        val camera = cameraFirst
+        val title = if (camera) "${(cameraMeters!! / 10) * 10} m" else stepText ?: "Guidage"
+        val detail = when {
+            camera -> listOfNotNull("Radar", cameraLimit?.toString()).joinToString(" · ")
+            turn == null -> ""
+            else -> when (turn.turn) {
+                Turn.LEFT -> "à gauche"
+                Turn.RIGHT -> "à droite"
+                Turn.ROUNDABOUT -> turn.exit?.let { "sortie $it" } ?: "rond-point"
+                Turn.UTURN -> "demi-tour"
+                Turn.ARRIVE -> "arrivée"
+                Turn.STRAIGHT -> "tout droit"
+            }
+        }
+        textPaint.textAlign = Paint.Align.LEFT
+        textPaint.typeface = Typeface.create(Typeface.create("sans-serif-condensed", Typeface.NORMAL), 700, false)
+        textPaint.textSize = 17 * density
+        val titleWidth = textPaint.measureText(title)
+        textPaint.typeface = Typeface.DEFAULT
+        textPaint.textSize = 10 * density
+        val detailWidth = textPaint.measureText(detail)
+        val icon = 26 * density
+        val left = 8 * density
+        val top = 8 * density
+        val wide = min(icon + 20 * density + maxOf(titleWidth, detailWidth), width * .5f)
+        rect.set(left, top, left + wide, top + 40 * density)
+        arrowPaint.shader = null
+        arrowPaint.color = when { camera -> 0xF05A1418.toInt(); arriving -> 0xF00B4A37.toInt(); else -> 0xF0102A5C.toInt() }
+        canvas.drawRoundRect(rect, 12 * density, 12 * density, arrowPaint)
+        if (camera) {
+            linePaint.color = 0xFFE5262E.toInt()
+            linePaint.strokeWidth = 1.4f * density
+            canvas.drawRoundRect(rect, 12 * density, 12 * density, linePaint)
+        }
+        val ix = left + 7 * density
+        val iy = top + 7 * density
+        val drawable = turnIcon
+        if (!camera && drawable != null) {
+            drawable.setBounds(ix.toInt(), iy.toInt(), (ix + icon).toInt(), (iy + icon).toInt())
+            drawable.draw(canvas)
+        } else {
+            // A small camera, or a plain arrow when the app sent no icon.
+            arrowPaint.color = Color.WHITE
+            if (camera) {
+                rect.set(ix + 2 * density, iy + 7 * density, ix + 17 * density, iy + 19 * density)
+                canvas.drawRoundRect(rect, 2 * density, 2 * density, arrowPaint)
+                canvas.drawCircle(ix + 22 * density, iy + 13 * density, 3 * density, arrowPaint)
+            } else {
+                path.reset()
+                path.moveTo(ix + icon / 2, iy + 3 * density)
+                path.lineTo(ix + icon - 4 * density, iy + icon - 5 * density)
+                path.lineTo(ix + icon / 2, iy + icon - 9 * density)
+                path.lineTo(ix + 4 * density, iy + icon - 5 * density)
+                path.close()
+                canvas.drawPath(path, arrowPaint)
+            }
+        }
+        val tx = ix + icon + 6 * density
+        canvas.save()
+        canvas.clipRect(left, top, left + wide - 4 * density, top + 40 * density)
+        textPaint.color = Color.WHITE
+        textPaint.typeface = Typeface.create(Typeface.create("sans-serif-condensed", Typeface.NORMAL), 700, false)
+        textPaint.textSize = 17 * density
+        canvas.drawText(title, tx, top + 19 * density, textPaint)
+        textPaint.typeface = Typeface.DEFAULT
+        textPaint.textSize = 10 * density
+        textPaint.color = 0xE6FFFFFF.toInt()
+        canvas.drawText(detail, tx, top + 32 * density, textPaint)
+        canvas.restore()
     }
 
     /**
@@ -182,12 +640,23 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
      * shoulders, sloping rear window, door mirrors, two wrap-around tail lights joined by a dark trim strip with the
      * driver's emblem between them, the plate, and a black lower bumper with reflectors. The lights brighten on braking.
      */
-    private fun drawCar(canvas: Canvas, cx: Float, bottom: Float, carW: Float) {
+    private fun drawCar(canvas: Canvas, cx: Float, bottom: Float, carW: Float, blink: Int = 0) {
         val u = carW
         val v = carW * .62f
         val top = bottom - v
         fun x(f: Float) = cx + u * f
         fun y(f: Float) = top + v * f
+        // At night, the headlights' beam on the road ahead.
+        if (night) {
+            carPaint.shader = LinearGradient(0f, top - v * .9f, 0f, top + v * .3f, 0x00FFF4D6, 0x38FFF4D6, Shader.TileMode.CLAMP)
+            path.reset()
+            path.moveTo(cx - u * .34f, top + v * .3f)
+            path.lineTo(cx - u * .62f, top - v * .9f)
+            path.lineTo(cx + u * .62f, top - v * .9f)
+            path.lineTo(cx + u * .34f, top + v * .3f)
+            path.close()
+            canvas.drawPath(path, carPaint)
+        }
         // Shadow and tyres.
         carPaint.shader = RadialGradient(cx, bottom, u * .8f, 0xA0000000.toInt(), 0, Shader.TileMode.CLAMP)
         rect.set(x(-.8f), bottom - v * .22f, x(.8f), bottom + v * .22f)
@@ -205,7 +674,9 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
         rect.set(x(.43f), y(.36f), x(.53f), y(.45f))
         canvas.drawOval(rect, carPaint)
         // Cabin: a sloping greenhouse, narrower at the roof.
-        val pearl = LinearGradient(0f, top, 0f, bottom, 0xFFF7F8FA.toInt(), 0xFFB9C0CA.toInt(), Shader.TileMode.CLAMP)
+        // The body in the driver's colour, lit from above.
+        val pearl = LinearGradient(0f, top, 0f, bottom, ColorUtils.blendARGB(bodyColor, Color.WHITE, .12f),
+            ColorUtils.blendARGB(bodyColor, Color.BLACK, .26f), Shader.TileMode.CLAMP)
         carPaint.shader = pearl
         path.reset()
         path.moveTo(x(-.42f), y(.46f))
@@ -255,7 +726,11 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
             path.lineTo(x(side * .22f), y(.585f))
             path.lineTo(x(side * .5f), y(.63f))
             path.close()
-            carPaint.color = if (glowing) 0xFFFF2B2B.toInt() else 0xFFD8262E.toInt()
+            carPaint.color = when {
+                blink != 0 && side == blink.toFloat() -> 0xFFFFB020.toInt() // the indicator, on the side of the turn
+                glowing -> 0xFFFF2B2B.toInt()
+                else -> 0xFFD8262E.toInt()
+            }
             canvas.drawPath(path, carPaint)
             // The light's inner LED line.
             stroke(if (glowing) 0xFFFFD0D0.toInt() else 0xFFFF7A7A.toInt(), 1f)
@@ -299,6 +774,9 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
     }
 
     private companion object {
+        // A turn is drawn on the road within this distance; the countdown bar fills over the second one.
+        const val NEAR_M = 400
+        const val FAR_M = 500
         val LANES = floatArrayOf(-1f / 3f, 1f / 3f)
         val SIDES = floatArrayOf(-1f, 1f)
     }

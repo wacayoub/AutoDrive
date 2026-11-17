@@ -3,6 +3,10 @@ Incar Drive 1.0.14 — écran d’accueil pour l’Incarlink (Android 11 à 13, 
 **Mettre à jour** : Réglages › Mises à jour, ou la proposition automatique.
 
 **Changements**
+- Compteur « Route » et guidage fusionnés : pendant un guidage Google Maps ou Waze, la route du compteur montre la suite. Tout droit : une flèche bleue sur ta voie. Virage à moins de 400 m : la route tourne à gauche ou à droite, avec la flèche, des chevrons, le nom de la rue sur un panneau vert et le clignotant de la voiture. Rond-point : l’anneau et la flèche vers la sortie comptée. Demi-tour et arrivée (drapeau) aussi. En haut à gauche : la flèche de Maps, la distance et un mot (« à droite », « sortie 2 »…) ; en bas : une barre qui se remplit sur les 500 derniers mètres, puis le temps restant et l’heure d’arrivée.
+- Radar sur la route : le radar et sa limite apparaissent sur les bas-côtés et se rapprochent, avec une zone rouge sur la chaussée.
+- Couleur de la voiture : Réglages › Compteur de vitesse (blanc, gris, noir, rouge, bleu). Phares allumés la nuit, ciel du moment derrière l’horizon.
+- Le sens du virage est lu dans la consigne de Maps (français, anglais, arabe). La route dessinée indique la direction, pas la forme réelle de la route ; une consigne non reconnue est montrée comme « tout droit ».
 - Cadre Google Maps pendant le guidage : le haut du cadre affiche le prochain virage en grand (flèche, distance, consigne, temps restant et heure d’arrivée), juste au-dessus de la petite fenêtre de Maps. La carte de navigation du milieu garde alors Maison, Travail et tes lieux.
 - Bulle de guidage : elle ne s’affiche plus au-dessus de Google Maps ou de Waze eux-mêmes, où elle répétait leur écran ; elle reste au-dessus des autres applis ouvertes depuis l’accueil. Elle n’écrit plus la distance deux fois.
 
