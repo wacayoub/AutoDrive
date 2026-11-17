@@ -64,6 +64,16 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
     var flow: Flow? = null
         set(value) { if (field != value) { field = value; invalidate() } }
 
+    // The foot of the card, kept for the navigation's destinations and instruction: the car stops above it.
+    private var footer = 0f
+    private var footerColor = 0
+
+    fun footer(height: Float, color: Int) {
+        footer = height
+        footerColor = color
+        invalidate()
+    }
+
     /** The speed camera ahead on this road, or null. */
     fun camera(meters: Int?, limit: Int?) {
         cameraMeters = meters
@@ -138,8 +148,16 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
 
     override fun onDraw(canvas: Canvas) {
         val w = width.toFloat()
-        val h = height.toFloat()
+        // Everything is drawn above the card's foot, which is filled plainly for the navigation.
+        val h = height.toFloat() - footer
         if (w < 40 * density || h < 40 * density) return
+        if (footer > 0f) {
+            roadPaint.shader = null
+            roadPaint.color = footerColor
+            canvas.drawRect(0f, h, w, height.toFloat(), roadPaint)
+            canvas.save()
+            canvas.clipRect(0f, 0f, w, h)
+        }
         val turn = maneuver
         val guiding = turn != null || cameraMeters != null
         val arriving = turn?.turn == Turn.ARRIVE
@@ -214,6 +232,7 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
             unitPaint.textSize = 10 * density
             canvas.drawText("KM/H", cx, baseline + 13 * density, unitPaint)
         } else drawPill(canvas, turn, arriving)
+        if (footer > 0f) canvas.restore()
 
         when {
             shown > .5f && isShown && windowVisibility == VISIBLE -> postInvalidateDelayed(33)

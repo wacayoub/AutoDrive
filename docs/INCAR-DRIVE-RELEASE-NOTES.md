@@ -3,6 +3,7 @@ Incar Drive 1.0.14 — écran d’accueil pour l’Incarlink (Android 11 à 13, 
 **Mettre à jour** : Réglages › Mises à jour, ou la proposition automatique.
 
 **Changements**
+- Une seule carte pour conduire : le compteur et la carte de navigation ne font plus qu’un. En haut, la vitesse, la route et le guidage ; au pied de la même carte, « Naviguer », Maison, Travail et tes lieux, ou pendant un guidage la distance, la consigne complète, le temps restant et l’heure d’arrivée en couleur.
 - Compteur « Route » et guidage fusionnés : pendant un guidage Google Maps ou Waze, la route du compteur montre la suite. Tout droit : une flèche bleue sur ta voie. Virage à moins de 400 m : la route tourne à gauche ou à droite, avec la flèche, des chevrons, le nom de la rue sur un panneau vert et le clignotant de la voiture. Rond-point : l’anneau et la flèche vers la sortie comptée. Demi-tour et arrivée (drapeau) aussi. En haut à gauche : la flèche de Maps, la distance et un mot (« à droite », « sortie 2 »…) ; en bas : une barre qui se remplit sur les 500 derniers mètres, puis le temps restant et l’heure d’arrivée.
 - Radar sur la route : le radar et sa limite apparaissent sur les bas-côtés et se rapprochent, avec une zone rouge sur la chaussée.
 - Couleur de la voiture : Réglages › Compteur de vitesse (blanc, gris, noir, rouge, bleu). Phares allumés la nuit, ciel du moment derrière l’horizon.

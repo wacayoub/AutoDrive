@@ -592,10 +592,8 @@ class HomeActivity : Activity() {
                 addPage(row().apply {
                     gravity = Gravity.FILL
                     addView(mediaCard(), LinearLayout.LayoutParams(0, -1, 1.4f))
-                    addView(column().apply {
-                        addView(speedCard(), LinearLayout.LayoutParams(-1, 0, 1.25f))
-                        addView(mapsCard(), LinearLayout.LayoutParams(-1, 0, .75f).apply { topMargin = dp(10) })
-                    }, LinearLayout.LayoutParams(0, -1, 1f).apply { marginStart = dp(10); marginEnd = dp(10) })
+                    // One card for driving: the speed, the road and the guidance, with the destinations at its foot.
+                    addView(speedCard(), LinearLayout.LayoutParams(0, -1, 1f).apply { marginStart = dp(10); marginEnd = dp(10) })
                 // The live map (a Google Maps or Waze widget) takes the favourites' place when chosen; they move to page 2.
                 addView(when {
                     !mapOnHome() -> favoritesCard()
@@ -1017,8 +1015,10 @@ class HomeActivity : Activity() {
         // The road reaches the card's edges, clipped to its rounded corners; the dials keep a margin.
         val road = dial is RoadGauge
         if (road) clipToOutline = true
+        // The foot of the card belongs to the navigation: the road stops above it, a dial sits above it.
+        (dial as? RoadGauge)?.footer(dp(DRIVE_FOOTER).toFloat(), if (night) 0xF00B1018.toInt() else 0xF5F2F5F8.toInt())
         addView(dial, FrameLayout.LayoutParams(-1, -1).apply {
-            if (!road) setMargins(dp(4), dp(4), dp(4), dp(20))
+            if (!road) setMargins(dp(4), dp(4), dp(4), dp(DRIVE_FOOTER + 20))
         })
         // Altitude in the upper left corner, the limit as a road sign in the upper right.
         addView(column().apply {
@@ -1042,7 +1042,8 @@ class HomeActivity : Activity() {
         addView(cameraBadge, FrameLayout.LayoutParams(-2, -2, Gravity.TOP or Gravity.CENTER_HORIZONTAL).apply { topMargin = dp(8) })
         // Over the road's dark band the trip line is light in both themes.
         speedStatus = label("", 11, if (road) 0xE6FFFFFF.toInt() else muted, 600).apply { gravity = Gravity.CENTER }
-        addView(speedStatus, FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM).apply { bottomMargin = dp(8) })
+        addView(speedStatus, FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM).apply { bottomMargin = dp(DRIVE_FOOTER + 6) })
+        addView(mapsCard(), FrameLayout.LayoutParams(-1, dp(DRIVE_FOOTER), Gravity.BOTTOM))
         contentDescription = "Vitesse et trajet"
         setOnClickListener {
             if (!gps.permitted()) requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION,
@@ -1057,8 +1058,9 @@ class HomeActivity : Activity() {
      * guidance instead: the turn arrow, the distance to the turn, the instruction, the time left and the arrival.
      */
     private fun mapsCard() = column().apply {
-        background = glass()
-        setPadding(dp(8), dp(6), dp(8), dp(8))
+        // The foot of the driving card: no frame of its own, a hairline above it.
+        addView(View(context).apply { setBackgroundColor(tint(text, 0x1F)) }, LinearLayout.LayoutParams(-1, dp(1)))
+        setPadding(dp(8), 0, dp(8), dp(8))
         addView(row().apply {
             background = pressable(null, 12)
             setPadding(dp(8), 0, dp(4), 0)
@@ -1315,12 +1317,7 @@ class HomeActivity : Activity() {
         if (roadGauge == null || !::altitudeText.isInitialized) return
         val busy = lastNav != null || islandCamera != null
         altitudeText.visibility = if (busy) View.INVISIBLE else View.VISIBLE
-        lastNav?.let { nav ->
-            listOfNotNull(nav.remaining, nav.arrival?.let { "arrivée $it" }, nav.distance).joinToString(" · ")
-                .takeIf { it.isNotBlank() }?.let { speedStatus.text = it }
-        }
-        // The time left in the traffic's colour, like in Maps; the trip line stays white.
-        speedStatus.setTextColor(lastNav?.flow?.color ?: 0xE6FFFFFF.toInt())
+        // The time left and the arrival are at the card's foot, in the traffic's colour; the trip line stays above it.
     }
 
     /** The next turn goes to the island only where the navigation card is not on screen: page 2 or under a panel. */
@@ -2548,6 +2545,8 @@ class HomeActivity : Activity() {
         const val FAVORITES = "favorites"
         const val DOCK_APPS = "dock_apps"
         const val SPEED_STYLE = "speed_style"
+        // Height of the navigation foot of the driving card, in dp.
+        const val DRIVE_FOOTER = 98
         const val CAR_COLOR = "car_color"
         val CAR_COLORS = linkedMapOf("Blanc" to 0xFFF2F5F9.toInt(), "Gris" to 0xFF9AA3AE.toInt(), "Noir" to 0xFF2A2F38.toInt(),
             "Rouge" to 0xFFC0272D.toInt(), "Bleu" to 0xFF2C5FA8.toInt())
