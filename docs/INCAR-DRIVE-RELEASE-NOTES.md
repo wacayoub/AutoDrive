@@ -4,6 +4,7 @@ Incar Drive 1.0.8 — écran d’accueil pour l’Incarlink (Android 11 à 13, c
 
 **Changements**
 - Logo Toyota argent + HYBRID : Réglages › Écran d’accueil › « Logo Toyota argent + HYBRID ». L’emblème Toyota en chrome argent (récupéré sur Wikimedia Commons) et un badge HYBRID chromé avec sa vague bleue, dessiné par Incar Drive, au milieu de la barre du haut. Rien n’est inclus dans l’appli.
+- Carte de navigation : la distance n’est plus répétée sur la seconde ligne, même quand Google Maps l’écrit avec des espaces spéciaux (« 8.5 km »).
 
 Comprend aussi la 1.0.7 :
 - Petite fenêtre Google Maps et carte ensemble : pendant un guidage, la carte de droite laisse place à un cadre sobre où la petite fenêtre de Maps vient se poser (Android la place en bas à droite ; pince-la pour l’agrandir, glisse-la pour la caler). Sans petite fenêtre, le cadre propose « Ouvrir Maps ». Le widget revient à la fin du guidage.
