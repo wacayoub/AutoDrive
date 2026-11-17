@@ -153,11 +153,11 @@ internal class StatusIcons(private val home: HomeActivity) {
     }
 
     fun stop() {
+        // The callback class only exists from Android 12: nothing was registered before it.
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return
         val callback = listening as? TelephonyCallback ?: return
         listening = null
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) runCatching {
-            home.getSystemService(TelephonyManager::class.java)?.unregisterTelephonyCallback(callback)
-        }
+        runCatching { home.getSystemService(TelephonyManager::class.java)?.unregisterTelephonyCallback(callback) }
     }
 
     fun render() {
