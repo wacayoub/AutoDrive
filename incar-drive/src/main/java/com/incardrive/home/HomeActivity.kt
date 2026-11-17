@@ -1041,7 +1041,7 @@ class HomeActivity : Activity() {
         // Over the road's dark band the trip line is light in both themes.
         // The trip summary is the first line of the card's foot, under the road's line.
         speedStatus = label("", 12, text, 700).apply { gravity = Gravity.CENTER; visibility = View.INVISIBLE }
-        addView(speedStatus, FrameLayout.LayoutParams(-1, dp(34), Gravity.BOTTOM).apply { bottomMargin = dp(DRIVE_FOOTER - 40) })
+        addView(speedStatus, FrameLayout.LayoutParams(-1, dp(24), Gravity.BOTTOM).apply { bottomMargin = dp(DRIVE_FOOTER - 31) })
         addView(mapsCard(), FrameLayout.LayoutParams(-1, dp(DRIVE_FOOTER), Gravity.BOTTOM))
         contentDescription = "Vitesse et trajet"
         setOnClickListener {
@@ -1062,19 +1062,18 @@ class HomeActivity : Activity() {
         addView(View(context).apply { setBackgroundColor(if (roadGauge == null) tint(text, 0x1F) else Color.TRANSPARENT) },
             LinearLayout.LayoutParams(-1, dp(1)))
         setPadding(dp(8), dp(4), dp(8), dp(6))
-        statsTop = statRow(13, 9)
+        // The arrival, in cells, only while the road card guides.
+        statsTop = statRow(13, 9).apply { visibility = View.GONE }
         addView(statsTop, LinearLayout.LayoutParams(-1, dp(34)))
-        statsBottom = statRow(12, 9).apply {
-            visibility = View.GONE
-            background = pressable(GradientDrawable().apply {
-                cornerRadius = dp(12).toFloat()
-                setColor(getColor(R.color.home_chip))
-                setStroke(dp(1), getColor(R.color.home_card_border))
-            }, 12)
-            contentDescription = "Trajet en cours. Toucher pour ouvrir la navigation."
-            setOnClickListener { if (!navigation.resume()) navMissing() }
+        // The trip, in a style of its own: one slim line, small labels and bold values, so it never reads like
+        // the arrival's cells.
+        tripLine = label("", 12, text, 700).apply {
+            gravity = Gravity.CENTER
+            maxLines = 1
+            contentDescription = "Trajet en cours"
+            setOnClickListener { if (lastNav != null) { if (!navigation.resume()) navMissing() } else showTrip() }
         }
-        addView(statsBottom, LinearLayout.LayoutParams(-1, 0, 1f).apply { topMargin = dp(6) })
+        addView(tripLine, LinearLayout.LayoutParams(-1, dp(24)).apply { topMargin = dp(2) })
         addView(row().apply {
             navRow = this
             visibility = View.GONE
@@ -1126,7 +1125,7 @@ class HomeActivity : Activity() {
     private lateinit var navIcon: ImageView
     private lateinit var navRow: View
     private lateinit var statsTop: LinearLayout
-    private lateinit var statsBottom: LinearLayout
+    private lateinit var tripLine: TextView
     private var footMessage = false
 
     /** Three cells side by side, each a value in bold over a small label, with hairlines between them. */
@@ -1152,11 +1151,24 @@ class HomeActivity : Activity() {
         }
     }
 
-    private fun tripCells(): Array<Triple<String, String, Int?>> {
+    /** « TRAJET 24 h 40 · 10 km · MOY. 0 km/h »: the labels small and muted, the values bold. */
+    private fun tripText(): CharSequence {
         val current = trip.trip
         val elapsed = current.startedAt.takeIf { it > 0 }?.let { System.currentTimeMillis() - it }?.coerceAtLeast(0) ?: 0
-        return arrayOf(Triple(hours(elapsed), "Trajet", null), Triple(kilometres(current.meters), "Distance", null),
-            Triple(current.averageKmh?.let { "$it km/h" } ?: "—", "Moyenne", null))
+        val out = android.text.SpannableStringBuilder()
+        fun small(word: String) {
+            val start = out.length
+            out.append(word)
+            out.setSpan(android.text.style.RelativeSizeSpan(.72f), start, out.length, 0)
+            out.setSpan(android.text.style.ForegroundColorSpan(muted), start, out.length, 0)
+        }
+        small("TRAJET  ")
+        out.append(hours(elapsed))
+        small("   ·   ")
+        out.append(kilometres(current.meters))
+        small("   ·   MOY.  ")
+        out.append(current.averageKmh?.let { "$it km/h" } ?: "—")
+        return out
     }
 
     /**
@@ -1168,15 +1180,24 @@ class HomeActivity : Activity() {
         if (!::statsTop.isInitialized) return
         val nav = lastNav
         val roadGuides = nav != null && roadGauge != null
-        statsTop.visibility = if (footMessage) View.INVISIBLE else View.VISIBLE
-        speedStatus.visibility = if (footMessage) View.VISIBLE else View.INVISIBLE
-        if (roadGuides) {
-            statsTop.stats(Triple(nav!!.arrival ?: "—", "Arrivée", nav.flow?.color),
-                Triple(nav.remaining ?: "—", "Restant", nav.flow?.color), Triple(nav.distance ?: "—", "Distance", null))
-            statsBottom.stats(*tripCells())
-        } else statsTop.stats(*tripCells())
+        speedStatus.visibility = if (footMessage && !roadGuides) View.VISIBLE else View.INVISIBLE
+        statsTop.visibility = if (roadGuides) View.VISIBLE else View.GONE
+        if (roadGuides) statsTop.stats(Triple(nav!!.arrival ?: "—", "Arrivée", nav.flow?.color),
+            Triple(nav.remaining ?: "—", "Restant", nav.flow?.color), Triple(nav.distance ?: "—", "Distance", null))
+        tripLine.text = tripText()
+        tripLine.visibility = if (footMessage && !roadGuides) View.INVISIBLE else View.VISIBLE
+        // Under the arrival's cells the trip sits in a pill; alone, it is a plain line.
+        tripLine.background = if (roadGuides) pressable(GradientDrawable().apply {
+            cornerRadius = dp(10).toFloat()
+            setColor(getColor(R.color.home_chip))
+            setStroke(dp(1), getColor(R.color.home_card_border))
+        }, 10) else null
+        (tripLine.layoutParams as LinearLayout.LayoutParams).let {
+            val height = if (roadGuides) dp(30) else dp(24)
+            val top = if (roadGuides) dp(8) else dp(2)
+            if (it.height != height || it.topMargin != top) { it.height = height; it.topMargin = top; tripLine.requestLayout() }
+        }
         val framed = roadGauge == null && mapOnHome() && (mapSource() == MAPS_WIDGET || mapSource() == MAPS_APP)
-        statsBottom.visibility = if (roadGuides) View.VISIBLE else View.GONE
         navRow.visibility = if (nav != null && roadGauge == null && !framed) View.VISIBLE else View.GONE
         placesRow.visibility = if (nav == null || (roadGauge == null && framed)) View.VISIBLE else View.GONE
     }
@@ -2640,7 +2661,7 @@ class HomeActivity : Activity() {
         const val DOCK_APPS = "dock_apps"
         const val SPEED_STYLE = "speed_style"
         // Height of the navigation foot of the driving card, in dp.
-        const val DRIVE_FOOTER = 92
+        const val DRIVE_FOOTER = 88
         const val CAR_COLOR = "car_color"
         val CAR_COLORS = linkedMapOf("Blanc" to 0xFFF2F5F9.toInt(), "Gris" to 0xFF9AA3AE.toInt(), "Noir" to 0xFF2A2F38.toInt(),
             "Rouge" to 0xFFC0272D.toInt(), "Bleu" to 0xFF2C5FA8.toInt())
