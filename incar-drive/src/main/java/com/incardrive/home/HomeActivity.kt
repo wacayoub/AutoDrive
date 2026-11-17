@@ -960,6 +960,7 @@ class HomeActivity : Activity() {
      * large, the instruction, and the time left with the arrival on the right. The places row makes way for it.
      */
     private fun renderNav(nav: NavInfo?) {
+        if (mapOnHome()) mapWidget.guide(nav != null) { if (!navigation.resume()) navMissing() }
         if (!::navTitle.isInitialized) return
         if (nav == null) {
             navIcon.setImageResource(R.drawable.ic_home_navigation)
@@ -979,8 +980,14 @@ class HomeActivity : Activity() {
             navIcon.setImageDrawable(nav.arrow)
             navIcon.rotation = 0f
         }
-        navTitle.text = nav.step ?: nav.remaining ?: "Guidage"
-        navDetail.text = nav.instruction ?: listOfNotNull(nav.distance, "restants").joinToString(" ")
+        val title = nav.step ?: nav.remaining ?: "Guidage"
+        navTitle.text = title
+        // A second line that adds something: the instruction, else the street, never the title again.
+        fun differs(value: String?) = value?.takeIf { it.isNotBlank() && !it.trim().equals(title.trim(), ignoreCase = true) }
+        navDetail.text = differs(nav.instruction)
+            ?: currentStreet?.let { "Sur $it" }
+            ?: differs(nav.distance)?.let { "$it restants" }
+            ?: "Continuer tout droit"
         navDetail.maxLines = 2
         navDetail.setTextColor(text)
         navEta.text = listOfNotNull(nav.remaining, nav.arrival).joinToString("\n")
