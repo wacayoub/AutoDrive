@@ -142,7 +142,7 @@ internal class OwnMap(private val home: HomeActivity, private val open: () -> Un
         guideText.text = detail.orEmpty()
         guideText.visibility = if (detail == null) View.GONE else View.VISIBLE
         guideEta.text = listOfNotNull(nav.remaining?.takeIf { nav.step != null }, nav.arrival).joinToString("\n")
-        guideEta.setTextColor(nav.flow?.color ?: 0xFF9CC4FF.toInt())
+        guideEta.setTextColor(nav.flow?.color ?: Color.WHITE)
         bar.visibility = View.VISIBLE
     }
 

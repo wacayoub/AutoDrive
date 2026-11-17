@@ -1171,7 +1171,7 @@ class HomeActivity : Activity() {
         statsTop.visibility = if (footMessage) View.INVISIBLE else View.VISIBLE
         speedStatus.visibility = if (footMessage) View.VISIBLE else View.INVISIBLE
         if (roadGuides) {
-            statsTop.stats(Triple(nav!!.arrival ?: "—", "Arrivée", nav.flow?.color ?: navColor),
+            statsTop.stats(Triple(nav!!.arrival ?: "—", "Arrivée", nav.flow?.color),
                 Triple(nav.remaining ?: "—", "Restant", nav.flow?.color), Triple(nav.distance ?: "—", "Distance", null))
             statsBottom.stats(*tripCells())
         } else statsTop.stats(*tripCells())
@@ -1341,7 +1341,7 @@ class HomeActivity : Activity() {
         navDetail.maxLines = 2
         navDetail.setTextColor(text)
         navEta.text = listOfNotNull(nav.remaining, nav.arrival).joinToString("\n")
-        navEta.setTextColor(nav.flow?.color ?: navColor)
+        navEta.setTextColor(nav.flow?.color ?: text)
         navEta.visibility = if (navEta.text.isNullOrEmpty()) View.GONE else View.VISIBLE
         navChevron.visibility = View.GONE
     }

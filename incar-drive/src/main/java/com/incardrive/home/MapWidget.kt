@@ -145,7 +145,7 @@ internal class MapWidget(private val home: HomeActivity) {
             text = line.orEmpty()
             visibility = if (line == null) View.GONE else View.VISIBLE
         }
-        guideEta?.setTextColor(nav.flow?.color ?: home.navColor)
+        guideEta?.setTextColor(nav.flow?.color ?: home.text)
         guideEta?.text = listOfNotNull(nav.remaining?.takeIf { nav.step != null }, nav.arrival, nav.distance?.takeIf { plain(it) != plain(title) })
             .joinToString(" · ")
     }
