@@ -54,9 +54,20 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
 
     /** The next instruction of Google Maps or Waze, or null when guidance stops. */
     fun guide(nav: NavInfo?) {
-        maneuver = nav?.let { Maneuver.of(it.instruction, it.step ?: it.instruction) }
+        maneuver = nav?.let {
+            val read = Maneuver.of(it.instruction, it.step ?: it.instruction)
+            // No direction in the words (often there are none): the arrow's own shape says it.
+            if (read.turn == Turn.STRAIGHT && it.turn != null) read.copy(turn = it.turn) else read
+        }
         turnIcon = nav?.arrow
-        stepText = nav?.let { it.step ?: it.remaining }
+        val text = nav?.let { it.step ?: it.remaining }
+        // A new value from the navigation app sets the distance again; the same text repeated lets the countdown
+        // that runs between its updates carry on.
+        if (text != stepText || nav == null) {
+            baseMeters = Maneuver.meters(nav?.step)
+            travelled = 0f
+        }
+        stepText = text
         invalidate()
     }
 
@@ -90,8 +101,25 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
     }
 
     /** The turn is drawn on the road only once it is close; before that the road stays straight. */
-    private val close get() = (maneuver?.meters ?: 0) <= NEAR_M
-    private val cameraFirst get() = cameraMeters != null && (maneuver == null || cameraMeters!! < (maneuver?.meters ?: Int.MAX_VALUE))
+    private val close get() = (liveMeters ?: 0) <= NEAR_M
+    private val cameraFirst get() = cameraMeters != null && (maneuver == null || cameraMeters!! < (liveMeters ?: Int.MAX_VALUE))
+
+    // The navigation app updates its distance in steps and a little late. Between two of its values the distance is
+    // counted down here from the car's own speed, frame by frame, and set again at each new value.
+    private var baseMeters: Int? = null
+    private var travelled = 0f
+    private val liveMeters: Int? get() = baseMeters?.let { (it - travelled).toInt().coerceAtLeast(0) }
+
+    /** The distance to the next turn as counted down now, written like the navigation app does; null when unknown. */
+    fun liveStep(): String? {
+        val metres = liveMeters ?: return null
+        return when {
+            metres >= 1000 -> String.format(java.util.Locale.FRENCH, "%.1f km", metres / 1000f)
+            metres >= 100 -> "${metres / 10 * 10} m"
+            metres >= 15 -> "${metres / 5 * 5} m"
+            else -> "maintenant"
+        }
+    }
 
     private val density = resources.displayMetrics.density
     private val alert = 0xFFFF4D4F.toInt()
@@ -178,7 +206,12 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
         canvas.drawRect(0f, 0f, w, h, glowPaint)
 
         val now = System.nanoTime()
-        if (lastFrame != 0L) travel = (travel + shown * (now - lastFrame) / 1e9f * .05f) % 2f
+        if (lastFrame != 0L) {
+            val seconds = (now - lastFrame) / 1e9f
+            travel = (travel + shown * seconds * .05f) % 2f
+            // Only over short gaps: after a pause in drawing (another app in front) the app's own value is kept.
+            if (seconds < 1.5f) travelled += shown / 3.6f * seconds
+        }
         lastFrame = now
         val bend = turn != null && close && (turn.turn == Turn.LEFT || turn.turn == Turn.RIGHT)
         val circle = turn != null && close && turn.turn == Turn.ROUNDABOUT
@@ -204,7 +237,7 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
         roadPaint.shader = LinearGradient(0f, h - band, 0f, h, 0x000B1018, 0xD90B1018.toInt(), Shader.TileMode.CLAMP)
         canvas.drawRect(0f, h - band, w, h, roadPaint)
         // How close the turn (or the camera) is: a thin bar that fills over the last 500 m.
-        val metres = if (cameraFirst) cameraMeters else turn?.meters
+        val metres = if (cameraFirst) cameraMeters else liveMeters
         if (guiding && metres != null) {
             val left = 12 * density
             val y = h - band - 3 * density
@@ -218,7 +251,7 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
             canvas.drawRoundRect(rect, 2 * density, 2 * density, arrowPaint)
         }
         // Indicator on the side of a close turn, blinking.
-        val blinkSide = if (bend && (turn?.meters ?: 0) <= 300) (if (turn!!.turn == Turn.LEFT) -1 else 1) else 0
+        val blinkSide = if (bend && (liveMeters ?: 0) <= 300) (if (turn!!.turn == Turn.LEFT) -1 else 1) else 0
         val blinkOn = blinkSide != 0 && (System.nanoTime() / 450_000_000L) % 2L == 0L
         drawCar(canvas, cx, h - band + 3 * density, min(w * .28f, 84 * density), if (blinkOn) blinkSide else 0)
 
@@ -588,7 +621,7 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
     /** Top left: the navigation app's own arrow, the distance, and in a word what comes (or the camera). */
     private fun drawPill(canvas: Canvas, turn: Maneuver?, arriving: Boolean) {
         val camera = cameraFirst
-        val title = if (camera) "${(cameraMeters!! / 10) * 10} m" else stepText ?: "Guidage"
+        val title = if (camera) "${(cameraMeters!! / 10) * 10} m" else liveStep()?.let { if (it == "maintenant") "ici" else it } ?: stepText ?: "Guidage"
         val detail = when {
             camera -> listOfNotNull("Radar", cameraLimit?.toString()).joinToString(" · ")
             turn == null -> ""

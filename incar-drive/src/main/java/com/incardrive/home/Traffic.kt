@@ -63,11 +63,18 @@ internal object Traffic {
 
         fun clear() = samples.clear()
 
-        /** Null until half a minute of driving is known, or when the car has not moved at all in that time (parked). */
+        /**
+         * Null until half a minute of driving is known, or when the car has not moved at all in that time (parked).
+         * A stop is not a jam: the pace is taken over the moments the car moves, so waiting at a light or before a
+         * turn changes nothing; only when it stands still most of the time and creeps in between is it a jam.
+         */
         fun flow(limit: Int?): Flow? {
             if (samples.size < 5 || samples.last().first - samples.first().first < MIN_SPAN_MS) return null
-            if (samples.all { it.second == 0 }) return null
-            val average = samples.sumOf { it.second } / samples.size.toDouble()
+            val moving = samples.filter { it.second >= 3 }
+            if (moving.isEmpty()) return null
+            if (moving.size < samples.size * .35 && moving.size >= 3) return Flow.JAM
+            if (moving.size < 3) return null
+            val average = moving.sumOf { it.second } / moving.size.toDouble()
             val ratio = average / (limit ?: DEFAULT_LIMIT).coerceAtLeast(30)
             return when {
                 ratio < .3 -> Flow.JAM
@@ -77,7 +84,7 @@ internal object Traffic {
         }
 
         private companion object {
-            const val WINDOW_MS = 60_000L
+            const val WINDOW_MS = 120_000L
             const val MIN_SPAN_MS = 30_000L
             const val DEFAULT_LIMIT = 50
         }

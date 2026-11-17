@@ -29,7 +29,15 @@ class MediaAccessService : NotificationListenerService() {
         HomeVisibility.changed = null
     }
 
-    override fun onNotificationPosted(sbn: StatusBarNotification) = refresh(current() ?: listOf(sbn))
+    override fun onNotificationPosted(sbn: StatusBarNotification) {
+        // The guidance changes every few metres: its own notification is read at once, without asking Android for
+        // the whole list again each time.
+        if (NavWatch.post(sbn, this)) {
+            bubble.render(NavWatch.nav.value, NavWatch.source)
+            return
+        }
+        refresh(current() ?: listOf(sbn))
+    }
 
     override fun onNotificationRemoved(sbn: StatusBarNotification) = refresh(current().orEmpty().filter { it.key != sbn.key })
 
@@ -146,6 +154,8 @@ internal data class NavInfo(
     val arrow: android.graphics.drawable.Drawable? = null,
     /** The traffic on the rest of the trip: Maps' own colour for its arrival time, else the trip's pace. */
     val flow: Flow? = null,
+    /** Which way that arrow points, read from its shape: all there is when the notification has no words. */
+    val turn: Turn? = null,
 )
 
 /** The guidance notification of the navigation app, read like the call notification. */
@@ -156,6 +166,14 @@ internal object NavWatch {
     var source: String? = null
         private set
     private val navigationApps = setOf("com.google.android.apps.maps", "com.waze")
+
+    /** An update of the guidance already being followed: true when [sbn] was one and has been taken. */
+    fun post(sbn: StatusBarNotification, context: android.content.Context): Boolean {
+        if (state.value == null || sbn.packageName != source) return false
+        val info = read(sbn, context) ?: return false
+        state.value = info
+        return true
+    }
 
     private val duration = Regex("""(?i)\b(\d{1,2}\s*h(?:\s*\d{1,2}\s*min)?|\d{1,3}\s*min)\b""")
     private val distance = Regex("""(?i)\b(\d+(?:[.,]\d+)?\s*(?:km|m))\b""")
@@ -189,7 +207,9 @@ internal object NavWatch {
             .mapNotNull { extras.getCharSequence(it) as? android.text.Spanned }
             .flatMap { text -> text.getSpans(0, text.length, android.text.style.ForegroundColorSpan::class.java).toList() }
             .firstNotNullOfOrNull { Traffic.ofColor(it.foregroundColor) }
-        return parse(texts)?.let { it.copy(arrow = arrow, flow = coloured ?: Traffic.ofTrip(it.remaining, it.distance)) }
+        return parse(texts)?.let {
+            it.copy(arrow = arrow, flow = coloured ?: Traffic.ofTrip(it.remaining, it.distance), turn = ArrowShape.turn(arrow))
+        }
     }
 
     /**

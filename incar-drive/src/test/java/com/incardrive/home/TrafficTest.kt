@@ -37,7 +37,17 @@ class TrafficTest {
     @Test fun oldSpeedsAreForgotten() {
         val meter = Traffic.Meter()
         repeat(10) { meter.add(it * 5_000L, 5) }                 // a jam…
-        repeat(14) { meter.add(50_000L + it * 5_000L, 55) }      // …then a clear road for over a minute
+        repeat(26) { meter.add(50_000L + it * 5_000L, 55) }      // …then a clear road for over two minutes
         assertEquals(Flow.FLUID, meter.flow(60))
+    }
+
+    @Test fun aStopAtALightIsNotAJam() {
+        fun meter(vararg speeds: Int) = Traffic.Meter().apply { speeds.forEachIndexed { i, kmh -> add(i * 5_000L, kmh) } }
+        // Driving at 50, half a minute stopped, driving again.
+        assertEquals(Flow.FLUID, meter(50, 48, 52, 20, 0, 0, 0, 0, 0, 0, 15, 45, 50).flow(60))
+        // Stopped before a turn after a normal drive.
+        assertEquals(Flow.FLUID, meter(45, 50, 47, 44, 30, 10, 0, 0, 0).flow(60))
+        // Standing most of the time and creeping in between: that is a jam.
+        assertEquals(Flow.JAM, meter(0, 0, 4, 0, 0, 0, 5, 0, 0, 0, 3, 0, 0).flow(60))
     }
 }

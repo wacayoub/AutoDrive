@@ -1,8 +1,14 @@
-Incar Drive 1.0.14 — écran d’accueil pour l’Incarlink (Android 11 à 13, conçu pour 800 × 480).
+Incar Drive 1.0.15 — écran d’accueil pour l’Incarlink (Android 11 à 13, conçu pour 800 × 480).
 
 **Mettre à jour** : Réglages › Mises à jour, ou la proposition automatique.
 
 **Changements**
+- Guidage en direct : entre deux mises à jour de Google Maps (qui avance par paliers et avec un peu de retard), la distance au virage est décomptée par Incar Drive avec la vitesse de la voiture, image par image, et se recale à chaque nouvelle valeur de Maps. Le virage se dessine donc dès qu’il est proche, sans attendre Maps.
+- Sens du virage lu dans la flèche de Maps : sur certains boîtiers, la notification de Maps ne contient aucun mot, seulement la distance et l’image de la flèche. Incar Drive lit maintenant la forme de cette flèche (gauche, droite, tout droit, demi-tour) ; avant, la carte restait sur « tout droit ».
+- Trafic : un arrêt à un feu ou avant un virage ne colore plus la route en rouge ; seul un vrai bouchon (à l’arrêt la plupart du temps, en avançant par à-coups) le fait.
+- La notification de guidage est lue plus vite.
+
+Comprend aussi la 1.0.14 :
 - Une seule carte pour conduire : le compteur et la carte de navigation ne font plus qu’un. En haut, la vitesse, la route et le guidage ; au pied de la même carte, « Naviguer », Maison, Travail et tes lieux, ou pendant un guidage la distance, la consigne complète, le temps restant et l’heure d’arrivée en couleur.
 - Compteur « Route » et guidage fusionnés : pendant un guidage Google Maps ou Waze, la route du compteur montre la suite. Tout droit : une flèche bleue sur ta voie. Virage à moins de 400 m : la route tourne à gauche ou à droite, avec la flèche, des chevrons, le nom de la rue sur un panneau vert et le clignotant de la voiture. Rond-point : l’anneau et la flèche vers la sortie comptée. Demi-tour et arrivée (drapeau) aussi. En haut à gauche : la flèche de Maps, la distance et un mot (« à droite », « sortie 2 »…) ; en bas : une barre qui se remplit sur les 500 derniers mètres, puis le temps restant et l’heure d’arrivée.
 - Radar sur la route : le radar et sa limite apparaissent sur les bas-côtés et se rapprochent, avec une zone rouge sur la chaussée.
@@ -13,7 +19,7 @@ Incar Drive 1.0.14 — écran d’accueil pour l’Incarlink (Android 11 à 13, 
 - Cadre Google Maps pendant le guidage : le haut du cadre affiche le prochain virage en grand (flèche, distance, consigne, temps restant et heure d’arrivée), juste au-dessus de la petite fenêtre de Maps. La carte de navigation du milieu garde alors Maison, Travail et tes lieux.
 - Bulle de guidage : elle ne s’affiche plus au-dessus de Google Maps ou de Waze eux-mêmes, où elle répétait leur écran ; elle reste au-dessus des autres applis ouvertes depuis l’accueil. Elle n’écrit plus la distance deux fois.
 
-Comprend aussi la 1.0.13 :
+Et la 1.0.13 :
 - Îlot en direct au milieu de la barre du haut : une pastille qui remplace le logo le temps d’une alerte, puis s’efface. En rouge au-dessus de la limite (« 56 km/h · limite 40 ») et à l’approche d’un radar ; en bleu pour le prochain virage quand la carte de navigation n’est pas à l’écran (page 2, panneau ouvert) ; en vert pour une prière dans moins de 15 minutes.
 - Mode calme : Réglages rapides › « Calme ». Écran noir avec seulement l’heure, la vitesse en grand et le prochain virage, pour rouler de nuit. Un toucher ramène l’accueil.
 - Assistant vocal : Réglages rapides › « Assistant » ouvre l’assistant du boîtier (Google Assistant s’il est installé).

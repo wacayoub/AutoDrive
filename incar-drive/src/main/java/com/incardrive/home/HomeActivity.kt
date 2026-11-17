@@ -245,6 +245,8 @@ class HomeActivity : Activity() {
             info.usePosition(fix.latitude, fix.longitude)
             if (kmh != null) trafficMeter.add(System.currentTimeMillis(), kmh)
             roadGauge?.flow = trafficMeter.flow(roadLimit)
+            // The distance to the turn, counted down live by the road card between the navigation app's updates.
+            if (lastNav != null && ::navTitle.isInitialized) roadGauge?.liveStep()?.let { navTitle.text = it }
             ownMap.position(fix.latitude, fix.longitude, fix.bearing.takeIf { fix.hasBearing() && (kmh ?: 0) >= 5 })
             wazeMap.position(fix.latitude, fix.longitude)
             googleWeb.position(fix.latitude, fix.longitude)
