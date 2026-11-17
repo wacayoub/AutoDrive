@@ -1361,6 +1361,10 @@ class HomeActivity : Activity() {
         val own = destination(place)
         val opened = if (own != null) navigation.goTo(own) else navigation.goToSaved(work = place == Place.WORK)
         if (!opened) navMissing()
+        // The navigation app opens for a moment to start guiding; the home screen then comes back by itself.
+        else if (Settings.canDrawOverlays(this)) Toast.makeText(this, "Guidage vers ${place.label}… l’accueil revient tout seul.", Toast.LENGTH_SHORT).show()
+        else Toast.makeText(this, "Pour revenir seul à l’accueil : autorise la superposition (Réglages › Navigation › Bulle de guidage).",
+            Toast.LENGTH_LONG).show()
     }
 
     private fun describe(target: String?) = when {

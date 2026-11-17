@@ -3,6 +3,7 @@ Incar Drive 1.0.16 — écran d’accueil pour l’Incarlink (Android 11 à 13, 
 **Mettre à jour** : Réglages › Mises à jour, ou la proposition automatique.
 
 **Changements**
+- Maison, Travail et tes lieux sans quitter l’accueil : un toucher lance le guidage, et l’accueil revient tout seul deux secondes après son démarrage. Google Maps (ou Waze) doit s’ouvrir un instant pour démarrer le guidage : Android ne permet pas de le lancer en arrière-plan. Il faut l’autorisation « Superposition aux autres applis » d’Incar Drive.
 - Carte de conduite : les informations sous la route sont plus petites (icône, textes, boutons Maison et Travail), et la route gagne en hauteur.
 
 Comprend aussi la 1.0.15 :

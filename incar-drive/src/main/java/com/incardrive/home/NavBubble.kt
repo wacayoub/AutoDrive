@@ -191,5 +191,10 @@ internal object HomeVisibility {
      */
     @Volatile var front: String? = null
         set(value) { field = value; changed?.invoke() }
+    /**
+     * When the driver last picked a destination on the home screen (Maison, Travail, a saved place): the home screen
+     * then comes back by itself once the navigation app has started guiding there.
+     */
+    @Volatile var destinationPickedAt = 0L
     var changed: (() -> Unit)? = null
 }

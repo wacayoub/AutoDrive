@@ -34,6 +34,7 @@ class MediaAccessService : NotificationListenerService() {
         // the whole list again each time.
         if (NavWatch.post(sbn, this)) {
             bubble.render(NavWatch.nav.value, NavWatch.source)
+            returnAfterPick()
             return
         }
         refresh(current() ?: listOf(sbn))
@@ -48,7 +49,35 @@ class MediaAccessService : NotificationListenerService() {
         val wasGuiding = NavWatch.nav.value != null
         NavWatch.refresh(active.orEmpty(), this)
         bubble.render(NavWatch.nav.value, NavWatch.source)
-        if (!wasGuiding && NavWatch.nav.value != null) returnHome()
+        if (!returnAfterPick() && !wasGuiding && NavWatch.nav.value != null) returnHome()
+    }
+
+    /**
+     * A destination picked on the home screen (Maison, Travail, a place): the navigation app has to open to start
+     * guiding, but the driver asked to stay on the home screen, so it comes back two seconds after the guidance is
+     * seen, with either app. Android lets an app holding « display over other apps » bring its own screen forward.
+     * True when a return was scheduled.
+     */
+    private fun returnAfterPick(): Boolean {
+        val picked = HomeVisibility.destinationPickedAt
+        if (picked == 0L || NavWatch.nav.value == null) return false
+        HomeVisibility.destinationPickedAt = 0L
+        if (android.os.SystemClock.elapsedRealtime() - picked > PICK_WINDOW_MS) return false
+        handler.removeCallbacksAndMessages(null)
+        handler.postDelayed({
+            if (NavWatch.nav.value != null && !HomeVisibility.shown && android.provider.Settings.canDrawOverlays(this)) {
+                runCatching {
+                    startActivity(android.content.Intent(this, HomeActivity::class.java)
+                        .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+                }
+            }
+        }, 2_000)
+        return true
+    }
+
+    private companion object {
+        // How long after the tap a guidance start still counts as that destination's.
+        const val PICK_WINDOW_MS = 90_000L
     }
 
     private val handler = android.os.Handler(android.os.Looper.getMainLooper())

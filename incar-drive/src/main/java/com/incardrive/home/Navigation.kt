@@ -65,13 +65,13 @@ internal class Navigation(private val activity: Activity, private val prefs: Sha
     fun goTo(destination: String): Boolean = when (app()) {
         NavApp.MAPS -> AppLinks(activity).navigate(destination)
         NavApp.WAZE -> start(view(wazeLink(destination), NavApp.WAZE))
-    }
+    }.also { if (it) HomeVisibility.destinationPickedAt = android.os.SystemClock.elapsedRealtime() }
 
     /** Guidance home or to work, saved in the navigation app's own account. */
     fun goToSaved(work: Boolean): Boolean = when (app()) {
         NavApp.MAPS -> AppLinks(activity).navigate(mapsLabel(work))
         NavApp.WAZE -> start(view("https://waze.com/ul?favorite=${if (work) "work" else "home"}&navigate=yes", NavApp.WAZE))
-    }
+    }.also { if (it) HomeVisibility.destinationPickedAt = android.os.SystemClock.elapsedRealtime() }
 
     /** Places matching [query] around the car. */
     fun search(query: String): Boolean = when (app()) {
