@@ -196,6 +196,8 @@ class HomeActivity : Activity() {
     private lateinit var navigation: Navigation
     private lateinit var mapWidget: MapWidget
     private lateinit var carLogo: CarLogo
+    /** Whether the head unit shares its connection, for the quick settings. */
+    internal val sharingConnection get() = ::status.isInitialized && status.sharingNow
     private lateinit var ownMap: OwnMap
     private lateinit var wazeMap: WazeMap
     private lateinit var googleWeb: WazeMap
@@ -437,11 +439,13 @@ class HomeActivity : Activity() {
         renderFavorites()
         renderDockApps()
         wazeMap.resume()
+        status.start()
         googleWeb.resume()
     }
 
     override fun onStop() {
         wazeMap.pause()
+        status.stop()
         googleWeb.pause()
         HomeVisibility.shown = false
         HomeVisibility.changed?.invoke()

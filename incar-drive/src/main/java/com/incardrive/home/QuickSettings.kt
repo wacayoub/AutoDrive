@@ -47,6 +47,9 @@ internal class QuickSettings(private val home: HomeActivity) {
             addView(row().apply {
                 tile(R.drawable.ic_home_wifi, "Wi-Fi", wifi()) { startSafely(Intent(Settings.Panel.ACTION_WIFI)) }
                 tile(R.drawable.ic_home_bluetooth, "Bluetooth", bluetooth()) { startSafely(Intent(Settings.ACTION_BLUETOOTH_SETTINGS)) }
+                tile(R.drawable.ic_home_hotspot, "Partage", if (sharingConnection) "Activé" else "Désactivé") {
+                    startSafely(Intent(Settings.ACTION_WIRELESS_SETTINGS))
+                }
                 tile(R.drawable.ic_home_location, "Position", location()) { startSafely(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)) }
                 tile(R.drawable.ic_home_moon, if (night) "Mode jour" else "Mode nuit", "Thème") { toggleNight() }
                 tile(R.drawable.ic_home_quiet, "Calme", "Écran noir") { enterQuiet() }
@@ -126,12 +129,12 @@ internal class QuickSettings(private val home: HomeActivity) {
                 setImageResource(icon)
                 imageTintList = ColorStateList.valueOf(ink)
             }, LinearLayout.LayoutParams(dp(26), dp(26)))
-            addView(label(title, 14, ink, 700).apply { gravity = Gravity.CENTER },
+            addView(label(title, 13, ink, 700).apply { gravity = Gravity.CENTER; maxLines = 1 },
                 LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
-            addView(label(state, 12, if (on) ink else muted, 500).apply { gravity = Gravity.CENTER },
+            addView(label(state, 11, if (on) ink else muted, 500).apply { gravity = Gravity.CENTER; maxLines = 1 },
                 LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(3) })
             contentDescription = "$title, $state"
             setOnClickListener { action() }
-        }, LinearLayout.LayoutParams(0, -1, 1f).apply { if (!last) marginEnd = dp(10) })
+        }, LinearLayout.LayoutParams(0, -1, 1f).apply { if (!last) marginEnd = dp(6) })
     }
 }
