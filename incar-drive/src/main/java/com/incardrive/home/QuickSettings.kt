@@ -49,6 +49,8 @@ internal class QuickSettings(private val home: HomeActivity) {
                 tile(R.drawable.ic_home_bluetooth, "Bluetooth", bluetooth()) { startSafely(Intent(Settings.ACTION_BLUETOOTH_SETTINGS)) }
                 tile(R.drawable.ic_home_location, "Position", location()) { startSafely(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)) }
                 tile(R.drawable.ic_home_moon, if (night) "Mode jour" else "Mode nuit", "Thème") { toggleNight() }
+                tile(R.drawable.ic_home_quiet, "Calme", "Écran noir") { enterQuiet() }
+                tile(R.drawable.ic_home_mic, "Assistant", "Voix") { openAssistant() }
                 tile(R.drawable.ic_home_settings, "Incarlink", "Réglages", last = true) { openOemSettings() }
             }, LinearLayout.LayoutParams(-1, 0, 1f).apply { topMargin = dp(12) })
         })

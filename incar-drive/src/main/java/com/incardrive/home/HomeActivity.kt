@@ -172,6 +172,18 @@ class HomeActivity : Activity() {
     private val dockItems = mutableMapOf<Page, View>()
     private lateinit var dockApps: LinearLayout
     private lateinit var dockBar: LinearLayout
+    private lateinit var island: LinearLayout
+    private lateinit var islandDot: View
+    private lateinit var islandText: TextView
+    private lateinit var logoPlate: View
+    // What the live island may show, most urgent first: over the limit, a speed camera, the next turn (when the
+    // navigation card is out of sight), a prayer within a quarter of an hour.
+    private var islandOver: String? = null
+    private var islandCamera: String? = null
+    private var islandTurn: String? = null
+    private var islandPrayer: String? = null
+    private var islandShown: String? = null
+    private var quiet: QuietMode? = null
     private lateinit var dockDivider: View
     private var guiding = false
     private var mapsFrame: View? = null
@@ -265,6 +277,7 @@ class HomeActivity : Activity() {
         window.statusBarColor = Color.TRANSPARENT
         window.navigationBarColor = Color.TRANSPARENT
         setContentView(screen())
+        showWelcome()
         window.insetsController?.setSystemBarsAppearance(
             if (night) 0 else WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS or WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS,
             WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS or WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS)
@@ -495,6 +508,7 @@ class HomeActivity : Activity() {
             renderPrayer()
             renderSky()
             status.render()
+            quiet?.tick()
             followSystemTheme()
             handler.postDelayed(this, 60_000L - System.currentTimeMillis() % 60_000L)
         }
@@ -528,7 +542,10 @@ class HomeActivity : Activity() {
     /** A dashboard panel: near opaque, square-ish corners, a hairline edge. */
     internal fun glass(radius: Int = 16): GradientDrawable = GradientDrawable().apply {
         cornerRadius = dp(radius).toFloat()
-        setColor(getColor(R.color.home_card))
+        // Like glass lit from above: a touch lighter at the top edge, the card's own colour below.
+        val card = getColor(R.color.home_card)
+        orientation = GradientDrawable.Orientation.TOP_BOTTOM
+        colors = intArrayOf(shadeKeepingAlpha(card, .09f), card, card)
         setStroke(dp(1), getColor(R.color.home_card_border))
     }
 
@@ -565,7 +582,7 @@ class HomeActivity : Activity() {
         val backdrop = skyBackdrop()
         val content = column().apply {
             addView(topBar(), LinearLayout.LayoutParams(-1, dp(54)))
-            pager = SwipePager(context) { page -> markDots(page); placeMapsFrame() }.apply {
+            pager = SwipePager(context) { page -> markDots(page); placeMapsFrame(); renderTurnIsland() }.apply {
                 clipChildren = true
                 addPage(row().apply {
                     gravity = Gravity.FILL
@@ -680,6 +697,46 @@ class HomeActivity : Activity() {
         }
     }
 
+    /**
+     * The live island: one pill in the middle of the top bar for what matters right now, in place of the car's logo,
+     * which comes back when nothing does. Red for the limit and cameras, blue for the turn, teal for the prayer.
+     */
+    private fun renderIsland() {
+        if (!::island.isInitialized) return
+        val (message, color) = when {
+            islandOver != null -> islandOver to 0xFFE5262E.toInt()
+            islandCamera != null -> islandCamera to 0xFFE5262E.toInt()
+            islandTurn != null -> islandTurn to navColor
+            islandPrayer != null -> islandPrayer to prayerColor
+            else -> null to 0
+        }
+        if (message == islandShown) return
+        islandShown = message
+        if (message == null) {
+            island.animate().alpha(0f).setDuration(180).withEndAction {
+                island.visibility = View.GONE
+                logoPlate.visibility = View.VISIBLE
+                logoPlate.alpha = 0f
+                logoPlate.animate().alpha(1f).setDuration(180).start()
+            }.start()
+            return
+        }
+        islandText.text = message
+        islandDot.background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(color) }
+        island.background = GradientDrawable().apply {
+            cornerRadius = dp(16).toFloat()
+            setColor(0xF0121A26.toInt())
+            setStroke(dp(1), color)
+        }
+        if (island.visibility != View.VISIBLE) {
+            logoPlate.visibility = View.GONE
+            island.visibility = View.VISIBLE
+            island.alpha = 0f
+            island.scaleX = .85f
+            island.animate().alpha(1f).scaleX(1f).setDuration(220).start()
+        }
+    }
+
     /** Two small marks under the pages; the current one is a longer bar in the accent colour. */
     private fun markDots(page: Int) {
         if (!::dots.isInitialized) return
@@ -692,6 +749,60 @@ class HomeActivity : Activity() {
             dot.alpha = if (active) 1f else .5f
             dot.layoutParams = (dot.layoutParams as LinearLayout.LayoutParams).apply { width = dp(if (active) 18 else 6) }
         }
+    }
+
+    /** Quiet mode: a black screen with the clock, the speed and the next turn; a touch ends it. */
+    internal fun enterQuiet() {
+        if (quiet != null || !::screenRoot.isInitialized) return
+        closePanel()
+        val mode = QuietMode(this) { quiet = null }
+        quiet = mode
+        mode.show(screenRoot)
+        mode.speed(gps.snapshot().speed.kmh, false)
+        mode.turn(NavWatch.nav.value)
+    }
+
+    /** The head unit's voice assistant (Google Assistant when installed), for « navigue vers… » or « appelle… ». */
+    internal fun openAssistant() {
+        val voice = Intent(Intent.ACTION_VOICE_COMMAND).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        val assist = Intent(Intent.ACTION_ASSIST).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        val opened = listOf(voice, assist).any { intent -> runCatching { startActivity(intent) }.isSuccess }
+        if (!opened) Toast.makeText(this, "Aucun assistant vocal n’est installé sur ce boîtier.", Toast.LENGTH_LONG).show()
+    }
+
+    /**
+     * The welcome scene, once per start of the head unit: the car's logo (when one is chosen) and the greeting over
+     * the sky, fading into the home screen.
+     */
+    private fun showWelcome() {
+        if (welcomed || !::screenRoot.isInitialized) return
+        welcomed = true
+        val hour = LocalDateTime.now().hour
+        val hello = when (hour) { in 5..11 -> "Bonjour"; in 12..17 -> "Bon après-midi"; in 18..21 -> "Bonsoir"; else -> "Bonne nuit" }
+        val scene = FrameLayout(this).apply {
+            setBackgroundColor(if (night) 0xFF070B12.toInt() else 0xFFEFF2F6.toInt())
+            isClickable = true
+            addView(column().apply {
+                gravity = Gravity.CENTER_HORIZONTAL
+                carLogo.bitmap()?.let { logo ->
+                    addView(ImageView(context).apply { setImageBitmap(CarLogo.fit(logo, dp(84))) }, LinearLayout.LayoutParams(-2, dp(84)))
+                }
+                addView(label(hello, 30, text, 300, condensed = true).apply { gravity = Gravity.CENTER },
+                    wrap().apply { topMargin = dp(18) })
+                addView(label("Incar Drive", 12, muted, 600).apply { letterSpacing = .2f; gravity = Gravity.CENTER },
+                    wrap().apply { topMargin = dp(6) })
+            }, FrameLayout.LayoutParams(-2, -2, Gravity.CENTER))
+        }
+        screenRoot.addView(scene, FrameLayout.LayoutParams(-1, -1))
+        scene.getChildAt(0).apply {
+            alpha = 0f
+            scaleX = .92f
+            scaleY = .92f
+            animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(500).start()
+        }
+        scene.postDelayed({
+            scene.animate().alpha(0f).setDuration(450).withEndAction { screenRoot.removeView(scene) }.start()
+        }, 1_700)
     }
 
     internal fun toggleNight() {
@@ -718,7 +829,18 @@ class HomeActivity : Activity() {
         // buttons, so they never cover them.
         addView(row().apply {
             gravity = Gravity.CENTER
+            island = row().apply {
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(dp(12), dp(6), dp(14), dp(6))
+                islandDot = View(context)
+                addView(islandDot, LinearLayout.LayoutParams(dp(8), dp(8)))
+                islandText = label("", 14, Color.WHITE, 700).apply { maxLines = 1 }
+                addView(islandText, wrap().apply { marginStart = dp(8) })
+                visibility = View.GONE
+            }
+            addView(island, wrap())
             addView(row().apply {
+                logoPlate = this
                 gravity = Gravity.CENTER_VERTICAL
                 // Chrome logos vanish on the day theme's light sky: there they sit on a dark plate.
                 if (!night && (carLogo.chosen || carBadge.chosen)) {
@@ -1078,6 +1200,9 @@ class HomeActivity : Activity() {
         guiding = nav != null
         placeMapsFrame()
         ownMap.guide(nav)
+        lastNav = nav
+        renderTurnIsland()
+        quiet?.turn(nav)
         if (!::navTitle.isInitialized) return
         if (nav == null) {
             navIcon.setImageResource(R.drawable.ic_home_navigation)
@@ -1154,6 +1279,17 @@ class HomeActivity : Activity() {
                     Toast.LENGTH_LONG).show()
             }
         }.start()
+    }
+
+    private var lastNav: NavInfo? = null
+
+    /** The next turn goes to the island only where the navigation card is not on screen: page 2 or under a panel. */
+    private fun renderTurnIsland() {
+        val nav = lastNav
+        val hidden = (::pager.isInitialized && pager.page != 0) || shownPage != Page.HOME
+        islandTurn = if (nav != null && hidden) listOfNotNull(nav.step ?: nav.remaining, nav.instruction?.take(28)).joinToString(" · ")
+            .takeIf { it.isNotBlank() } else null
+        renderIsland()
     }
 
     private fun destination(place: Place) = prefs.getString(place.key, null)?.takeIf { it.isNotBlank() }
@@ -1392,12 +1528,15 @@ class HomeActivity : Activity() {
         prayerDetail.text = next?.let {
             // Habous times are Moroccan wall-clock times, like the head unit's own clock.
             val minutes = Duration.between(LocalDateTime.now(), it.dateTime).toMinutes()
+            islandPrayer = if (minutes in 0..15) "${it.prayer.label} " + (if (minutes <= 0) "maintenant" else "dans $minutes min") else null
             when {
                 minutes <= 0 -> "maintenant"
                 minutes < 60 -> "dans $minutes min"
                 else -> "dans ${minutes / 60} h ${(minutes % 60).toString().padStart(2, '0')}"
             }
         }.orEmpty()
+        if (next == null) islandPrayer = null
+        renderIsland()
     }
 
     private fun renderSpeed() {
@@ -1425,6 +1564,9 @@ class HomeActivity : Activity() {
             alerted = true
             runCatching { ToneGenerator(AudioManager.STREAM_NOTIFICATION, 80).startTone(ToneGenerator.TONE_PROP_BEEP2, 400) }
         } else if (limit == null || kmh <= limit - 3) alerted = false
+        islandOver = if (limit != null && kmh > limit) "$kmh km/h · limite $limit" else null
+        renderIsland()
+        quiet?.speed(state.speed.kmh, limit != null && kmh > limit)
         if (shownPage == Page.TRIP) tripValues?.invoke()
     }
 
@@ -1540,10 +1682,14 @@ class HomeActivity : Activity() {
         if (ahead == null || (kmh ?: 0) < 10) {
             cameraBadge.visibility = View.GONE
             if (ahead == null) warnedCamera = null
+            islandCamera = null
+            renderIsland()
             return
         }
         val (camera, meters) = ahead
         cameraBadge.text = listOfNotNull("Radar ${(meters / 10) * 10} m", camera.limit?.let { "$it" }).joinToString(" · ")
+        islandCamera = cameraBadge.text.toString()
+        renderIsland()
         cameraBadge.visibility = View.VISIBLE
         if (warnedCamera != camera) {
             warnedCamera = camera
@@ -1824,6 +1970,7 @@ class HomeActivity : Activity() {
         // The greeting would peek out at the panel's rounded corner.
         if (::greeting.isInitialized) greeting.visibility = View.INVISIBLE
         shownPage = page
+        renderTurnIsland()
         markDock(page)
     }
 
@@ -1834,6 +1981,7 @@ class HomeActivity : Activity() {
         tripValues = null
         if (::updatesUi.isInitialized) updatesUi.observe(null)
         if (::greeting.isInitialized) greeting.visibility = View.VISIBLE
+        renderTurnIsland()
         if (panelHost.visibility != View.VISIBLE) return
         panelHost.animate().alpha(0f).translationY(dp(12).toFloat()).setDuration(150).withEndAction {
             panelHost.visibility = View.GONE
@@ -2307,6 +2455,12 @@ class HomeActivity : Activity() {
 
     internal fun shade(color: Int, toward: Int, amount: Float) = ArgbEvaluator().evaluate(amount, color, toward) as Int
 
+    /** [color] moved towards white by [amount], its transparency unchanged. */
+    private fun shadeKeepingAlpha(color: Int, amount: Float) = Color.argb(Color.alpha(color),
+        (Color.red(color) + (255 - Color.red(color)) * amount).toInt(),
+        (Color.green(color) + (255 - Color.green(color)) * amount).toInt(),
+        (Color.blue(color) + (255 - Color.blue(color)) * amount).toInt())
+
     internal companion object {
         const val REQUEST_BLUETOOTH = 5
         const val CALL_GREEN = 0xFF1FA35B.toInt()
@@ -2322,6 +2476,8 @@ class HomeActivity : Activity() {
         const val SOUND_PROFILE = "sound_profile"
         const val MY_PLACES = "my_places"
         const val MAP_ON_HOME = "map_on_home"
+        // The welcome scene plays once per start of the app's process, not at every theme change.
+        private var welcomed = false
         const val MAP_SOURCE = "map_source"
         const val OWN_MAP = "own"
         const val MAPS_WIDGET = "widget"
