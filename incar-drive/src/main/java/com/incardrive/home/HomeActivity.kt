@@ -1060,7 +1060,7 @@ class HomeActivity : Activity() {
     private fun mapsCard() = column().apply {
         // The foot of the driving card: no frame of its own, a hairline above it.
         addView(View(context).apply { setBackgroundColor(tint(text, 0x1F)) }, LinearLayout.LayoutParams(-1, dp(1)))
-        setPadding(dp(8), 0, dp(8), dp(8))
+        setPadding(dp(8), 0, dp(8), dp(6))
         addView(row().apply {
             background = pressable(null, 12)
             setPadding(dp(8), 0, dp(4), 0)
@@ -1071,14 +1071,14 @@ class HomeActivity : Activity() {
                     imageTintList = ColorStateList.valueOf(navColor)
                     rotation = 45f
                 }
-                addView(navIcon, FrameLayout.LayoutParams(dp(24), dp(24), Gravity.CENTER))
-            }, LinearLayout.LayoutParams(dp(42), dp(42)))
+                addView(navIcon, FrameLayout.LayoutParams(dp(17), dp(17), Gravity.CENTER))
+            }, LinearLayout.LayoutParams(dp(30), dp(30)))
             addView(column().apply {
-                navTitle = label("Naviguer", 19, text, 700, condensed = true)
-                navDetail = label(navigation.app().label, 12, muted, 500)
+                navTitle = label("Naviguer", 15, text, 700, condensed = true)
+                navDetail = label(navigation.app().label, 11, muted, 500)
                 addView(navTitle)
-                addView(navDetail, wrap().apply { topMargin = dp(2) })
-            }, LinearLayout.LayoutParams(0, -2, 1f).apply { marginStart = dp(10) })
+                addView(navDetail)
+            }, LinearLayout.LayoutParams(0, -2, 1f).apply { marginStart = dp(8) })
             navEta = label("", 13, navColor, 700).apply {
                 gravity = Gravity.END
                 maxLines = 2
@@ -1090,7 +1090,7 @@ class HomeActivity : Activity() {
                 setImageResource(R.drawable.ic_home_chevron)
                 imageTintList = ColorStateList.valueOf(navColor)
             }
-            addView(navChevron, LinearLayout.LayoutParams(dp(22), dp(22)))
+            addView(navChevron, LinearLayout.LayoutParams(dp(18), dp(18)))
             contentDescription = "Naviguer"
             setOnClickListener {
                 // While guiding, back to the guidance; otherwise straight to choosing a destination.
@@ -1103,7 +1103,7 @@ class HomeActivity : Activity() {
             isHorizontalScrollBarEnabled = false
             addView(row().also { placesStrip = it })
         }
-        addView(placesRow, LinearLayout.LayoutParams(-1, dp(42)).apply { topMargin = dp(4) })
+        addView(placesRow, LinearLayout.LayoutParams(-1, dp(32)).apply { topMargin = dp(2) })
         renderPlaces()
     }
 
@@ -1120,12 +1120,12 @@ class HomeActivity : Activity() {
             setColor(getColor(R.color.home_chip))
             setStroke(dp(1), getColor(R.color.home_card_border))
         }, 12)
-        setPadding(dp(12), 0, dp(14), 0)
+        setPadding(dp(10), 0, dp(12), 0)
         addView(ImageView(context).apply {
             setImageResource(icon)
             imageTintList = ColorStateList.valueOf(iconColor)
-        }, LinearLayout.LayoutParams(dp(18), dp(18)))
-        addView(label(title, 14, text, 700), wrap().apply { marginStart = dp(7) })
+        }, LinearLayout.LayoutParams(dp(15), dp(15)))
+        addView(label(title, 12, text, 700), wrap().apply { marginStart = dp(6) })
         contentDescription = title
         setOnClickListener { action() }
         long?.let { handler -> setOnLongClickListener { handler(); true } }
@@ -2567,7 +2567,7 @@ class HomeActivity : Activity() {
         const val DOCK_APPS = "dock_apps"
         const val SPEED_STYLE = "speed_style"
         // Height of the navigation foot of the driving card, in dp.
-        const val DRIVE_FOOTER = 98
+        const val DRIVE_FOOTER = 74
         const val CAR_COLOR = "car_color"
         val CAR_COLORS = linkedMapOf("Blanc" to 0xFFF2F5F9.toInt(), "Gris" to 0xFF9AA3AE.toInt(), "Noir" to 0xFF2A2F38.toInt(),
             "Rouge" to 0xFFC0272D.toInt(), "Bleu" to 0xFF2C5FA8.toInt())
