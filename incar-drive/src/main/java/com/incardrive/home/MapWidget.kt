@@ -76,30 +76,75 @@ internal class MapWidget(private val home: HomeActivity) {
                 setStroke(dp(1), tint(navColor, 0x55))
             }
             isClickable = true
+            fun openButton() = label("Ouvrir Maps  ›", 12, onAccent, 700).apply {
+                gravity = Gravity.CENTER
+                setPadding(dp(10), dp(6), dp(10), dp(6))
+                background = pressable(GradientDrawable().apply {
+                    cornerRadius = dp(14).toFloat()
+                    setColor(navColor)
+                }, 14)
+                contentDescription = "Ouvrir Google Maps"
+                setOnClickListener { openMaps() }
+            }
             addView(column().apply {
+                if (!guiding) {
+                    addView(row().apply {
+                        gravity = Gravity.CENTER_VERTICAL
+                        addView(ImageView(context).apply {
+                            setImageResource(R.drawable.ic_home_navigation)
+                            imageTintList = ColorStateList.valueOf(navColor)
+                            rotation = 45f
+                        }, LinearLayout.LayoutParams(dp(18), dp(18)))
+                        addView(label("Google Maps", 13, text, 700), wrap().apply { marginStart = dp(6) })
+                    })
+                    addView(label("Lance un guidage : la fenêtre de Maps se place ici", 11, muted, 500).apply { maxLines = 3 },
+                        wrap().apply { topMargin = dp(2) })
+                    addView(openButton(), wrap().apply { topMargin = dp(10) })
+                    return@apply
+                }
+                // While guiding: the next turn in large, above where Maps' own window sits (bottom right).
                 addView(row().apply {
                     gravity = Gravity.CENTER_VERTICAL
-                    addView(ImageView(context).apply {
-                        setImageResource(R.drawable.ic_home_navigation)
-                        imageTintList = ColorStateList.valueOf(navColor)
-                        rotation = 45f
-                    }, LinearLayout.LayoutParams(dp(18), dp(18)))
-                    addView(label("Google Maps", 13, text, 700), wrap().apply { marginStart = dp(6) })
+                    addView(FrameLayout(context).apply {
+                        background = GradientDrawable().apply { cornerRadius = dp(12).toFloat(); setColor(navColor) }
+                        guideArrow = ImageView(context).apply { imageTintList = ColorStateList.valueOf(android.graphics.Color.WHITE) }
+                        addView(guideArrow, FrameLayout.LayoutParams(dp(30), dp(30), Gravity.CENTER))
+                    }, LinearLayout.LayoutParams(dp(46), dp(46)))
+                    guideStep = label("", 28, text, 700, condensed = true).apply { maxLines = 1 }
+                    addView(guideStep, LinearLayout.LayoutParams(0, -2, 1f).apply { marginStart = dp(10) })
                 })
-                addView(label(if (guiding) "Guidage en cours" else "Lance un guidage : la fenêtre de Maps se place ici", 11, muted, 500)
-                    .apply { maxLines = 3 }, wrap().apply { topMargin = dp(2) })
-                addView(label("Ouvrir Maps  ›", 13, onAccent, 700).apply {
-                    gravity = Gravity.CENTER
-                    setPadding(dp(12), dp(7), dp(12), dp(7))
-                    background = pressable(GradientDrawable().apply {
-                        cornerRadius = dp(14).toFloat()
-                        setColor(navColor)
-                    }, 14)
-                    contentDescription = "Ouvrir Google Maps"
-                    setOnClickListener { openMaps() }
-                }, wrap().apply { topMargin = dp(10) })
-            }, FrameLayout.LayoutParams(-2, -2, Gravity.TOP or Gravity.START).apply { setMargins(dp(12), dp(10), 0, 0) })
+                guideLine = label("", 13, text, 500).apply { maxLines = 2 }
+                addView(guideLine, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(6) })
+                guideEta = label("", 13, navColor, 700).apply { maxLines = 1 }
+                addView(guideEta, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(4) })
+                addView(openButton(), wrap().apply { topMargin = dp(8) })
+            }, FrameLayout.LayoutParams(-1, -2, Gravity.TOP).apply { setMargins(dp(12), dp(10), dp(12), 0) })
         }
+    }
+
+    private var guideArrow: ImageView? = null
+    private var guideStep: android.widget.TextView? = null
+    private var guideLine: android.widget.TextView? = null
+    private var guideEta: android.widget.TextView? = null
+
+    /** Fills the guidance frame from the navigation app's notification. */
+    fun guideUpdate(nav: NavInfo?) {
+        val step = guideStep ?: return
+        if (nav == null) return
+        guideArrow?.apply {
+            if (nav.arrow != null) { setImageDrawable(nav.arrow); rotation = 0f }
+            else { setImageResource(R.drawable.ic_home_navigation); rotation = 45f }
+        }
+        val title = nav.step ?: nav.remaining ?: "Guidage"
+        step.text = title
+        fun plain(value: String) = value.filterNot { it.isWhitespace() }.lowercase()
+        val line = nav.instruction?.takeIf { it.isNotBlank() && plain(it) != plain(title) }
+        guideLine?.apply {
+            text = line.orEmpty()
+            visibility = if (line == null) View.GONE else View.VISIBLE
+        }
+        guideEta?.text = listOfNotNull(nav.remaining?.takeIf { nav.step != null }, nav.arrival, nav.distance?.takeIf { plain(it) != plain(title) })
+            .joinToString(" · ")
     }
 
     fun render() {

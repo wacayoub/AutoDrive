@@ -687,6 +687,7 @@ class HomeActivity : Activity() {
                 leftMargin = left
                 topMargin = top
             })
+            mapWidget.guideUpdate(NavWatch.nav.value)
             dockApps.visibility = View.GONE
             dockDivider.visibility = View.GONE
             (dockBar.layoutParams as? LinearLayout.LayoutParams)?.let {
@@ -1203,8 +1204,11 @@ class HomeActivity : Activity() {
         lastNav = nav
         renderTurnIsland()
         quiet?.turn(nav)
+        mapWidget.guideUpdate(nav)
         if (!::navTitle.isInitialized) return
-        if (nav == null) {
+        // With the Maps frame on the right, the guidance is shown large there: this card keeps its destinations.
+        val inFrame = mapOnHome() && (mapSource() == MAPS_WIDGET || mapSource() == MAPS_APP)
+        if (nav == null || inFrame) {
             navIcon.setImageResource(R.drawable.ic_home_navigation)
             navIcon.imageTintList = ColorStateList.valueOf(navColor)
             navIcon.rotation = 45f

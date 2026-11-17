@@ -1,15 +1,18 @@
-Incar Drive 1.0.13 — écran d’accueil pour l’Incarlink (Android 11 à 13, conçu pour 800 × 480).
+Incar Drive 1.0.14 — écran d’accueil pour l’Incarlink (Android 11 à 13, conçu pour 800 × 480).
 
 **Mettre à jour** : Réglages › Mises à jour, ou la proposition automatique.
 
 **Changements**
+- Cadre Google Maps pendant le guidage : le haut du cadre affiche le prochain virage en grand (flèche, distance, consigne, temps restant et heure d’arrivée), juste au-dessus de la petite fenêtre de Maps. La carte de navigation du milieu garde alors Maison, Travail et tes lieux.
+
+Comprend aussi la 1.0.13 :
 - Îlot en direct au milieu de la barre du haut : une pastille qui remplace le logo le temps d’une alerte, puis s’efface. En rouge au-dessus de la limite (« 56 km/h · limite 40 ») et à l’approche d’un radar ; en bleu pour le prochain virage quand la carte de navigation n’est pas à l’écran (page 2, panneau ouvert) ; en vert pour une prière dans moins de 15 minutes.
 - Mode calme : Réglages rapides › « Calme ». Écran noir avec seulement l’heure, la vitesse en grand et le prochain virage, pour rouler de nuit. Un toucher ramène l’accueil.
 - Assistant vocal : Réglages rapides › « Assistant » ouvre l’assistant du boîtier (Google Assistant s’il est installé).
 - Scène d’accueil au démarrage : le logo de la voiture et le salut du moment, qui s’effacent sur l’accueil.
 - Cartes légèrement plus claires en haut, comme du verre éclairé.
 
-Comprend aussi la 1.0.12 :
+Et la 1.0.12 :
 - « Appli Maps » à droite de l’accueil (nouveau choix) : un cadre fait pour la petite fenêtre de l’application Google Maps, la seule forme sous laquelle Android 13 laisse l’appli apparaître sur un écran d’accueil. Pendant un guidage, le cadre descend jusqu’en bas et la fenêtre de Maps s’y pose, avec l’itinéraire et les consignes de Maps.
 - Retour automatique à l’accueil : avec « Appli Maps », environ 5 secondes après le début d’un guidage Google Maps, l’accueil revient tout seul et Maps passe en petite fenêtre, sans appuyer sur Accueil. Il faut l’autorisation « Image dans l’image » de Maps et « Superposition aux autres applis » d’Incar Drive. Waze, qui n’a pas de petite fenêtre, reste à l’écran.
 
