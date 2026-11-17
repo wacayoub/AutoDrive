@@ -21,7 +21,10 @@ import java.util.Locale
  * with other maps): it does not follow the car by itself, so it is centred again on the car as it moves away, and
  * it shows neither a route nor the guidance. The buttons centre it now and open the Waze app.
  */
-internal class WazeMap(private val home: HomeActivity, private val openWaze: () -> Unit) {
+internal class WazeMap(private val home: HomeActivity, private val google: Boolean = false, private val openWaze: () -> Unit) {
+    // With [google], the same card shows Google Maps' own website instead, with its traffic layer on: the site a
+    // browser would show, not the Maps app, so no guidance either.
+    private val name = if (google) "Google Maps" else "Waze"
     private var web: WebView? = null
     private var latitude = Double.NaN
     private var longitude = Double.NaN
@@ -41,7 +44,7 @@ internal class WazeMap(private val home: HomeActivity, private val openWaze: () 
             val page = runCatching { WebView(context) }.getOrNull()
             if (page == null) {
                 // No system WebView on this head unit: say so instead of an empty card.
-                addView(label("La carte Waze a besoin du composant « Android System WebView », absent de ce boîtier.", 12, muted).apply {
+                addView(label("La carte $name a besoin du composant « Android System WebView », absent de ce boîtier.", 12, muted).apply {
                     gravity = Gravity.CENTER
                     maxLines = 4
                     setPadding(dp(14), 0, dp(14), 0)
@@ -57,8 +60,11 @@ internal class WazeMap(private val home: HomeActivity, private val openWaze: () 
             page.setBackgroundColor(if (night) 0xFF121A26.toInt() else 0xFFE6E9ED.toInt())
             page.webViewClient = object : WebViewClient() {
                 // The map only: any link out of Waze's embed is ignored.
-                override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest) =
-                    request.url.host != HOST
+                override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
+                    val host = request.url.host.orEmpty()
+                    val https = request.url.scheme == "https"
+                    return if (google) !(https && (host == "google.com" || host.endsWith(".google.com"))) else host != HOST
+                }
             }
             // Dragging the map sideways moves the map, not the home pages.
             page.setOnTouchListener { view, event ->
@@ -80,9 +86,11 @@ internal class WazeMap(private val home: HomeActivity, private val openWaze: () 
                 }
                 addView(button("Centrer", "Centrer la carte sur la voiture") { show(force = true) },
                     LinearLayout.LayoutParams(-2, dp(30)))
-                addView(button("Ouvrir Waze  ›", "Ouvrir l’application Waze") { openWaze() },
+                addView(button(if (google) "Ouvrir Maps  ›" else "Ouvrir Waze  ›", "Ouvrir l’application $name") { openWaze() },
                     LinearLayout.LayoutParams(-2, dp(30)).apply { marginStart = dp(6) })
-            }, FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM or Gravity.START).apply { setMargins(dp(8), 0, 0, dp(34)) })
+            }, if (google) FrameLayout.LayoutParams(-2, -2, Gravity.TOP or Gravity.START).apply { setMargins(dp(8), dp(56), 0, 0) }
+                // Under Google's search bar, or above Waze's credit line: clear of each site's own buttons.
+                else FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM or Gravity.START).apply { setMargins(dp(8), 0, 0, dp(34)) })
             show(force = true)
         }
     }
@@ -105,6 +113,11 @@ internal class WazeMap(private val home: HomeActivity, private val openWaze: () 
         shownLatitude = latitude
         shownLongitude = longitude
         shownAt = now
+        if (google) {
+            // « !5m1!1e1 » turns the traffic layer on, as the site's own « Trafic » button does.
+            page.loadUrl(String.format(Locale.US, "https://www.google.com/maps/@%.5f,%.5f,16z/data=!5m1!1e1?hl=fr", latitude, longitude))
+            return
+        }
         // As Waze documents it: its map inside a frame that fills the card.
         val url = String.format(Locale.US, "https://%s/fr/iframe?zoom=15&lat=%.5f&lon=%.5f&pin=1", HOST, latitude, longitude)
         page.loadDataWithBaseURL("https://$HOST/", """<!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1">

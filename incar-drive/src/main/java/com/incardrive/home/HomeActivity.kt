@@ -182,6 +182,7 @@ class HomeActivity : Activity() {
     private lateinit var carLogo: CarLogo
     private lateinit var ownMap: OwnMap
     private lateinit var wazeMap: WazeMap
+    private lateinit var googleWeb: WazeMap
     private lateinit var carBadge: CarLogo
     private lateinit var mediaResume: MediaResume
     private lateinit var widgets: WidgetBoard
@@ -228,6 +229,7 @@ class HomeActivity : Activity() {
             info.usePosition(fix.latitude, fix.longitude)
             ownMap.position(fix.latitude, fix.longitude, fix.bearing.takeIf { fix.hasBearing() && (kmh ?: 0) >= 5 })
             wazeMap.position(fix.latitude, fix.longitude)
+            googleWeb.position(fix.latitude, fix.longitude)
             followRoad(fix, kmh)
             trip.accept(System.currentTimeMillis(), fix.latitude, fix.longitude, fix.accuracy.takeIf { fix.hasAccuracy() }, kmh)
             if (System.currentTimeMillis() - lastTripSave > 30_000) saveTrip()
@@ -237,6 +239,10 @@ class HomeActivity : Activity() {
         navigation = Navigation(this, prefs)
         mapWidget = MapWidget(this)
         carLogo = CarLogo(this)
+        googleWeb = WazeMap(this, google = true) {
+            val maps = packageManager.getLaunchIntentForPackage(AppLinks.MAPS)
+            if (maps != null) startSafely(maps) else Toast.makeText(this, "Google Maps n’est pas installé sur ce boîtier.", Toast.LENGTH_LONG).show()
+        }
         wazeMap = WazeMap(this) {
             val waze = packageManager.getLaunchIntentForPackage("com.waze")
             if (waze != null) startSafely(waze) else Toast.makeText(this, "Waze n’est pas installé sur ce boîtier.", Toast.LENGTH_LONG).show()
@@ -291,6 +297,7 @@ class HomeActivity : Activity() {
 
     override fun onDestroy() {
         if (::wazeMap.isInitialized) wazeMap.destroy()
+        if (::googleWeb.isInitialized) googleWeb.destroy()
         if (::mediaResume.isInitialized) mediaResume.release()
         if (::clicks.isInitialized) clicks.release()
         super.onDestroy()
@@ -405,10 +412,12 @@ class HomeActivity : Activity() {
         renderFavorites()
         renderDockApps()
         wazeMap.resume()
+        googleWeb.resume()
     }
 
     override fun onStop() {
         wazeMap.pause()
+        googleWeb.pause()
         HomeVisibility.shown = false
         HomeVisibility.changed?.invoke()
         handler.removeCallbacks(tick)
@@ -555,6 +564,7 @@ class HomeActivity : Activity() {
                 addView(when {
                     !mapOnHome() -> favoritesCard()
                     mapSource() == WAZE_MAP -> wazeMap.view()
+                    mapSource() == GOOGLE_WEB -> googleWeb.view()
                     ownMapOnHome() -> ownMap.view()
                     else -> mapWidget.view()
                 }, LinearLayout.LayoutParams(0, -1, 1.05f))
@@ -1947,13 +1957,13 @@ class HomeActivity : Activity() {
             }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
             addView(label("À droite de l’accueil", 13, text, 700), wrap().apply { topMargin = dp(10) })
             val rightNow = if (!mapOnHome()) "favorites" else mapSource()
-            addView(choices(listOf(OWN_MAP, WAZE_MAP, MAPS_WIDGET, "favorites"), rightNow,
-                { when (it) { OWN_MAP -> "Carte"; WAZE_MAP -> "Waze"; MAPS_WIDGET -> "Widget Maps"; else -> "Favoris" } }, { null }) {
+            addView(choices(listOf(GOOGLE_WEB, WAZE_MAP, OWN_MAP, MAPS_WIDGET, "favorites"), rightNow,
+                { when (it) { GOOGLE_WEB -> "Maps web"; WAZE_MAP -> "Waze"; OWN_MAP -> "Carte"; MAPS_WIDGET -> "Widget"; else -> "Favoris" } }, { null }) {
                 prefs.edit().putBoolean(MAP_ON_HOME, it != "favorites")
                     .apply { if (it != "favorites") putString(MAP_SOURCE, it) }.apply()
             }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(6) })
-            addView(label("Carte : celle d’Incar Drive (OpenStreetMap), avec ta position, les radars et la consigne de Maps · " +
-                "Waze : la carte web de Waze, son trafic et ses signalements · Widget Maps : le trafic de Google Maps, s’il a la position",
+            addView(label("Maps web : le site de Google Maps avec son trafic · Waze : la carte web de Waze · " +
+                "Carte : celle d’Incar Drive (OpenStreetMap), avec les radars et la consigne de Maps · Widget : celui de Google Maps, s’il a la position",
                 11, muted).apply { maxLines = 3 },
                 LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(4) })
             val hasTraffic = !prefs.getString(OwnMap.TRAFFIC_KEY, null).isNullOrBlank()
@@ -2295,6 +2305,7 @@ class HomeActivity : Activity() {
         const val OWN_MAP = "own"
         const val MAPS_WIDGET = "widget"
         const val WAZE_MAP = "waze"
+        const val GOOGLE_WEB = "google_web"
         const val PREFS = "incar_drive_home"
         const val APPEARANCE = "appearance"
         const val ACCENT = "accent"
