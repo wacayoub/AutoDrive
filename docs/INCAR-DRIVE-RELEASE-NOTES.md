@@ -1,14 +1,17 @@
-Incar Drive 1.0.17 — écran d’accueil pour l’Incarlink (Android 11 à 13, conçu pour 800 × 480).
+Incar Drive 1.0.18 — écran d’accueil pour l’Incarlink (Android 11 à 13, conçu pour 800 × 480).
 
 **Mettre à jour** : Réglages › Mises à jour, ou la proposition automatique.
 
 **Changements**
+- Ciel réel derrière la route : le fond de la carte de conduite suit le soleil et la météo du jour. Le soleil se lève à gauche, monte, puis se couche à droite, avec les couleurs de l’aube, du plein jour, du couchant et de la nuit étoilée ; des nuages passent quand le ciel est couvert, la pluie ou la neige tombent quand il y en a. La route, les phares et les chiffres passent en mode nuit quand il fait nuit dehors, quel que soit le thème choisi.
+
+Comprend aussi la 1.0.17 :
 - Icônes d’état refaites : le Wi-Fi en éventail qui se remplit avec le signal, suivi de sa génération dans un badge quand le boîtier la donne (4, 5, 6, 6E, 7) ; le réseau mobile en barres arrondies avec un badge « 5G », « 5G+ », « 4G+ » ou « 4G » (le 5G est reconnu aussi quand il passe par une ancre 4G) ; une icône de partage de connexion quand le boîtier sert de point d’accès. Réglages rapides : nouvelle tuile « Partage », qui ouvre les réglages réseau d’Android. Le badge réseau demande l’autorisation « Téléphone » (touche les barres).
 - Barre du haut : le logo de la voiture et le badge n’y sont plus, pour laisser tout le milieu aux notifications (alertes de la route, prochain virage, radar, prière), qui peuvent tenir sur deux lignes. Le logo reste sur la voiture du compteur Route et dans la scène d’accueil ; le badge HYBRID est retiré.
 - Alertes de la route d’après Google Maps (ou Waze) : quand l’appli de navigation écrit une alerte dans une de ses notifications (accident, route fermée, danger, ralentissement, travaux, contrôle de vitesse…), elle s’affiche dans la pastille en haut de l’accueil, en rouge pour un accident, une route fermée ou un danger, en orange pour le reste, avec un bip. Elle disparaît quand l’appli la retire. Incar Drive ne montre que ce que l’appli écrit ; il ne cherche pas les incidents ailleurs.
 - Barre de A à B aux couleurs du trafic de Google Maps : la partie déjà parcourue garde, tronçon par tronçon, la couleur que Maps donnait à ce moment-là (vert, orange, rouge) ; la partie à venir prend, en plus pâle, la couleur du moment. Ce n’est pas le détail des bouchons à venir, que Maps ne transmet pas, et il faut que la notification de Maps contienne une couleur ; sinon la barre reste bleue.
 
-Comprend aussi la 1.0.16 :
+Et la 1.0.16 :
 - La ligne sous la route devient l’itinéraire de A à B pendant un guidage : un point bleu au départ, un point vert à la destination, la partie parcourue en dégradé du bleu au vert, et un point blanc pour la voiture. Elle avance avec la distance restante que donne Google Maps.
 - Pied de la carte de conduite refait : le trajet tient sur une ligne fine à son propre style : durée, distance et vitesse moyenne, chacune avec son icône colorée. Pendant un guidage, trois cases au-dessus donnent l’heure d’arrivée (à la couleur du trafic de Maps), le temps restant et la distance restante ; un toucher sur le trajet ouvre Maps. Sans guidage : un bouton bleu pour naviguer, puis Maison, Travail, tes lieux et les recherches.
 - Voiture redessinée, plus moderne et un peu plus petite : basse et large, toit vitré qui descend jusqu’au coffre, une fine barre de feux sur toute la largeur (plus vive au freinage, clignotant orange du côté du virage), diffuseur sombre. Elle garde la couleur choisie et ton logo sous la barre de feux.

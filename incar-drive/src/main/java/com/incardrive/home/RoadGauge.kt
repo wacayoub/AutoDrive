@@ -114,6 +114,128 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
         invalidate()
     }
 
+    // The sky outside: its colours for this hour and weather, where the sun stands, and what falls from it.
+    private var outside: Sky? = null
+    private var elevation = 45f
+    private var weather: com.autodrive.radiomaroc.WeatherCondition? = null
+    // Dark outside (the sun well below the horizon): night road, headlights and light figures, whatever the theme.
+    private var dark = night
+
+    /** The sky of this hour and this weather: [elevation] is the sun's height in degrees, negative below the horizon. */
+    fun outside(sky: Sky, elevation: Float, weather: com.autodrive.radiomaroc.WeatherCondition?) {
+        if (sky == outside && weather == this.weather && kotlin.math.abs(elevation - this.elevation) < .3f) return
+        outside = sky
+        this.elevation = elevation
+        this.weather = weather
+        dark = elevation < -4f
+        invalidate()
+    }
+
+    private val ink get() = if (dark) Color.WHITE else 0xFF10161F.toInt()
+
+    // The same scattered stars and clouds every time.
+    private val starSeeds = FloatArray(90) {
+        // Well mixed, so stars and drops never line up.
+        val value = kotlin.math.sin(it * 12.9898 + 78.233) * 43758.5453
+        (value - kotlin.math.floor(value)).toFloat()
+    }
+    private var drift = 0f
+
+    /** The sky above the horizon, and by day the ground on both sides of the road. */
+    private fun drawOutside(canvas: Canvas, sky: Sky, w: Float, h: Float, horizon: Float) {
+        val cloudy = when (weather) {
+            com.autodrive.radiomaroc.WeatherCondition.PARTLY_CLOUDY -> .45f
+            com.autodrive.radiomaroc.WeatherCondition.CLOUDY, com.autodrive.radiomaroc.WeatherCondition.FOG -> 1f
+            com.autodrive.radiomaroc.WeatherCondition.DRIZZLE, com.autodrive.radiomaroc.WeatherCondition.SHOWERS -> .8f
+            com.autodrive.radiomaroc.WeatherCondition.RAIN, com.autodrive.radiomaroc.WeatherCondition.STORM,
+            com.autodrive.radiomaroc.WeatherCondition.SNOW -> 1f
+            else -> 0f
+        }
+        // The palette's colours are pastel, made for the home screen behind the cards: here a clear day gets a
+        // fuller blue, less so as clouds cover it or as the low sun colours it.
+        val blue = if (dark) 0f else (.55f * (1f - cloudy * .8f) * (elevation / 22f).coerceIn(0f, 1f))
+        val top = ColorUtils.blendARGB(sky.top, 0xFF3A86E2.toInt(), blue)
+        val mid = ColorUtils.blendARGB(sky.mid, 0xFFCFE6FF.toInt(), blue * .7f)
+        roadPaint.shader = linear(0f, 0f, 0f, horizon, top, if (dark) sky.bottom else mid)
+        canvas.drawRect(0f, 0f, w, horizon, roadPaint)
+        if (dark) {
+            // Stars, fewer and fainter under clouds.
+            val shine = (sky.stars.coerceAtLeast(if (cloudy < .5f) .5f else 0f) * (1f - cloudy)).coerceIn(0f, 1f)
+            if (shine > 0f) {
+                arrowPaint.shader = null
+                for (i in 0 until starSeeds.size / 3) {
+                    val x = starSeeds[i * 3] * w
+                    val y = starSeeds[i * 3 + 1] * horizon * .92f
+                    val twinkle = .55f + .45f * kotlin.math.sin(drift * 6f + i * 1.7f)
+                    arrowPaint.color = ColorUtils.setAlphaComponent(Color.WHITE,
+                        (220 * shine * twinkle * (1f - y / horizon * .6f)).toInt().coerceIn(0, 255))
+                    canvas.drawCircle(x, y, (0.6f + starSeeds[i * 3 + 2]) * density * .8f, arrowPaint)
+                }
+            }
+        } else {
+            // The sun, where it stands now: east on the left, west on the right, low near the horizon.
+            if (elevation > -2f && cloudy < 1f) {
+                val x = w * sky.sunX.coerceIn(.06f, .94f)
+                val y = horizon * (1f - (elevation / 70f).coerceIn(0f, 1f) * .82f)
+                val low = (1f - elevation / 18f).coerceIn(0f, 1f)
+                val warm = ColorUtils.blendARGB(0xFFFFF6D8.toInt(), 0xFFFF9A45.toInt(), low)
+                val strength = (1f - cloudy * .75f)
+                glowPaint.shader = radial(x, y, w * (.3f + .2f * low), ColorUtils.setAlphaComponent(warm, (150 * strength).toInt()),
+                    ColorUtils.setAlphaComponent(warm, 0))
+                canvas.save()
+                canvas.clipRect(0f, 0f, w, horizon)
+                canvas.drawRect(0f, 0f, w, horizon, glowPaint)
+                arrowPaint.shader = null
+                arrowPaint.color = ColorUtils.setAlphaComponent(warm, (255 * strength).toInt())
+                canvas.drawCircle(x, y, 7 * density, arrowPaint)
+                canvas.restore()
+            }
+            // Ground beside the road: lit by the sky's own colour at the horizon.
+            roadPaint.shader = linear(0f, horizon, 0f, h, ColorUtils.blendARGB(sky.bottom, 0xFFDFE9F1.toInt(), .55f),
+                ColorUtils.blendARGB(sky.bottom, 0xFFA9BCCD.toInt(), .7f))
+            canvas.drawRect(0f, horizon, w, h, roadPaint)
+        }
+        // Clouds drifting across, more of them as the sky covers.
+        if (cloudy > 0f) {
+            arrowPaint.shader = null
+            val count = (2 + cloudy * 4).toInt()
+            for (i in 0 until count) {
+                val seed = starSeeds[i * 5 + 2]
+                val x = ((seed + drift * (.012f + .01f * starSeeds[i + 40])) % 1.3f - .15f) * w
+                val y = horizon * (.12f + .55f * starSeeds[i * 2 + 7])
+                val size = w * (.14f + .1f * starSeeds[i + 20])
+                arrowPaint.color = if (dark) ColorUtils.setAlphaComponent(0xFF8A94A6.toInt(), (60 + 60 * cloudy).toInt())
+                    else ColorUtils.setAlphaComponent(Color.WHITE, (150 + 80 * cloudy).toInt())
+                rect.set(x - size, y - size * .26f, x + size, y + size * .26f)
+                canvas.drawRoundRect(rect, size * .26f, size * .26f, arrowPaint)
+                canvas.drawCircle(x - size * .3f, y - size * .2f, size * .3f, arrowPaint)
+                canvas.drawCircle(x + size * .2f, y - size * .28f, size * .38f, arrowPaint)
+            }
+        }
+        // Rain or snow falling over the whole view.
+        val falling = when (weather) {
+            com.autodrive.radiomaroc.WeatherCondition.DRIZZLE -> 14
+            com.autodrive.radiomaroc.WeatherCondition.SHOWERS, com.autodrive.radiomaroc.WeatherCondition.RAIN -> 26
+            com.autodrive.radiomaroc.WeatherCondition.STORM -> 36
+            com.autodrive.radiomaroc.WeatherCondition.SNOW -> 22
+            else -> 0
+        }
+        if (falling > 0) {
+            val snow = weather == com.autodrive.radiomaroc.WeatherCondition.SNOW
+            // Pale drops against the night, slate ones against the day's light sky; snow stays white.
+            linePaint.color = ColorUtils.setAlphaComponent(if (dark || snow) 0xFFD6E4F7.toInt() else 0xFF5B7896.toInt(),
+                if (snow) 230 else 150)
+            linePaint.strokeWidth = (if (snow) 2.2f else 1.1f) * density
+            for (i in 0 until falling) {
+                val x = starSeeds[i] * w
+                val speed = if (snow) .25f else 1.6f
+                val y = ((starSeeds[i + 30] + drift * speed * (.7f + starSeeds[i + 50] * .6f)) % 1f) * h
+                if (snow) canvas.drawPoint(x + kotlin.math.sin(drift * 2f + i) * 4 * density, y, linePaint)
+                else canvas.drawLine(x, y, x - 3 * density, y + 9 * density, linePaint)
+            }
+        }
+    }
+
     /** What is drawn on the road: a bend or a roundabout when close, else the straight road with what lies on it. */
     private data class Scene(val shape: Turn?, val onRoad: Turn?, val exit: Int?, val street: String?, val ahead: Boolean)
 
@@ -278,19 +400,18 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
         val baseline = if (guiding) size + 8 * density else maxOf(size * .95f + 6 * density, h * .35f)
         val horizon = if (guiding) maxOf(h * .36f, baseline + 16 * density) else baseline + 20 * density
         val road = h - horizon
-        // The sky of the moment above the horizon, then a soft glow where the road meets it.
-        if (night) {
+        // The sky outside above the horizon (this hour's sun, today's weather), then a soft glow where the road
+        // meets it. Until the first sky is known: the theme's own.
+        val real = outside
+        if (real != null) drawOutside(canvas, real, w, h, horizon)
+        else if (night) {
             roadPaint.shader = linear(0f, 0f, 0f, horizon, ColorUtils.setAlphaComponent(skyTop, 0xB0),
                 ColorUtils.setAlphaComponent(skyBottom, 0xB0))
             canvas.drawRect(0f, 0f, w, horizon, roadPaint)
         } else {
-            // By day: a clear blue sky tinted by the sky of the moment, paler towards the horizon, a soft sun, and
-            // light ground on both sides of the road instead of the bare card.
             roadPaint.shader = linear(0f, 0f, 0f, horizon, ColorUtils.blendARGB(skyTop, 0xFF3F8BE6.toInt(), .6f),
                 ColorUtils.blendARGB(skyBottom, 0xFFD6EAFF.toInt(), .6f))
             canvas.drawRect(0f, 0f, w, horizon, roadPaint)
-            glowPaint.shader = radial(w * .82f, horizon * .3f, w * .3f, 0x99FFFFFF.toInt(), 0x00FFFFFF)
-            canvas.drawRect(0f, 0f, w, horizon, glowPaint)
             roadPaint.shader = linear(0f, horizon, 0f, h, 0xFFDFE9F1.toInt(), 0xFFB4C6D6.toInt())
             canvas.drawRect(0f, horizon, w, h, roadPaint)
         }
@@ -303,6 +424,7 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
             val seconds = (now - lastFrame) / 1e9f
             if (seconds < .5f) frameMs += (seconds * 1000f - frameMs) * .08f
             travel = (travel + shown * seconds * .05f) % 2f
+            if (seconds < 1.5f) drift += seconds
             // The light running along the arrows: slow when stopped, quicker with the car.
             if (seconds < 1.5f) flowPhase = (flowPhase + seconds * (.55f + shown / 110f)) % 1f
             // Only over short gaps: after a pause in drawing (another app in front) the app's own value is kept.
@@ -360,7 +482,7 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
                 val fraction = (1f - leftMetres / routeMeters.toFloat()).coerceIn(0f, 1f)
                 val head = from + (to - from) * fraction
                 // Ahead: the colour Maps gives the rest of the trip now, faint; plain when it gives none.
-                arrowPaint.color = flow?.let { ColorUtils.setAlphaComponent(it.color, 0x66) } ?: ColorUtils.setAlphaComponent(textColor, 0x33)
+                arrowPaint.color = flow?.let { ColorUtils.setAlphaComponent(it.color, 0x66) } ?: ColorUtils.setAlphaComponent(ink, 0x33)
                 rect.set(from, y, to, y + thick)
                 canvas.drawRoundRect(rect, thick / 2, thick / 2, arrowPaint)
                 // Behind: each stretch in the colour Maps gave while the car drove it (blue where it gave none).
@@ -402,7 +524,8 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
 
         // The speed.
         valuePaint.textSize = size
-        valuePaint.color = if (over) alert else textColor
+        valuePaint.color = if (over) alert else ink
+        unitPaint.color = ColorUtils.setAlphaComponent(ink, 0xB3)
         valuePaint.setShadowLayer(10 * density, 0f, 0f, ColorUtils.setAlphaComponent(tone, 0x80))
         val speedX = if (guiding) w * .64f else cx
         canvas.drawText(speed?.let { shown.roundToInt().toString() } ?: "—", speedX, baseline, valuePaint)
@@ -435,7 +558,7 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
         path.lineTo(cx - near, h)
         path.close()
         // Asphalt: fading into the dark at night, solid under the daylight.
-        roadPaint.shader = if (night) linear(0f, horizon, 0f, h, 0x001A2230, 0xF01A2230.toInt())
+        roadPaint.shader = if (dark) linear(0f, horizon, 0f, h, 0x001A2230, 0xF01A2230.toInt())
             else linear(0f, horizon, 0f, h, 0xFF5A6676.toInt(), 0xFF2C343F.toInt())
         canvas.drawPath(path, roadPaint)
         roadPaint.shader = linear(0f, horizon, 0f, h, ColorUtils.setAlphaComponent(tone, 0),
@@ -878,7 +1001,7 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
         fun x(f: Float) = cx + u * f
         fun y(f: Float) = top + v * f
         // At night, the headlights' beam on the road ahead.
-        if (night) {
+        if (dark) {
             carPaint.shader = linear(0f, top - v * .9f, 0f, top + v * .3f, 0x00FFF4D6, 0x38FFF4D6)
             path.reset()
             path.moveTo(cx - u * .34f, top + v * .3f)

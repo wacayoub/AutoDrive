@@ -1001,6 +1001,7 @@ class HomeActivity : Activity() {
             else -> RoadGauge(context, if (night) ROAD_BLUE else 0xFF2F86E8.toInt(), text, muted, carLogo.bitmap(), carColor(), night).also {
                 roadGauge = it
                 currentSky().let { sky -> it.sky(sky.top, sky.mid) }
+                outsideSky(it)
                 it.guide(NavWatch.nav.value)
                 debugCamera()?.let { metres -> it.camera(metres, 60) }
             }
@@ -1628,6 +1629,22 @@ class HomeActivity : Activity() {
     // ——— Live content ———
 
     /** The background for this season and the weather outside, behind the cards. */
+    /**
+     * The sky behind the road of the driving card: the real one outside, from the sun's place at this hour and
+     * today's weather, in day colours while the sun is up and night colours after, whichever theme the screen uses.
+     */
+    private fun outsideSky(gauge: RoadGauge) {
+        val city = info.city.value
+        val debug = applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0
+        val time = if (debug) prefs.getString("debug_sky_time", null)?.let { runCatching { Instant.parse(it) }.getOrNull() } else null
+        val condition = (if (debug) prefs.getString("debug_weather", null)?.let { name ->
+            com.autodrive.radiomaroc.WeatherCondition.entries.firstOrNull { it.name == name } } else null)
+            ?: info.weather.value?.condition
+        val sun = SunPosition.at(time ?: Instant.now(), city.latitude, city.longitude)
+        val dark = sun.elevation < -4
+        gauge.outside(SkyPalette.of(condition, LocalDate.now().month, dark, sun), sun.elevation.toFloat(), condition)
+    }
+
     private fun currentSky(): Sky {
         val city = info.city.value
         // Debug builds only: a fixed time to preview the sky (« debug_sky_time », an ISO instant in the preferences).
@@ -1641,6 +1658,7 @@ class HomeActivity : Activity() {
         val sky = currentSky()
         shownSky = sky
         roadGauge?.sky(sky.top, sky.mid)
+        roadGauge?.let { outsideSky(it) }
         return CockpitBackdrop(sky.top, sky.mid, sky.bottom, accent, getColor(R.color.home_grid), if (night) 0x26 else 0x30,
             sky.glow, sky.sunX, sky.sunY, sky.sunSize, sky.stars)
     }
