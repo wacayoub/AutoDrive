@@ -3,6 +3,7 @@ Incar Drive 1.0.16 — écran d’accueil pour l’Incarlink (Android 11 à 13, 
 **Mettre à jour** : Réglages › Mises à jour, ou la proposition automatique.
 
 **Changements**
+- Couleurs du trafic d’après Google Maps uniquement : la route et l’heure d’arrivée ne passent au vert, à l’orange ou au rouge que si Google Maps donne cette couleur dans sa notification de guidage. Les estimations d’Incar Drive (vitesse moyenne, rythme du trajet) sont retirées ; sans couleur de Maps, la route reste bleue.
 - Animation de la route modernisée : en guidage tout droit, des chevrons lumineux remontent ta voie vers l’horizon ; les flèches de virage, de rond-point et de demi-tour sont éclairées (halo, dégradé, liseré) ; le passage d’une scène à l’autre se fait en fondu au lieu d’un saut ; l’animation suit la cadence de l’écran quand le boîtier le permet.
 - Maison, Travail et tes lieux sans quitter l’accueil : un toucher lance le guidage, et l’accueil revient tout seul deux secondes après son démarrage. Google Maps (ou Waze) doit s’ouvrir un instant pour démarrer le guidage : Android ne permet pas de le lancer en arrière-plan. Il faut l’autorisation « Superposition aux autres applis » d’Incar Drive.
 - Carte de conduite : les informations sous la route sont plus petites (icône, textes, boutons Maison et Travail), et la route gagne en hauteur.

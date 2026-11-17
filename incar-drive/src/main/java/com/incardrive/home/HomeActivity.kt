@@ -186,7 +186,6 @@ class HomeActivity : Activity() {
     private var quiet: QuietMode? = null
     // The « Route » speed card, which also draws the guidance and the speed cameras; null with the other styles.
     private var roadGauge: RoadGauge? = null
-    private val trafficMeter = Traffic.Meter()
     private lateinit var dockDivider: View
     private var guiding = false
     private var mapsFrame: View? = null
@@ -243,8 +242,6 @@ class HomeActivity : Activity() {
         }
         gps.onFix = { fix, kmh ->
             info.usePosition(fix.latitude, fix.longitude)
-            if (kmh != null) trafficMeter.add(System.currentTimeMillis(), kmh)
-            roadGauge?.flow = trafficMeter.flow(roadLimit)
             ownMap.position(fix.latitude, fix.longitude, fix.bearing.takeIf { fix.hasBearing() && (kmh ?: 0) >= 5 })
             wazeMap.position(fix.latitude, fix.longitude)
             googleWeb.position(fix.latitude, fix.longitude)
@@ -1218,6 +1215,8 @@ class HomeActivity : Activity() {
         ownMap.guide(nav.takeIf { roadGauge == null })
         lastNav = nav
         roadGauge?.guide(nav)
+        // Green, orange or red only as Google Maps says it; no colour of our own.
+        roadGauge?.flow = nav?.flow
         renderRoadCorner()
         renderTurnIsland()
         quiet?.turn(nav)

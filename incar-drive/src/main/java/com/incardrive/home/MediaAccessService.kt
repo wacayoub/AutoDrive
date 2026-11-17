@@ -181,7 +181,7 @@ internal data class NavInfo(
     val step: String? = null,
     /** The turn arrow Maps draws in its notification. */
     val arrow: android.graphics.drawable.Drawable? = null,
-    /** The traffic on the rest of the trip: Maps' own colour for its arrival time, else the trip's pace. */
+    /** The traffic as Google Maps itself colours it in its notification; null when it gives no colour. */
     val flow: Flow? = null,
     /** Which way that arrow points, read from its shape: all there is when the notification has no words. */
     val turn: Turn? = null,
@@ -237,7 +237,7 @@ internal object NavWatch {
             .flatMap { text -> text.getSpans(0, text.length, android.text.style.ForegroundColorSpan::class.java).toList() }
             .firstNotNullOfOrNull { Traffic.ofColor(it.foregroundColor) }
         return parse(texts)?.let {
-            it.copy(arrow = arrow, flow = coloured ?: Traffic.ofTrip(it.remaining, it.distance), turn = ArrowShape.turn(arrow))
+            it.copy(arrow = arrow, flow = coloured, turn = ArrowShape.turn(arrow))
         }
     }
 
