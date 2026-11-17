@@ -236,8 +236,12 @@ internal object NavWatch {
             .mapNotNull { extras.getCharSequence(it) as? android.text.Spanned }
             .flatMap { text -> text.getSpans(0, text.length, android.text.style.ForegroundColorSpan::class.java).toList() }
             .firstNotNullOfOrNull { Traffic.ofColor(it.foregroundColor) }
+        // Debug builds only: a test notification may name a colour (« [vert] », « [orange] », « [rouge] »).
+        val named = if (!test) null else texts.firstNotNullOfOrNull { line ->
+            when { "[vert]" in line -> Flow.FLUID; "[orange]" in line -> Flow.SLOW; "[rouge]" in line -> Flow.JAM; else -> null }
+        }
         return parse(texts)?.let {
-            it.copy(arrow = arrow, flow = coloured, turn = ArrowShape.turn(arrow))
+            it.copy(arrow = arrow, flow = coloured ?: named, turn = ArrowShape.turn(arrow))
         }
     }
 

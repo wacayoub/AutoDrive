@@ -1317,9 +1317,9 @@ class HomeActivity : Activity() {
         // The turn is shown once: on the road of the « Route » card when that style is on, else on the map.
         ownMap.guide(nav.takeIf { roadGauge == null })
         lastNav = nav
-        roadGauge?.guide(nav)
         // Green, orange or red only as Google Maps says it; no colour of our own.
         roadGauge?.flow = nav?.flow
+        roadGauge?.guide(nav)
         renderRoadCorner()
         renderTurnIsland()
         quiet?.turn(nav)

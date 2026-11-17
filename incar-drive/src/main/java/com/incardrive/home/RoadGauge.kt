@@ -65,10 +65,14 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
         // The whole route, from where the guidance started (A) to the destination (B): the longest distance left
         // seen is the route's length, and the bar under the road fills as that distance shrinks.
         val left = Maneuver.meters(nav?.distance)
-        if (nav == null) { routeMeters = 0; routeLeft = null } else if (left != null) {
+        if (nav == null) { routeMeters = 0; routeLeft = null; stretches.clear() } else if (left != null) {
             routeLeft = left
             // A much longer distance than before is a new destination: start again from A.
-            if (left > routeMeters) routeMeters = left
+            if (left > routeMeters) { routeMeters = left; stretches.clear() }
+            // Each change of Google Maps' traffic colour starts a new stretch of the bar where the car is now, so
+            // the part already driven keeps the colours Maps gave along the way.
+            val at = 1f - left / routeMeters.toFloat()
+            if (stretches.isEmpty() || stretches.last().second != nav.flow) stretches += at to nav.flow
         }
         val text = nav?.let { it.step ?: it.remaining }
         // A new value from the navigation app sets the distance again; the same text repeated lets the countdown
@@ -154,6 +158,8 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
     }
 
     /** The turn is drawn on the road only once it is close; before that the road stays straight. */
+    // Where along the route (0 at A, 1 at B) each traffic colour of Google Maps began; null = no colour given.
+    private val stretches = ArrayList<Pair<Float, Flow?>>()
     private var routeMeters = 0
     private var routeLeft: Int? = null
     private val close get() = (liveMeters ?: 0) <= NEAR_M
@@ -353,14 +359,19 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
                 val to = w - 10 * density - dot
                 val fraction = (1f - leftMetres / routeMeters.toFloat()).coerceIn(0f, 1f)
                 val head = from + (to - from) * fraction
-                arrowPaint.color = ColorUtils.setAlphaComponent(textColor, 0x33)
+                // Ahead: the colour Maps gives the rest of the trip now, faint; plain when it gives none.
+                arrowPaint.color = flow?.let { ColorUtils.setAlphaComponent(it.color, 0x66) } ?: ColorUtils.setAlphaComponent(textColor, 0x33)
                 rect.set(from, y, to, y + thick)
                 canvas.drawRoundRect(rect, thick / 2, thick / 2, arrowPaint)
-                arrowPaint.color = Color.WHITE
-                arrowPaint.shader = linear(from, 0f, to, 0f, guideColor, arriveColor)
-                rect.set(from, y, head, y + thick)
-                canvas.drawRoundRect(rect, thick / 2, thick / 2, arrowPaint)
-                arrowPaint.shader = null
+                // Behind: each stretch in the colour Maps gave while the car drove it (blue where it gave none).
+                for (index in stretches.indices) {
+                    val start = stretches[index].first.coerceIn(0f, fraction)
+                    val end = (stretches.getOrNull(index + 1)?.first ?: fraction).coerceIn(start, fraction)
+                    if (end <= start) continue
+                    arrowPaint.color = stretches[index].second?.color ?: guideColor
+                    rect.set(from + (to - from) * start, y, from + (to - from) * end, y + thick)
+                    canvas.drawRect(rect, arrowPaint)
+                }
                 // A: a blue dot. B: a green one, hollow until the car is there.
                 arrowPaint.color = guideColor
                 canvas.drawCircle(from, middle, dot, arrowPaint)
@@ -373,7 +384,7 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
                 // The car on the route.
                 arrowPaint.color = Color.WHITE
                 canvas.drawCircle(head, middle, dot * .95f, arrowPaint)
-                arrowPaint.color = ColorUtils.blendARGB(guideColor, arriveColor, fraction)
+                arrowPaint.color = flow?.color ?: guideColor
                 canvas.drawCircle(head, middle, dot * .5f, arrowPaint)
             } else {
                 val left = 10 * density

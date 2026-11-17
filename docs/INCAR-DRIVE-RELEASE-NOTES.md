@@ -1,8 +1,11 @@
-Incar Drive 1.0.16 — écran d’accueil pour l’Incarlink (Android 11 à 13, conçu pour 800 × 480).
+Incar Drive 1.0.17 — écran d’accueil pour l’Incarlink (Android 11 à 13, conçu pour 800 × 480).
 
 **Mettre à jour** : Réglages › Mises à jour, ou la proposition automatique.
 
 **Changements**
+- Barre de A à B aux couleurs du trafic de Google Maps : la partie déjà parcourue garde, tronçon par tronçon, la couleur que Maps donnait à ce moment-là (vert, orange, rouge) ; la partie à venir prend, en plus pâle, la couleur du moment. Ce n’est pas le détail des bouchons à venir, que Maps ne transmet pas, et il faut que la notification de Maps contienne une couleur ; sinon la barre reste bleue.
+
+Comprend aussi la 1.0.16 :
 - La ligne sous la route devient l’itinéraire de A à B pendant un guidage : un point bleu au départ, un point vert à la destination, la partie parcourue en dégradé du bleu au vert, et un point blanc pour la voiture. Elle avance avec la distance restante que donne Google Maps.
 - Pied de la carte de conduite refait : le trajet tient sur une ligne fine à son propre style : durée, distance et vitesse moyenne, chacune avec son icône colorée. Pendant un guidage, trois cases au-dessus donnent l’heure d’arrivée (à la couleur du trafic de Maps), le temps restant et la distance restante ; un toucher sur le trajet ouvre Maps. Sans guidage : un bouton bleu pour naviguer, puis Maison, Travail, tes lieux et les recherches.
 - Voiture redessinée, plus moderne et un peu plus petite : basse et large, toit vitré qui descend jusqu’au coffre, une fine barre de feux sur toute la largeur (plus vive au freinage, clignotant orange du côté du virage), diffuseur sombre. Elle garde la couleur choisie et ton logo sous la barre de feux.
@@ -12,7 +15,7 @@ Incar Drive 1.0.16 — écran d’accueil pour l’Incarlink (Android 11 à 13, 
 - Maison, Travail et tes lieux sans quitter l’accueil : un toucher lance le guidage, et l’accueil revient tout seul deux secondes après son démarrage. Google Maps (ou Waze) doit s’ouvrir un instant pour démarrer le guidage : Android ne permet pas de le lancer en arrière-plan. Il faut l’autorisation « Superposition aux autres applis » d’Incar Drive.
 - Carte de conduite : pied plus compact (icône, titre, boutons Maison et Travail) pour laisser plus de hauteur à la route ; une ligne colorée sépare la route du pied, avec la ligne du trajet juste dessous, et se remplit sur les 500 derniers mètres avant un virage pendant un guidage ; la ligne du trajet (durée, distance, vitesse moyenne) comme la deuxième ligne du pied sont plus grandes et plus lisibles.
 
-Comprend aussi la 1.0.15 :
+Et la 1.0.15 :
 - Guidage en direct : entre deux mises à jour de Google Maps (qui avance par paliers et avec un peu de retard), la distance au virage est décomptée par Incar Drive avec la vitesse de la voiture, image par image, et se recale à chaque nouvelle valeur de Maps. Le virage se dessine donc dès qu’il est proche, sans attendre Maps.
 - Sens du virage lu dans la flèche de Maps : sur certains boîtiers, la notification de Maps ne contient aucun mot, seulement la distance et l’image de la flèche. Incar Drive lit maintenant la forme de cette flèche (gauche, droite, tout droit, demi-tour) ; avant, la carte restait sur « tout droit ».
 - Trafic : un arrêt à un feu ou avant un virage ne colore plus la route en rouge ; seul un vrai bouchon (à l’arrêt la plupart du temps, en avançant par à-coups) le fait.
