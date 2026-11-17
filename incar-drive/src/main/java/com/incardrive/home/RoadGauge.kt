@@ -33,6 +33,8 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
     private val mutedColor: Int, private val badge: android.graphics.Bitmap? = null,
     private val bodyColor: Int = 0xFFF2F5F9.toInt(), private val night: Boolean = true) : View(context), SpeedDial {
     private val guideColor = 0xFF3B8CFF.toInt()
+    // Road markings are white on the asphalt in both themes.
+    private val laneColor = Color.WHITE
     private val arriveColor = 0xFF1D9E75.toInt()
     private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val arrowPaint = Paint(Paint.ANTI_ALIAS_FLAG)
@@ -261,9 +263,21 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
         val horizon = if (guiding) maxOf(h * .36f, baseline + 16 * density) else baseline + 20 * density
         val road = h - horizon
         // The sky of the moment above the horizon, then a soft glow where the road meets it.
-        roadPaint.shader = linear(0f, 0f, 0f, horizon, ColorUtils.setAlphaComponent(skyTop, 0xB0),
-            ColorUtils.setAlphaComponent(skyBottom, 0xB0))
-        canvas.drawRect(0f, 0f, w, horizon, roadPaint)
+        if (night) {
+            roadPaint.shader = linear(0f, 0f, 0f, horizon, ColorUtils.setAlphaComponent(skyTop, 0xB0),
+                ColorUtils.setAlphaComponent(skyBottom, 0xB0))
+            canvas.drawRect(0f, 0f, w, horizon, roadPaint)
+        } else {
+            // By day: a clear blue sky tinted by the sky of the moment, paler towards the horizon, a soft sun, and
+            // light ground on both sides of the road instead of the bare card.
+            roadPaint.shader = linear(0f, 0f, 0f, horizon, ColorUtils.blendARGB(skyTop, 0xFF3F8BE6.toInt(), .6f),
+                ColorUtils.blendARGB(skyBottom, 0xFFD6EAFF.toInt(), .6f))
+            canvas.drawRect(0f, 0f, w, horizon, roadPaint)
+            glowPaint.shader = radial(w * .82f, horizon * .3f, w * .3f, 0x99FFFFFF.toInt(), 0x00FFFFFF)
+            canvas.drawRect(0f, 0f, w, horizon, glowPaint)
+            roadPaint.shader = linear(0f, horizon, 0f, h, 0xFFDFE9F1.toInt(), 0xFFB4C6D6.toInt())
+            canvas.drawRect(0f, horizon, w, h, roadPaint)
+        }
         glowPaint.shader = radial(cx, horizon, w * .55f, ColorUtils.setAlphaComponent(tone, 0x26),
             ColorUtils.setAlphaComponent(tone, 0))
         canvas.drawRect(0f, 0f, w, h, glowPaint)
@@ -327,13 +341,18 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
                 arrowPaint.color = ColorUtils.setAlphaComponent(textColor, 0x33)
                 rect.set(left, y, w - left, y + thick)
                 canvas.drawRoundRect(rect, thick / 2, thick / 2, arrowPaint)
-                arrowPaint.color = when { cameraFirst -> alert; arriving -> arriveColor; else -> guideColor }
+                val colour = when { cameraFirst -> alert; arriving -> arriveColor; else -> guideColor }
                 rect.set(left, y, left + (w - 2 * left) * fraction, y + thick)
+                // A gradient along the filled part: pale where it started, full colour at its head.
+                arrowPaint.shader = linear(left, 0f, w - left, 0f, ColorUtils.blendARGB(colour, Color.WHITE, .6f), colour)
             } else {
-                arrowPaint.color = tone
                 rect.set(left, y, w - left, y + thick)
+                // Idle: the road's colour fading out to the right.
+                arrowPaint.shader = linear(left, 0f, w - left, 0f, tone, ColorUtils.setAlphaComponent(tone, 0x26))
             }
+            arrowPaint.color = Color.WHITE
             canvas.drawRoundRect(rect, thick / 2, thick / 2, arrowPaint)
+            arrowPaint.shader = null
         }
         // Indicator on the side of a close turn, blinking.
         val blinkSide = if (bend && (liveMeters ?: 0) <= 300) (if (turn!!.turn == Turn.LEFT) -1 else 1) else 0
@@ -374,7 +393,9 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
         path.lineTo(cx + near, h)
         path.lineTo(cx - near, h)
         path.close()
-        roadPaint.shader = linear(0f, horizon, 0f, h, 0x001A2230, 0xF01A2230.toInt())
+        // Asphalt: fading into the dark at night, solid under the daylight.
+        roadPaint.shader = if (night) linear(0f, horizon, 0f, h, 0x001A2230, 0xF01A2230.toInt())
+            else linear(0f, horizon, 0f, h, 0xFF5A6676.toInt(), 0xFF2C343F.toInt())
         canvas.drawPath(path, roadPaint)
         roadPaint.shader = linear(0f, horizon, 0f, h, ColorUtils.setAlphaComponent(tone, 0),
             ColorUtils.setAlphaComponent(tone, 0x2E))
@@ -388,8 +409,8 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
         edgePaint.strokeWidth = 2.2f * density
         canvas.drawLine(cx - far, horizon, cx - near, h, edgePaint)
         canvas.drawLine(cx + far, horizon, cx + near, h, edgePaint)
-        edgePaint.shader = linear(0f, horizon, 0f, h, ColorUtils.setAlphaComponent(textColor, 0x10),
-            ColorUtils.setAlphaComponent(textColor, 0xB0))
+        edgePaint.shader = linear(0f, horizon, 0f, h, ColorUtils.setAlphaComponent(laneColor, 0x10),
+            ColorUtils.setAlphaComponent(laneColor, 0xB0))
         edgePaint.strokeWidth = 1.6f * density
         canvas.drawLine(cx - far * .86f, horizon, cx - near * .86f, h, edgePaint)
         canvas.drawLine(cx + far * .86f, horizon, cx + near * .86f, h, edgePaint)
@@ -404,7 +425,7 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
             val y0 = horizon + (h - horizon) / z0
             val y1 = horizon + (h - horizon) / z1
             val fade = ((y0 - horizon) / (h - horizon)).coerceIn(0f, 1f)
-            markPaint.color = ColorUtils.setAlphaComponent(textColor, (30 + 190 * fade).roundToInt())
+            markPaint.color = ColorUtils.setAlphaComponent(laneColor, (30 + 190 * fade).roundToInt())
             val wide = 1.5f * density * (.4f + 2.2f * fade)
             for (lane in LANES) {
                 path.reset()
@@ -418,7 +439,7 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
             if (post) for (side in SIDES) {
                 val x = cx + side * half(y0) * 1.1f
                 val tall = (4 + 16 * fade) * density
-                markPaint.color = ColorUtils.setAlphaComponent(textColor, (25 + 120 * fade).roundToInt())
+                markPaint.color = ColorUtils.setAlphaComponent(laneColor, (25 + 120 * fade).roundToInt())
                 canvas.drawRect(x - wide * .5f, y0 - tall, x + wide * .5f, y0, markPaint)
                 markPaint.color = ColorUtils.setAlphaComponent(0xFFFFB020.toInt(), (60 + 190 * fade).roundToInt())
                 canvas.drawRect(x - wide * .5f, y0 - tall, x + wide * .5f, y0 - tall * .75f, markPaint)

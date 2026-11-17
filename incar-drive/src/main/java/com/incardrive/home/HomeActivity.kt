@@ -1000,7 +1000,8 @@ class HomeActivity : Activity() {
             brand != null -> BrandGauge(context, brand, text, muted)
             styleName == DIAL -> SpeedGauge(context, getColor(R.color.home_gauge_track), shade(accent, Color.BLACK, .25f),
                 shade(accent, Color.WHITE, .3f), text, muted)
-            else -> RoadGauge(context, ROAD_BLUE, text, muted, carLogo.bitmap(), carColor(), night).also {
+            // Ice blue on the night road; a fuller blue by day, where the pale one would wash out.
+            else -> RoadGauge(context, if (night) ROAD_BLUE else 0xFF2F86E8.toInt(), text, muted, carLogo.bitmap(), carColor(), night).also {
                 roadGauge = it
                 currentSky().let { sky -> it.sky(sky.top, sky.mid) }
                 it.guide(NavWatch.nav.value)
