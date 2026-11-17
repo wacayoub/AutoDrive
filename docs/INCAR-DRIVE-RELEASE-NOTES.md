@@ -1,15 +1,18 @@
-Incar Drive 1.0.9 — écran d’accueil pour l’Incarlink (Android 11 à 13, conçu pour 800 × 480).
+Incar Drive 1.0.10 — écran d’accueil pour l’Incarlink (Android 11 à 13, conçu pour 800 × 480).
 
 **Mettre à jour** : Réglages › Mises à jour, ou la proposition automatique.
 
 **Changements**
+- Carte Waze à droite de l’accueil (nouveau choix) : la carte web officielle de Waze, gratuite et sans compte, avec son trafic et les signalements de ses conducteurs. Elle se recentre sur la voiture tous les 400 m ; « Centrer » le fait tout de suite, « Ouvrir Waze » lance l’appli. Elle ne montre ni itinéraire ni guidage, et demande Internet et le composant Android System WebView. Réglages › Navigation › « À droite de l’accueil » : Carte, Waze, Widget Maps ou Favoris.
+
+Comprend aussi la 1.0.9 :
 - Carte Incar Drive à droite de l’accueil, gratuite et sans compte : la carte OpenStreetMap autour de la voiture, avec ta position et ta direction, les radars, le zoom + / −, et la consigne de Google Maps ou Waze par-dessus pendant un guidage. Un toucher ouvre la navigation. Ce n’est pas Google Maps : pas de ligne d’itinéraire ; il faut Internet pour les zones jamais vues, les autres restent en mémoire. Réglages › Navigation › « À droite de l’accueil » : Carte, Widget Maps ou Favoris.
 - Trafic en direct sur la carte (option) : les bouchons en couleurs, fournis par TomTom avec ta propre clé gratuite (200 000 tuiles par mois, sans carte bancaire). Réglages › Navigation › « Ajouter le trafic en direct sur la carte » explique comment l’obtenir. Sans clé, la carte reste sans trafic.
 - Thème jour : le logo de la voiture et le badge sont posés sur une plaque sombre, pour rester visibles sur le ciel clair.
 - Compteur Route : la ligne du trajet reste lisible en thème jour.
 - Panneaux (Applis, Réglages, Téléphone) : plus de texte de la barre du haut qui dépasse au coin.
 
-Comprend aussi la 1.0.8 :
+Et la 1.0.8 :
 - Logo Toyota argent + HYBRID : Réglages › Écran d’accueil › « Logo Toyota argent + HYBRID ». L’emblème Toyota en chrome argent (récupéré sur Wikimedia Commons) et un badge HYBRID chromé avec sa vague bleue, dessiné par Incar Drive, au milieu de la barre du haut. Rien n’est inclus dans l’appli.
 - Cadre Google Maps jusqu’en bas : pendant un guidage, la carte de droite descend jusqu’au bas de l’écran et la barre du bas se raccourcit (Accueil, Téléphone, Applis, Réglages), pour que la petite fenêtre de Maps, qu’Android place en bas à droite, se pose dans le cadre et non sur la barre. Tout revient à la fin du guidage ou en page 2.
 - Carte de navigation : la distance n’est plus répétée sur la seconde ligne, même quand Google Maps l’écrit avec des espaces spéciaux (« 8.5 km »).

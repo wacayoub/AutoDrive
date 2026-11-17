@@ -181,6 +181,7 @@ class HomeActivity : Activity() {
     private lateinit var mapWidget: MapWidget
     private lateinit var carLogo: CarLogo
     private lateinit var ownMap: OwnMap
+    private lateinit var wazeMap: WazeMap
     private lateinit var carBadge: CarLogo
     private lateinit var mediaResume: MediaResume
     private lateinit var widgets: WidgetBoard
@@ -226,6 +227,7 @@ class HomeActivity : Activity() {
         gps.onFix = { fix, kmh ->
             info.usePosition(fix.latitude, fix.longitude)
             ownMap.position(fix.latitude, fix.longitude, fix.bearing.takeIf { fix.hasBearing() && (kmh ?: 0) >= 5 })
+            wazeMap.position(fix.latitude, fix.longitude)
             followRoad(fix, kmh)
             trip.accept(System.currentTimeMillis(), fix.latitude, fix.longitude, fix.accuracy.takeIf { fix.hasAccuracy() }, kmh)
             if (System.currentTimeMillis() - lastTripSave > 30_000) saveTrip()
@@ -235,6 +237,10 @@ class HomeActivity : Activity() {
         navigation = Navigation(this, prefs)
         mapWidget = MapWidget(this)
         carLogo = CarLogo(this)
+        wazeMap = WazeMap(this) {
+            val waze = packageManager.getLaunchIntentForPackage("com.waze")
+            if (waze != null) startSafely(waze) else Toast.makeText(this, "Waze n’est pas installé sur ce boîtier.", Toast.LENGTH_LONG).show()
+        }
         ownMap = OwnMap(this) { if (NavWatch.nav.value != null) { if (!navigation.resume()) navMissing() } else if (!navigation.open()) navMissing() }
         carBadge = CarLogo(this, "car_badge", 48)
         mediaResume = MediaResume(this)
@@ -284,6 +290,7 @@ class HomeActivity : Activity() {
     }
 
     override fun onDestroy() {
+        if (::wazeMap.isInitialized) wazeMap.destroy()
         if (::mediaResume.isInitialized) mediaResume.release()
         if (::clicks.isInitialized) clicks.release()
         super.onDestroy()
@@ -397,9 +404,11 @@ class HomeActivity : Activity() {
         renderSpeed()
         renderFavorites()
         renderDockApps()
+        wazeMap.resume()
     }
 
     override fun onStop() {
+        wazeMap.pause()
         HomeVisibility.shown = false
         HomeVisibility.changed?.invoke()
         handler.removeCallbacks(tick)
@@ -545,6 +554,7 @@ class HomeActivity : Activity() {
                 // The live map (a Google Maps or Waze widget) takes the favourites' place when chosen; they move to page 2.
                 addView(when {
                     !mapOnHome() -> favoritesCard()
+                    mapSource() == WAZE_MAP -> wazeMap.view()
                     ownMapOnHome() -> ownMap.view()
                     else -> mapWidget.view()
                 }, LinearLayout.LayoutParams(0, -1, 1.05f))
@@ -595,7 +605,7 @@ class HomeActivity : Activity() {
      * own: Android decides its exact place and size, the frame is laid out around that corner.
      */
     private fun placeMapsFrame() {
-        val wanted = guiding && mapOnHome() && !ownMapOnHome() && ::pager.isInitialized && pager.page == 0 && ::screenRoot.isInitialized
+        val wanted = guiding && mapOnHome() && mapSource() == MAPS_WIDGET && ::pager.isInitialized && pager.page == 0 && ::screenRoot.isInitialized
         if (!wanted) {
             mapsFrame?.let { screenRoot.removeView(it) }
             mapsFrame = null
@@ -983,7 +993,8 @@ class HomeActivity : Activity() {
     private fun mapOnHome() = prefs.getBoolean(MAP_ON_HOME, true)
 
     /** Incar Drive's own OpenStreetMap map rather than Google Maps' widget, when a map is on the home page. */
-    private fun ownMapOnHome() = prefs.getString(MAP_SOURCE, OWN_MAP) != MAPS_WIDGET
+    private fun mapSource() = prefs.getString(MAP_SOURCE, OWN_MAP) ?: OWN_MAP
+    private fun ownMapOnHome() = mapSource() == OWN_MAP
 
     private fun navMissing() = Toast.makeText(this, "${navigation.app().label} n’est pas installé.", Toast.LENGTH_LONG).show()
 
@@ -1935,14 +1946,15 @@ class HomeActivity : Activity() {
                 }
             }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
             addView(label("À droite de l’accueil", 13, text, 700), wrap().apply { topMargin = dp(10) })
-            val rightNow = when { !mapOnHome() -> "favorites"; ownMapOnHome() -> OWN_MAP; else -> MAPS_WIDGET }
-            addView(choices(listOf(OWN_MAP, MAPS_WIDGET, "favorites"), rightNow,
-                { when (it) { OWN_MAP -> "Carte"; MAPS_WIDGET -> "Widget Maps"; else -> "Favoris" } }, { null }) {
+            val rightNow = if (!mapOnHome()) "favorites" else mapSource()
+            addView(choices(listOf(OWN_MAP, WAZE_MAP, MAPS_WIDGET, "favorites"), rightNow,
+                { when (it) { OWN_MAP -> "Carte"; WAZE_MAP -> "Waze"; MAPS_WIDGET -> "Widget Maps"; else -> "Favoris" } }, { null }) {
                 prefs.edit().putBoolean(MAP_ON_HOME, it != "favorites")
                     .apply { if (it != "favorites") putString(MAP_SOURCE, it) }.apply()
             }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(6) })
-            addView(label("Carte : celle d’Incar Drive (OpenStreetMap, gratuite), avec ta position, les radars et la consigne de Maps · " +
-                "Widget Maps : le trafic de Google Maps, s’il a la position", 11, muted).apply { maxLines = 3 },
+            addView(label("Carte : celle d’Incar Drive (OpenStreetMap), avec ta position, les radars et la consigne de Maps · " +
+                "Waze : la carte web de Waze, son trafic et ses signalements · Widget Maps : le trafic de Google Maps, s’il a la position",
+                11, muted).apply { maxLines = 3 },
                 LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(4) })
             val hasTraffic = !prefs.getString(OwnMap.TRAFFIC_KEY, null).isNullOrBlank()
             addView(label(if (hasTraffic) "Trafic en direct sur la carte : activé  ›" else "Ajouter le trafic en direct sur la carte  ›",
@@ -2282,6 +2294,7 @@ class HomeActivity : Activity() {
         const val MAP_SOURCE = "map_source"
         const val OWN_MAP = "own"
         const val MAPS_WIDGET = "widget"
+        const val WAZE_MAP = "waze"
         const val PREFS = "incar_drive_home"
         const val APPEARANCE = "appearance"
         const val ACCENT = "accent"
