@@ -67,7 +67,11 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
         importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_YES
     }
 
+    // Brake lights on while the speed drops quickly.
+    private var braking = false
+
     override fun setSpeed(value: Int?) {
+        braking = value != null && speed != null && value <= speed!! - 3
         speed = value
         easing?.cancel()
         easing = ValueAnimator.ofFloat(shown, (value ?: 0).toFloat()).apply {
@@ -162,7 +166,7 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
         val band = 26 * density
         roadPaint.shader = LinearGradient(0f, h - band, 0f, h, 0x000B1018, 0xD90B1018.toInt(), Shader.TileMode.CLAMP)
         canvas.drawRect(0f, h - band, w, h, roadPaint)
-        drawCar(canvas, cx, h - band + 3 * density, min(w * .28f, 84 * density))
+        drawCar(canvas, cx, h - band + 3 * density, min(w * .32f, 92 * density))
         // The speed above the road.
         valuePaint.textSize = size
         valuePaint.color = if (over) alert else textColor
@@ -173,58 +177,116 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
         if (shown > .5f && isShown && windowVisibility == VISIBLE) postInvalidateDelayed(33) else lastFrame = 0L
     }
 
-    /** The car from behind: a soft shadow, the wheels, the body, the rear window and a full-width tail light. */
+    /**
+     * A compact hybrid saloon from behind, in the lines of the driver's Corolla Hybrid: pearl-white body with rounded
+     * shoulders, sloping rear window, door mirrors, two wrap-around tail lights joined by a dark trim strip with the
+     * driver's emblem between them, the plate, and a black lower bumper with reflectors. The lights brighten on braking.
+     */
     private fun drawCar(canvas: Canvas, cx: Float, bottom: Float, carW: Float) {
-        val carH = carW * .68f
-        val top = bottom - carH
-        carPaint.shader = RadialGradient(cx, bottom, carW * .75f, 0x99000000.toInt(), 0, Shader.TileMode.CLAMP)
-        rect.set(cx - carW * .75f, bottom - carH * .25f, cx + carW * .75f, bottom + carH * .25f)
+        val u = carW
+        val v = carW * .62f
+        val top = bottom - v
+        fun x(f: Float) = cx + u * f
+        fun y(f: Float) = top + v * f
+        // Shadow and tyres.
+        carPaint.shader = RadialGradient(cx, bottom, u * .8f, 0xA0000000.toInt(), 0, Shader.TileMode.CLAMP)
+        rect.set(x(-.8f), bottom - v * .22f, x(.8f), bottom + v * .22f)
         canvas.drawOval(rect, carPaint)
         carPaint.shader = null
-        carPaint.color = 0xFF07090D.toInt()
-        rect.set(cx - carW * .47f, bottom - carH * .22f, cx - carW * .3f, bottom + carH * .02f)
-        canvas.drawRoundRect(rect, carH * .05f, carH * .05f, carPaint)
-        rect.set(cx + carW * .3f, bottom - carH * .22f, cx + carW * .47f, bottom + carH * .02f)
-        canvas.drawRoundRect(rect, carH * .05f, carH * .05f, carPaint)
-        // Cabin then body, light grey lit from above.
-        carPaint.shader = LinearGradient(0f, top, 0f, bottom, 0xFFF2F5F9.toInt(), 0xFFAEB7C4.toInt(), Shader.TileMode.CLAMP)
+        carPaint.color = 0xFF06080B.toInt()
+        rect.set(x(-.47f), y(.8f), x(-.33f), bottom + v * .02f)
+        canvas.drawRoundRect(rect, v * .05f, v * .05f, carPaint)
+        rect.set(x(.33f), y(.8f), x(.47f), bottom + v * .02f)
+        canvas.drawRoundRect(rect, v * .05f, v * .05f, carPaint)
+        // Door mirrors.
+        carPaint.color = 0xFF1A1F27.toInt()
+        rect.set(x(-.53f), y(.36f), x(-.43f), y(.45f))
+        canvas.drawOval(rect, carPaint)
+        rect.set(x(.43f), y(.36f), x(.53f), y(.45f))
+        canvas.drawOval(rect, carPaint)
+        // Cabin: a sloping greenhouse, narrower at the roof.
+        val pearl = LinearGradient(0f, top, 0f, bottom, 0xFFF7F8FA.toInt(), 0xFFB9C0CA.toInt(), Shader.TileMode.CLAMP)
+        carPaint.shader = pearl
         path.reset()
-        path.moveTo(cx - carW * .3f, top + carH * .42f)
-        path.lineTo(cx - carW * .24f, top + carH * .04f)
-        path.quadTo(cx, top - carH * .04f, cx + carW * .24f, top + carH * .04f)
-        path.lineTo(cx + carW * .3f, top + carH * .42f)
+        path.moveTo(x(-.42f), y(.46f))
+        path.cubicTo(x(-.36f), y(.2f), x(-.3f), y(.02f), x(-.18f), y(0f))
+        path.lineTo(x(.18f), y(0f))
+        path.cubicTo(x(.3f), y(.02f), x(.36f), y(.2f), x(.42f), y(.46f))
         path.close()
         canvas.drawPath(path, carPaint)
-        rect.set(cx - carW / 2, top + carH * .36f, cx + carW / 2, bottom - carH * .08f)
-        canvas.drawRoundRect(rect, carH * .2f, carH * .2f, carPaint)
-        carPaint.shader = LinearGradient(0f, top, 0f, top + carH * .38f, 0xFF2A3446.toInt(), 0xFF0B1220.toInt(), Shader.TileMode.CLAMP)
+        // Rear window, dark glass with a reflection.
+        carPaint.shader = LinearGradient(0f, y(.04f), 0f, y(.4f), 0xFF2E3A4E.toInt(), 0xFF070B12.toInt(), Shader.TileMode.CLAMP)
         path.reset()
-        path.moveTo(cx - carW * .25f, top + carH * .38f)
-        path.lineTo(cx - carW * .2f, top + carH * .1f)
-        path.quadTo(cx, top + carH * .04f, cx + carW * .2f, top + carH * .1f)
-        path.lineTo(cx + carW * .25f, top + carH * .38f)
+        path.moveTo(x(-.35f), y(.4f))
+        path.cubicTo(x(-.3f), y(.2f), x(-.26f), y(.07f), x(-.16f), y(.05f))
+        path.lineTo(x(.16f), y(.05f))
+        path.cubicTo(x(.26f), y(.07f), x(.3f), y(.2f), x(.35f), y(.4f))
         path.close()
         canvas.drawPath(path, carPaint)
-        // The tail light across the boot, glowing.
-        val lightTop = top + carH * .5f
+        // Body: wide, with rounded shoulders and a slightly tucked-in bottom.
+        carPaint.shader = pearl
+        path.reset()
+        path.moveTo(x(-.47f), y(.44f))
+        path.quadTo(x(-.51f), y(.46f), x(-.51f), y(.56f))
+        path.lineTo(x(-.49f), y(.86f))
+        path.quadTo(x(-.48f), y(.94f), x(-.4f), y(.94f))
+        path.lineTo(x(.4f), y(.94f))
+        path.quadTo(x(.48f), y(.94f), x(.49f), y(.86f))
+        path.lineTo(x(.51f), y(.56f))
+        path.quadTo(x(.51f), y(.46f), x(.47f), y(.44f))
+        path.close()
+        canvas.drawPath(path, carPaint)
+        // The boot lid's shut line.
         carPaint.shader = null
-        carPaint.color = 0x55FF2A2A
-        rect.set(cx - carW * .5f, lightTop - carH * .06f, cx + carW * .5f, lightTop + carH * .16f)
-        canvas.drawRoundRect(rect, carH * .1f, carH * .1f, carPaint)
-        carPaint.color = 0xFFFF3B3B.toInt()
-        rect.set(cx - carW * .46f, lightTop, cx + carW * .46f, lightTop + carH * .08f)
-        canvas.drawRoundRect(rect, carH * .04f, carH * .04f, carPaint)
-        carPaint.color = 0xFFE4E8EE.toInt()
-        rect.set(cx - carW * .12f, lightTop + carH * .18f, cx + carW * .12f, lightTop + carH * .3f)
-        canvas.drawRoundRect(rect, carH * .02f, carH * .02f, carPaint)
-        // The driver's car logo on the boot, between the window and the light, when one is chosen.
+        stroke(0x33000000, .8f)
+        canvas.drawLine(x(-.3f), y(.47f), x(.3f), y(.47f), outline)
+        // Wrap-around tail lights, joined by a dark trim strip.
+        val glowing = braking
+        carPaint.color = if (glowing) 0x88FF2020.toInt() else 0x44FF2020
+        rect.set(x(-.56f), y(.46f), x(.56f), y(.66f))
+        canvas.drawRoundRect(rect, v * .1f, v * .1f, carPaint)
+        carPaint.color = 0xFF1B1F26.toInt()
+        rect.set(x(-.22f), y(.53f), x(.22f), y(.575f))
+        canvas.drawRect(rect, carPaint)
+        for (side in SIDES) {
+            path.reset()
+            path.moveTo(x(side * .51f), y(.5f))
+            path.lineTo(x(side * .22f), y(.52f))
+            path.lineTo(x(side * .22f), y(.585f))
+            path.lineTo(x(side * .5f), y(.63f))
+            path.close()
+            carPaint.color = if (glowing) 0xFFFF2B2B.toInt() else 0xFFD8262E.toInt()
+            canvas.drawPath(path, carPaint)
+            // The light's inner LED line.
+            stroke(if (glowing) 0xFFFFD0D0.toInt() else 0xFFFF7A7A.toInt(), 1f)
+            canvas.drawLine(x(side * .48f), y(.535f), x(side * .25f), y(.548f), outline)
+        }
+        // Plate, then the black lower bumper with its reflectors.
+        carPaint.color = 0xFFE9ECF0.toInt()
+        rect.set(x(-.13f), y(.66f), x(.13f), y(.77f))
+        canvas.drawRoundRect(rect, v * .02f, v * .02f, carPaint)
+        carPaint.color = 0xFF15191F.toInt()
+        rect.set(x(-.47f), y(.82f), x(.47f), y(.95f))
+        canvas.drawRoundRect(rect, v * .05f, v * .05f, carPaint)
+        carPaint.color = 0xFFB0222A.toInt()
+        rect.set(x(-.42f), y(.85f), x(-.33f), y(.88f))
+        canvas.drawRect(rect, carPaint)
+        rect.set(x(.33f), y(.85f), x(.42f), y(.88f))
+        canvas.drawRect(rect, carPaint)
+        // The driver's emblem on the boot, above the trim strip.
         badge?.let { original ->
-            val logo = fitted(original, carH * .2f, carW * .32f)
-            val tall = logo.height.toFloat()
+            val logo = fitted(original, v * .14f, u * .16f)
             val wide = logo.width.toFloat()
-            rect.set(cx - wide / 2, lightTop - tall - carH * .01f, cx + wide / 2, lightTop - carH * .01f)
+            val tall = logo.height.toFloat()
+            rect.set(cx - wide / 2, y(.525f) - tall, cx + wide / 2, y(.525f))
             canvas.drawBitmap(logo, null, rect, badgePaint)
         }
+    }
+
+    private val outline = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND }
+    private fun stroke(color: Int, widthDp: Float) {
+        outline.color = color
+        outline.strokeWidth = widthDp * density
     }
 
     // Each badge shrunk once to the size it is drawn at, so its edges stay clean.

@@ -616,8 +616,8 @@ class HomeActivity : Activity() {
         // buttons, so they never cover them.
         addView(row().apply {
             gravity = Gravity.CENTER
-            addView(carLogo.view(32), LinearLayout.LayoutParams(-2, dp(32)))
-            addView(carBadge.view(18), LinearLayout.LayoutParams(-2, dp(18)).apply { marginStart = dp(10) })
+            addView(carLogo.view(26), LinearLayout.LayoutParams(-2, dp(26)))
+            addView(carBadge.view(15), LinearLayout.LayoutParams(-2, dp(15)).apply { marginStart = dp(8) })
         }, LinearLayout.LayoutParams(0, -1, 1f).apply { marginStart = dp(8); marginEnd = dp(8) })
         fun chip(content: LinearLayout.() -> Unit) = row().apply {
             background = glass(14)
