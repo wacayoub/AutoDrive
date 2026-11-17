@@ -62,6 +62,14 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
             if (read.turn == Turn.STRAIGHT && it.turn != null) read.copy(turn = it.turn) else read
         }
         turnIcon = nav?.arrow
+        // The whole route, from where the guidance started (A) to the destination (B): the longest distance left
+        // seen is the route's length, and the bar under the road fills as that distance shrinks.
+        val left = Maneuver.meters(nav?.distance)
+        if (nav == null) { routeMeters = 0; routeLeft = null } else if (left != null) {
+            routeLeft = left
+            // A much longer distance than before is a new destination: start again from A.
+            if (left > routeMeters) routeMeters = left
+        }
         val text = nav?.let { it.step ?: it.remaining }
         // A new value from the navigation app sets the distance again; the same text repeated lets the countdown
         // that runs between its updates carry on.
@@ -146,6 +154,8 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
     }
 
     /** The turn is drawn on the road only once it is close; before that the road stays straight. */
+    private var routeMeters = 0
+    private var routeLeft: Int? = null
     private val close get() = (liveMeters ?: 0) <= NEAR_M
     private val cameraFirst get() = cameraMeters != null && (maneuver == null || cameraMeters!! < (liveMeters ?: Int.MAX_VALUE))
 
@@ -328,31 +338,51 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
         val band = 12 * density
         roadPaint.shader = linear(0f, h - band, 0f, h, 0x000B1018, 0xD90B1018.toInt())
         canvas.drawRect(0f, h - band, w, h, roadPaint)
-        // The line under the trip summary, where the road meets the card's foot: plain in the road's colour when
-        // idle; while guiding it fills over the last 500 m before the turn (or the camera).
-        val metres = if (cameraFirst) cameraMeters else liveMeters
+        // The line where the road meets the card's foot. Idle: plain, in the road's colour. While guiding: the route
+        // from A (where the guidance started) to B (the destination), filled as far as the car has come, its colour
+        // running from A's blue to B's green, with a dot at each end and one for the car.
         run {
-            val left = 10 * density
             val thick = 4 * density
             val y = h - thick - 1.5f * density
+            val middle = y + thick / 2
             arrowPaint.shader = null
-            if (guiding && metres != null) {
-                val fraction = (1f - metres.coerceAtMost(FAR_M) / FAR_M.toFloat()).coerceIn(.03f, 1f)
+            val leftMetres = routeLeft
+            if (turn != null && leftMetres != null && routeMeters > 0) {
+                val dot = 4.5f * density
+                val from = 10 * density + dot
+                val to = w - 10 * density - dot
+                val fraction = (1f - leftMetres / routeMeters.toFloat()).coerceIn(0f, 1f)
+                val head = from + (to - from) * fraction
                 arrowPaint.color = ColorUtils.setAlphaComponent(textColor, 0x33)
-                rect.set(left, y, w - left, y + thick)
+                rect.set(from, y, to, y + thick)
                 canvas.drawRoundRect(rect, thick / 2, thick / 2, arrowPaint)
-                val colour = when { cameraFirst -> alert; arriving -> arriveColor; else -> guideColor }
-                rect.set(left, y, left + (w - 2 * left) * fraction, y + thick)
-                // A gradient along the filled part: pale where it started, full colour at its head.
-                arrowPaint.shader = linear(left, 0f, w - left, 0f, ColorUtils.blendARGB(colour, Color.WHITE, .6f), colour)
+                arrowPaint.color = Color.WHITE
+                arrowPaint.shader = linear(from, 0f, to, 0f, guideColor, arriveColor)
+                rect.set(from, y, head, y + thick)
+                canvas.drawRoundRect(rect, thick / 2, thick / 2, arrowPaint)
+                arrowPaint.shader = null
+                // A: a blue dot. B: a green one, hollow until the car is there.
+                arrowPaint.color = guideColor
+                canvas.drawCircle(from, middle, dot, arrowPaint)
+                arrowPaint.color = arriveColor
+                canvas.drawCircle(to, middle, dot, arrowPaint)
+                if (fraction < .97f) {
+                    arrowPaint.color = footerColor.takeIf { footer > 0f } ?: 0xFF0B1018.toInt()
+                    canvas.drawCircle(to, middle, dot * .5f, arrowPaint)
+                }
+                // The car on the route.
+                arrowPaint.color = Color.WHITE
+                canvas.drawCircle(head, middle, dot * .95f, arrowPaint)
+                arrowPaint.color = ColorUtils.blendARGB(guideColor, arriveColor, fraction)
+                canvas.drawCircle(head, middle, dot * .5f, arrowPaint)
             } else {
+                val left = 10 * density
                 rect.set(left, y, w - left, y + thick)
-                // Idle: the road's colour fading out to the right.
+                arrowPaint.color = Color.WHITE
                 arrowPaint.shader = linear(left, 0f, w - left, 0f, tone, ColorUtils.setAlphaComponent(tone, 0x26))
+                canvas.drawRoundRect(rect, thick / 2, thick / 2, arrowPaint)
+                arrowPaint.shader = null
             }
-            arrowPaint.color = Color.WHITE
-            canvas.drawRoundRect(rect, thick / 2, thick / 2, arrowPaint)
-            arrowPaint.shader = null
         }
         // Indicator on the side of a close turn, blinking.
         val blinkSide = if (bend && (liveMeters ?: 0) <= 300) (if (turn!!.turn == Turn.LEFT) -1 else 1) else 0
