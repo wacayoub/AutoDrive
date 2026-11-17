@@ -67,6 +67,9 @@ internal class RoadLimits {
     fun limitAt(latitude: Double, longitude: Double, bearing: Int?): Road? = match(roads, latitude, longitude, bearing)
 
     /** The nearest speed camera ahead of the car, and its distance in metres. */
+    /** The speed cameras found around the car, for the map. */
+    fun cameraList(): List<Camera> = cameras
+
     fun cameraAhead(latitude: Double, longitude: Double, bearing: Int?): Pair<Camera, Int>? =
         cameraAhead(cameras, latitude, longitude, bearing)
 

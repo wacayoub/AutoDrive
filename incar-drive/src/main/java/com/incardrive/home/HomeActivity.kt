@@ -180,6 +180,7 @@ class HomeActivity : Activity() {
     private lateinit var navigation: Navigation
     private lateinit var mapWidget: MapWidget
     private lateinit var carLogo: CarLogo
+    private lateinit var ownMap: OwnMap
     private lateinit var carBadge: CarLogo
     private lateinit var mediaResume: MediaResume
     private lateinit var widgets: WidgetBoard
@@ -224,6 +225,7 @@ class HomeActivity : Activity() {
         }
         gps.onFix = { fix, kmh ->
             info.usePosition(fix.latitude, fix.longitude)
+            ownMap.position(fix.latitude, fix.longitude, fix.bearing.takeIf { fix.hasBearing() && (kmh ?: 0) >= 5 })
             followRoad(fix, kmh)
             trip.accept(System.currentTimeMillis(), fix.latitude, fix.longitude, fix.accuracy.takeIf { fix.hasAccuracy() }, kmh)
             if (System.currentTimeMillis() - lastTripSave > 30_000) saveTrip()
@@ -233,6 +235,7 @@ class HomeActivity : Activity() {
         navigation = Navigation(this, prefs)
         mapWidget = MapWidget(this)
         carLogo = CarLogo(this)
+        ownMap = OwnMap(this) { if (NavWatch.nav.value != null) { if (!navigation.resume()) navMissing() } else if (!navigation.open()) navMissing() }
         carBadge = CarLogo(this, "car_badge", 48)
         mediaResume = MediaResume(this)
         widgets = WidgetBoard(this)
@@ -540,7 +543,11 @@ class HomeActivity : Activity() {
                         addView(mapsCard(), LinearLayout.LayoutParams(-1, 0, .75f).apply { topMargin = dp(10) })
                     }, LinearLayout.LayoutParams(0, -1, 1f).apply { marginStart = dp(10); marginEnd = dp(10) })
                 // The live map (a Google Maps or Waze widget) takes the favourites' place when chosen; they move to page 2.
-                addView(if (mapOnHome()) mapWidget.view() else favoritesCard(), LinearLayout.LayoutParams(0, -1, 1.05f))
+                addView(when {
+                    !mapOnHome() -> favoritesCard()
+                    ownMapOnHome() -> ownMap.view()
+                    else -> mapWidget.view()
+                }, LinearLayout.LayoutParams(0, -1, 1.05f))
                 })
                 // Second page: the connected phone and the driver's Android widgets.
                 addPage(row().apply {
@@ -588,7 +595,7 @@ class HomeActivity : Activity() {
      * own: Android decides its exact place and size, the frame is laid out around that corner.
      */
     private fun placeMapsFrame() {
-        val wanted = guiding && mapOnHome() && ::pager.isInitialized && pager.page == 0 && ::screenRoot.isInitialized
+        val wanted = guiding && mapOnHome() && !ownMapOnHome() && ::pager.isInitialized && pager.page == 0 && ::screenRoot.isInitialized
         if (!wanted) {
             mapsFrame?.let { screenRoot.removeView(it) }
             mapsFrame = null
@@ -975,6 +982,9 @@ class HomeActivity : Activity() {
     /** Whether the live map replaces the favourites on the first page (Réglages › Navigation › Carte sur l’accueil). */
     private fun mapOnHome() = prefs.getBoolean(MAP_ON_HOME, true)
 
+    /** Incar Drive's own OpenStreetMap map rather than Google Maps' widget, when a map is on the home page. */
+    private fun ownMapOnHome() = prefs.getString(MAP_SOURCE, OWN_MAP) != MAPS_WIDGET
+
     private fun navMissing() = Toast.makeText(this, "${navigation.app().label} n’est pas installé.", Toast.LENGTH_LONG).show()
 
     // The driver's own places, stored like the saved phone numbers: a name and an address or position.
@@ -1030,6 +1040,7 @@ class HomeActivity : Activity() {
     private fun renderNav(nav: NavInfo?) {
         guiding = nav != null
         placeMapsFrame()
+        ownMap.guide(nav)
         if (!::navTitle.isInitialized) return
         if (nav == null) {
             navIcon.setImageResource(R.drawable.ic_home_navigation)
@@ -1436,6 +1447,7 @@ class HomeActivity : Activity() {
             fetchingRoads = true
             scope?.launch {
                 withContext(Dispatchers.IO) { roadLimits.refresh(fix.latitude, fix.longitude, now) }
+                ownMap.cameras(roadLimits.cameraList())
                 fetchingRoads = false
             } ?: run { fetchingRoads = false }
         }
@@ -1896,24 +1908,16 @@ class HomeActivity : Activity() {
                     }, LinearLayout.LayoutParams(0, dp(46), 1f).apply { if (index > 0) marginStart = dp(8) })
                 }
             }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
-            addView(row().apply {
-                background = pressable(GradientDrawable().apply {
-                    cornerRadius = dp(12).toFloat()
-                    setColor(getColor(R.color.home_chip))
-                    setStroke(dp(1), getColor(R.color.home_card_border))
-                }, 12)
-                setPadding(dp(14), 0, dp(14), 0)
-                addView(column().apply {
-                    addView(label("Carte sur l’accueil", 15, text, 700))
-                    addView(label("Widget Google Maps (trafic à proximité) ou Waze à droite de l’accueil · les favoris passent en page 2", 11, muted),
-                        wrap().apply { topMargin = dp(2) })
-                }, LinearLayout.LayoutParams(0, -2, 1f))
-                addView(label(if (mapOnHome()) "ON" else "OFF", 14, accent, 700), wrap().apply { marginStart = dp(12) })
-                setOnClickListener {
-                    prefs.edit().putBoolean(MAP_ON_HOME, !mapOnHome()).apply()
-                    recreate()
-                }
-            }, LinearLayout.LayoutParams(-1, dp(52)).apply { topMargin = dp(8) })
+            addView(label("À droite de l’accueil", 13, text, 700), wrap().apply { topMargin = dp(10) })
+            val rightNow = when { !mapOnHome() -> "favorites"; ownMapOnHome() -> OWN_MAP; else -> MAPS_WIDGET }
+            addView(choices(listOf(OWN_MAP, MAPS_WIDGET, "favorites"), rightNow,
+                { when (it) { OWN_MAP -> "Carte"; MAPS_WIDGET -> "Widget Maps"; else -> "Favoris" } }, { null }) {
+                prefs.edit().putBoolean(MAP_ON_HOME, it != "favorites")
+                    .apply { if (it != "favorites") putString(MAP_SOURCE, it) }.apply()
+            }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(6) })
+            addView(label("Carte : celle d’Incar Drive (OpenStreetMap, gratuite), avec ta position, les radars et la consigne de Maps · " +
+                "Widget Maps : le trafic de Google Maps, s’il a la position", 11, muted).apply { maxLines = 3 },
+                LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(4) })
             // Google Maps' own small window (picture-in-picture) during guidance: it is Maps' feature, allowed per app
             // in Android's settings; this row opens Maps' app page there and explains the two steps.
             addView(row().apply {
@@ -2243,6 +2247,9 @@ class HomeActivity : Activity() {
         const val SOUND_PROFILE = "sound_profile"
         const val MY_PLACES = "my_places"
         const val MAP_ON_HOME = "map_on_home"
+        const val MAP_SOURCE = "map_source"
+        const val OWN_MAP = "own"
+        const val MAPS_WIDGET = "widget"
         const val PREFS = "incar_drive_home"
         const val APPEARANCE = "appearance"
         const val ACCENT = "accent"

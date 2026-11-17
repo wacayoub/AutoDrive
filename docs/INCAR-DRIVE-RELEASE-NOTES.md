@@ -3,6 +3,7 @@ Incar Drive 1.0.9 — écran d’accueil pour l’Incarlink (Android 11 à 13, c
 **Mettre à jour** : Réglages › Mises à jour, ou la proposition automatique.
 
 **Changements**
+- Carte Incar Drive à droite de l’accueil, gratuite et sans compte : la carte OpenStreetMap autour de la voiture, avec ta position et ta direction, les radars, le zoom + / −, et la consigne de Google Maps ou Waze par-dessus pendant un guidage. Un toucher ouvre la navigation. Ce n’est pas Google Maps : ni ligne d’itinéraire ni trafic ; il faut Internet pour les zones jamais vues, les autres restent en mémoire. Réglages › Navigation › « À droite de l’accueil » : Carte, Widget Maps ou Favoris.
 - Thème jour : le logo de la voiture et le badge sont posés sur une plaque sombre, pour rester visibles sur le ciel clair.
 - Compteur Route : la ligne du trajet reste lisible en thème jour.
 - Panneaux (Applis, Réglages, Téléphone) : plus de texte de la barre du haut qui dépasse au coin.
