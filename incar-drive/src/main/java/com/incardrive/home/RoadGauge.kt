@@ -357,7 +357,7 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
         // Indicator on the side of a close turn, blinking.
         val blinkSide = if (bend && (liveMeters ?: 0) <= 300) (if (turn!!.turn == Turn.LEFT) -1 else 1) else 0
         val blinkOn = blinkSide != 0 && (System.nanoTime() / 450_000_000L) % 2L == 0L
-        drawCar(canvas, cx, h - band + 3 * density, min(w * .28f, 84 * density), if (blinkOn) blinkSide else 0)
+        drawCar(canvas, cx, h - band + 3 * density, min(w * .26f, 76 * density), if (blinkOn) blinkSide else 0)
 
         // The speed.
         valuePaint.textSize = size
@@ -826,13 +826,13 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
     }
 
     /**
-     * A compact hybrid saloon from behind, in the lines of the driver's Corolla Hybrid: pearl-white body with rounded
-     * shoulders, sloping rear window, door mirrors, two wrap-around tail lights joined by a dark trim strip with the
-     * driver's emblem between them, the plate, and a black lower bumper with reflectors. The lights brighten on braking.
+     * The car from behind, drawn low and wide like a recent saloon: a glass roof flowing into the rear window, broad
+     * shoulders, one thin light bar across the whole tail with the driver's emblem under it, a clean boot, and a dark
+     * diffuser with two reflectors. The light bar brightens on braking; its end blinks amber on the side of a turn.
      */
     private fun drawCar(canvas: Canvas, cx: Float, bottom: Float, carW: Float, blink: Int = 0) {
         val u = carW
-        val v = carW * .62f
+        val v = carW * .56f
         val top = bottom - v
         fun x(f: Float) = cx + u * f
         fun y(f: Float) = top + v * f
@@ -847,103 +847,115 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
             path.close()
             canvas.drawPath(path, carPaint)
         }
-        // Shadow and tyres.
-        carPaint.shader = radial(cx, bottom, u * .8f, 0xA0000000.toInt(), 0)
-        rect.set(x(-.8f), bottom - v * .22f, x(.8f), bottom + v * .22f)
+        // A soft shadow on the road, then the tyres.
+        carPaint.shader = radial(cx, bottom, u * .78f, 0xB0000000.toInt(), 0)
+        rect.set(x(-.78f), bottom - v * .2f, x(.78f), bottom + v * .2f)
         canvas.drawOval(rect, carPaint)
         carPaint.shader = null
-        carPaint.color = 0xFF06080B.toInt()
-        rect.set(x(-.47f), y(.8f), x(-.33f), bottom + v * .02f)
-        canvas.drawRoundRect(rect, v * .05f, v * .05f, carPaint)
-        rect.set(x(.33f), y(.8f), x(.47f), bottom + v * .02f)
-        canvas.drawRoundRect(rect, v * .05f, v * .05f, carPaint)
-        // Door mirrors.
-        carPaint.color = 0xFF1A1F27.toInt()
-        rect.set(x(-.53f), y(.36f), x(-.43f), y(.45f))
-        canvas.drawOval(rect, carPaint)
-        rect.set(x(.43f), y(.36f), x(.53f), y(.45f))
-        canvas.drawOval(rect, carPaint)
-        // Cabin: a sloping greenhouse, narrower at the roof.
-        // The body in the driver's colour, lit from above.
-        val pearl = linear(0f, top, 0f, bottom, ColorUtils.blendARGB(bodyColor, Color.WHITE, .12f),
-            ColorUtils.blendARGB(bodyColor, Color.BLACK, .26f))
-        carPaint.shader = pearl
+        carPaint.color = 0xFF05070A.toInt()
+        rect.set(x(-.49f), y(.76f), x(-.34f), bottom + v * .03f)
+        canvas.drawRoundRect(rect, v * .06f, v * .06f, carPaint)
+        rect.set(x(.34f), y(.76f), x(.49f), bottom + v * .03f)
+        canvas.drawRoundRect(rect, v * .06f, v * .06f, carPaint)
+        // Slim door mirrors.
+        carPaint.color = ColorUtils.blendARGB(bodyColor, Color.BLACK, .45f)
+        rect.set(x(-.555f), y(.34f), x(-.455f), y(.41f))
+        canvas.drawRoundRect(rect, v * .03f, v * .03f, carPaint)
+        rect.set(x(.455f), y(.34f), x(.555f), y(.41f))
+        canvas.drawRoundRect(rect, v * .03f, v * .03f, carPaint)
+        // The cabin: one dark glass shape from the roof down to the boot, with a thin body-colour pillar line.
+        carPaint.color = Color.WHITE
+        val body = linear(0f, top, 0f, bottom, ColorUtils.blendARGB(bodyColor, Color.WHITE, .18f),
+            ColorUtils.blendARGB(bodyColor, Color.BLACK, .3f))
+        carPaint.shader = body
         path.reset()
-        path.moveTo(x(-.42f), y(.46f))
-        path.cubicTo(x(-.36f), y(.2f), x(-.3f), y(.02f), x(-.18f), y(0f))
-        path.lineTo(x(.18f), y(0f))
-        path.cubicTo(x(.3f), y(.02f), x(.36f), y(.2f), x(.42f), y(.46f))
+        path.moveTo(x(-.43f), y(.44f))
+        path.cubicTo(x(-.38f), y(.16f), x(-.3f), y(.01f), x(-.2f), y(0f))
+        path.lineTo(x(.2f), y(0f))
+        path.cubicTo(x(.3f), y(.01f), x(.38f), y(.16f), x(.43f), y(.44f))
         path.close()
         canvas.drawPath(path, carPaint)
-        // Rear window, dark glass with a reflection.
-        carPaint.shader = linear(0f, y(.04f), 0f, y(.4f), 0xFF2E3A4E.toInt(), 0xFF070B12.toInt())
+        carPaint.shader = linear(0f, y(.03f), 0f, y(.42f), 0xFF3A4860.toInt(), 0xFF080C14.toInt())
         path.reset()
-        path.moveTo(x(-.35f), y(.4f))
-        path.cubicTo(x(-.3f), y(.2f), x(-.26f), y(.07f), x(-.16f), y(.05f))
-        path.lineTo(x(.16f), y(.05f))
-        path.cubicTo(x(.26f), y(.07f), x(.3f), y(.2f), x(.35f), y(.4f))
+        path.moveTo(x(-.385f), y(.41f))
+        path.cubicTo(x(-.34f), y(.17f), x(-.28f), y(.05f), x(-.19f), y(.04f))
+        path.lineTo(x(.19f), y(.04f))
+        path.cubicTo(x(.28f), y(.05f), x(.34f), y(.17f), x(.385f), y(.41f))
         path.close()
         canvas.drawPath(path, carPaint)
-        // Body: wide, with rounded shoulders and a slightly tucked-in bottom.
-        carPaint.shader = pearl
-        path.reset()
-        path.moveTo(x(-.47f), y(.44f))
-        path.quadTo(x(-.51f), y(.46f), x(-.51f), y(.56f))
-        path.lineTo(x(-.49f), y(.86f))
-        path.quadTo(x(-.48f), y(.94f), x(-.4f), y(.94f))
-        path.lineTo(x(.4f), y(.94f))
-        path.quadTo(x(.48f), y(.94f), x(.49f), y(.86f))
-        path.lineTo(x(.51f), y(.56f))
-        path.quadTo(x(.51f), y(.46f), x(.47f), y(.44f))
-        path.close()
-        canvas.drawPath(path, carPaint)
-        // The boot lid's shut line.
+        // A streak of light across the glass.
         carPaint.shader = null
-        stroke(0x33000000, .8f)
-        canvas.drawLine(x(-.3f), y(.47f), x(.3f), y(.47f), outline)
-        // Wrap-around tail lights, joined by a dark trim strip.
-        val glowing = braking
-        carPaint.color = if (glowing) 0x88FF2020.toInt() else 0x44FF2020
-        rect.set(x(-.56f), y(.46f), x(.56f), y(.66f))
+        carPaint.color = 0x24FFFFFF
+        path.reset()
+        path.moveTo(x(-.3f), y(.13f))
+        path.lineTo(x(-.12f), y(.07f))
+        path.lineTo(x(.02f), y(.07f))
+        path.lineTo(x(-.2f), y(.2f))
+        path.close()
+        canvas.drawPath(path, carPaint)
+        // The body: broad shoulders, tucked in towards the road.
+        carPaint.color = Color.WHITE // full opacity again after the translucent streak
+        carPaint.shader = body
+        path.reset()
+        path.moveTo(x(-.46f), y(.4f))
+        path.quadTo(x(-.53f), y(.42f), x(-.53f), y(.54f))
+        path.lineTo(x(-.5f), y(.84f))
+        path.quadTo(x(-.49f), y(.92f), x(-.41f), y(.92f))
+        path.lineTo(x(.41f), y(.92f))
+        path.quadTo(x(.49f), y(.92f), x(.5f), y(.84f))
+        path.lineTo(x(.53f), y(.54f))
+        path.quadTo(x(.53f), y(.42f), x(.46f), y(.4f))
+        path.close()
+        canvas.drawPath(path, carPaint)
+        carPaint.shader = null
+        // A highlight along the shoulder line.
+        stroke(0x59FFFFFF, 1f)
+        canvas.drawLine(x(-.44f), y(.425f), x(.44f), y(.425f), outline)
+        // The light bar: a glow behind it, then one thin line across the tail, thicker at its ends.
+        val braked = braking
+        carPaint.color = if (braked) 0x80FF1E1E.toInt() else 0x2EFF1E1E
+        rect.set(x(-.56f), y(.475f), x(.56f), y(.6f))
         canvas.drawRoundRect(rect, v * .1f, v * .1f, carPaint)
-        carPaint.color = 0xFF1B1F26.toInt()
-        rect.set(x(-.22f), y(.53f), x(.22f), y(.575f))
-        canvas.drawRect(rect, carPaint)
-        for (side in SIDES) {
-            path.reset()
-            path.moveTo(x(side * .51f), y(.5f))
-            path.lineTo(x(side * .22f), y(.52f))
-            path.lineTo(x(side * .22f), y(.585f))
-            path.lineTo(x(side * .5f), y(.63f))
-            path.close()
-            carPaint.color = when {
-                blink != 0 && side == blink.toFloat() -> 0xFFFFB020.toInt() // the indicator, on the side of the turn
-                glowing -> 0xFFFF2B2B.toInt()
-                else -> 0xFFD8262E.toInt()
-            }
-            canvas.drawPath(path, carPaint)
-            // The light's inner LED line.
-            stroke(if (glowing) 0xFFFFD0D0.toInt() else 0xFFFF7A7A.toInt(), 1f)
-            canvas.drawLine(x(side * .48f), y(.535f), x(side * .25f), y(.548f), outline)
-        }
-        // Plate, then the black lower bumper with its reflectors.
-        carPaint.color = 0xFFE9ECF0.toInt()
-        rect.set(x(-.13f), y(.66f), x(.13f), y(.77f))
+        val red = if (braked) 0xFFFF3030.toInt() else 0xFFDA2A32.toInt()
+        carPaint.color = red
+        rect.set(x(-.5f), y(.515f), x(.5f), y(.555f))
         canvas.drawRoundRect(rect, v * .02f, v * .02f, carPaint)
-        carPaint.color = 0xFF15191F.toInt()
-        rect.set(x(-.47f), y(.82f), x(.47f), y(.95f))
-        canvas.drawRoundRect(rect, v * .05f, v * .05f, carPaint)
+        for (side in SIDES) {
+            carPaint.color = if (blink != 0 && side == blink.toFloat()) 0xFFFFB020.toInt() else red
+            path.reset()
+            path.moveTo(x(side * .525f), y(.47f))
+            path.lineTo(x(side * .3f), y(.515f))
+            path.lineTo(x(side * .3f), y(.555f))
+            path.lineTo(x(side * .52f), y(.6f))
+            path.close()
+            canvas.drawPath(path, carPaint)
+        }
+        // A bright core along the bar.
+        stroke(if (braked) 0xFFFFE0E0.toInt() else 0xB3FFB0B0.toInt(), .8f)
+        canvas.drawLine(x(-.47f), y(.535f), x(.47f), y(.535f), outline)
+        // The plate, set low, then the diffuser with its reflectors.
+        carPaint.color = 0xFFEDF0F4.toInt()
+        rect.set(x(-.12f), y(.68f), x(.12f), y(.775f))
+        canvas.drawRoundRect(rect, v * .02f, v * .02f, carPaint)
+        carPaint.color = 0xFF12161C.toInt()
+        path.reset()
+        path.moveTo(x(-.47f), y(.82f))
+        path.lineTo(x(.47f), y(.82f))
+        path.lineTo(x(.43f), y(.95f))
+        path.lineTo(x(-.43f), y(.95f))
+        path.close()
+        canvas.drawPath(path, carPaint)
         carPaint.color = 0xFFB0222A.toInt()
-        rect.set(x(-.42f), y(.85f), x(-.33f), y(.88f))
-        canvas.drawRect(rect, carPaint)
-        rect.set(x(.33f), y(.85f), x(.42f), y(.88f))
-        canvas.drawRect(rect, carPaint)
-        // The driver's emblem on the boot, above the trim strip.
+        rect.set(x(-.41f), y(.845f), x(-.31f), y(.87f))
+        canvas.drawRoundRect(rect, v * .01f, v * .01f, carPaint)
+        rect.set(x(.31f), y(.845f), x(.41f), y(.87f))
+        canvas.drawRoundRect(rect, v * .01f, v * .01f, carPaint)
+        // The driver's emblem on the boot, under the light bar.
         badge?.let { original ->
-            val logo = fitted(original, v * .14f, u * .16f)
+            val logo = fitted(original, v * .11f, u * .14f)
             val wide = logo.width.toFloat()
             val tall = logo.height.toFloat()
-            rect.set(cx - wide / 2, y(.525f) - tall, cx + wide / 2, y(.525f))
+            rect.set(cx - wide / 2, y(.575f), cx + wide / 2, y(.575f) + tall)
             canvas.drawBitmap(logo, null, rect, badgePaint)
         }
     }
