@@ -1,17 +1,22 @@
-Incar Drive 1.0.8 — écran d’accueil pour l’Incarlink (Android 11 à 13, conçu pour 800 × 480).
+Incar Drive 1.0.9 — écran d’accueil pour l’Incarlink (Android 11 à 13, conçu pour 800 × 480).
 
 **Mettre à jour** : Réglages › Mises à jour, ou la proposition automatique.
 
 **Changements**
+- Thème jour : le logo de la voiture et le badge sont posés sur une plaque sombre, pour rester visibles sur le ciel clair.
+- Compteur Route : la ligne du trajet reste lisible en thème jour.
+- Panneaux (Applis, Réglages, Téléphone) : plus de texte de la barre du haut qui dépasse au coin.
+
+Comprend aussi la 1.0.8 :
 - Logo Toyota argent + HYBRID : Réglages › Écran d’accueil › « Logo Toyota argent + HYBRID ». L’emblème Toyota en chrome argent (récupéré sur Wikimedia Commons) et un badge HYBRID chromé avec sa vague bleue, dessiné par Incar Drive, au milieu de la barre du haut. Rien n’est inclus dans l’appli.
 - Cadre Google Maps jusqu’en bas : pendant un guidage, la carte de droite descend jusqu’au bas de l’écran et la barre du bas se raccourcit (Accueil, Téléphone, Applis, Réglages), pour que la petite fenêtre de Maps, qu’Android place en bas à droite, se pose dans le cadre et non sur la barre. Tout revient à la fin du guidage ou en page 2.
 - Carte de navigation : la distance n’est plus répétée sur la seconde ligne, même quand Google Maps l’écrit avec des espaces spéciaux (« 8.5 km »).
 
-Comprend aussi la 1.0.7 :
+Et la 1.0.7 :
 - Petite fenêtre Google Maps et carte ensemble : pendant un guidage, la carte de droite laisse place à un cadre sobre où la petite fenêtre de Maps vient se poser (Android la place en bas à droite ; pince-la pour l’agrandir, glisse-la pour la caler). Sans petite fenêtre, le cadre propose « Ouvrir Maps ». Le widget revient à la fin du guidage.
 - Carte de navigation : la seconde ligne donne l’instruction ou la rue, au lieu de répéter la distance (« 11 km · Continuer tout droit »).
 
-Comprend aussi la 1.0.6 :
+Et la 1.0.6 :
 - La partie droite de l’accueil est pour la carte : le widget Google Maps « Trafic à proximité » (ou Waze), ajouté d’une touche la première fois. Les favoris passent en page 2 ; les applis du quotidien sont dans la barre du bas. Réglages › Navigation › Carte sur l’accueil pour revenir aux favoris.
 - Nouveau compteur « Route » : la vitesse en grand au-dessus de la route vue de derrière la voiture, sur toute la carte : lignes des voies et balises au bord de la route qui défilent selon la vitesse, lueur à l’horizon, une berline hybride vue de l’arrière dans les lignes de la Corolla Hybrid (feux qui s’allument plus fort au freinage, ton logo sur le coffre), comme sur les tableaux de bord numériques récents (Toyota…). Le bord de route et le chiffre passent en rouge au-dessus de la limite. Réglages › Compteur de vitesse pour changer de style.
 - Quatre autres compteurs, proches des tableaux de bord numériques récents (dessins originaux, sans logo) : Électrique (grand chiffre et barre recharge / puissance), Angulaire (cadran à facettes orange), Virtuel (grand cadran rond, aiguille rouge), Élégant (anneau argent et arc turquoise). La barre recharge / puissance suit la vitesse GPS : le boîtier ne lit pas les données de la voiture.

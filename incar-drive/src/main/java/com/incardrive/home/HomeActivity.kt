@@ -675,8 +675,16 @@ class HomeActivity : Activity() {
         // buttons, so they never cover them.
         addView(row().apply {
             gravity = Gravity.CENTER
-            addView(carLogo.view(26), LinearLayout.LayoutParams(-2, dp(26)))
-            addView(carBadge.view(15), LinearLayout.LayoutParams(-2, dp(15)).apply { marginStart = dp(8) })
+            addView(row().apply {
+                gravity = Gravity.CENTER_VERTICAL
+                // Chrome logos vanish on the day theme's light sky: there they sit on a dark plate.
+                if (!night && (carLogo.chosen || carBadge.chosen)) {
+                    background = GradientDrawable().apply { cornerRadius = dp(14).toFloat(); setColor(0xE6182030.toInt()) }
+                    setPadding(dp(12), dp(5), dp(12), dp(5))
+                }
+                addView(carLogo.view(26), LinearLayout.LayoutParams(-2, dp(26)))
+                addView(carBadge.view(15), LinearLayout.LayoutParams(-2, dp(15)).apply { marginStart = dp(8) })
+            }, wrap())
         }, LinearLayout.LayoutParams(0, -1, 1f).apply { marginStart = dp(8); marginEnd = dp(8) })
         fun chip(content: LinearLayout.() -> Unit) = row().apply {
             background = glass(14)
@@ -856,7 +864,8 @@ class HomeActivity : Activity() {
             visibility = View.GONE
         }
         addView(cameraBadge, FrameLayout.LayoutParams(-2, -2, Gravity.TOP or Gravity.CENTER_HORIZONTAL).apply { topMargin = dp(8) })
-        speedStatus = label("", 11, muted, 600).apply { gravity = Gravity.CENTER }
+        // Over the road's dark band the trip line is light in both themes.
+        speedStatus = label("", 11, if (road) 0xE6FFFFFF.toInt() else muted, 600).apply { gravity = Gravity.CENTER }
         addView(speedStatus, FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM).apply { bottomMargin = dp(8) })
         contentDescription = "Vitesse et trajet"
         setOnClickListener {
@@ -1737,6 +1746,8 @@ class HomeActivity : Activity() {
         panelHost.alpha = 0f
         panelHost.translationY = dp(16).toFloat()
         panelHost.animate().alpha(1f).translationY(0f).setDuration(180).start()
+        // The greeting would peek out at the panel's rounded corner.
+        if (::greeting.isInitialized) greeting.visibility = View.INVISIBLE
         shownPage = page
         markDock(page)
     }
@@ -1747,6 +1758,7 @@ class HomeActivity : Activity() {
         shownPage = Page.HOME
         tripValues = null
         if (::updatesUi.isInitialized) updatesUi.observe(null)
+        if (::greeting.isInitialized) greeting.visibility = View.VISIBLE
         if (panelHost.visibility != View.VISIBLE) return
         panelHost.animate().alpha(0f).translationY(dp(12).toFloat()).setDuration(150).withEndAction {
             panelHost.visibility = View.GONE
