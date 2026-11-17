@@ -100,6 +100,49 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
         invalidate()
     }
 
+    /** What is drawn on the road: a bend or a roundabout when close, else the straight road with what lies on it. */
+    private data class Scene(val shape: Turn?, val onRoad: Turn?, val exit: Int?, val street: String?, val ahead: Boolean)
+
+    private var shownScene: Scene? = null
+    private var previousScene: Scene? = null
+    private var enter = 1f
+    private var enterStart = 0L
+    private var flowPhase = 0f
+    // The time between two frames, smoothed: how well this head unit keeps up with the animation.
+    private var frameMs = 16f
+
+    private fun drawScene(canvas: Canvas, scene: Scene, w: Float, h: Float, horizon: Float, road: Float, tone: Int) {
+        val cx = w / 2f
+        when (scene.shape) {
+            Turn.LEFT, Turn.RIGHT -> drawBend(canvas, w, horizon, road, tone, left = scene.shape == Turn.LEFT)
+            Turn.ROUNDABOUT -> drawRoundabout(canvas, w, horizon, road, tone, scene.exit)
+            else -> {
+                drawStraight(canvas, w, h, horizon, tone)
+                when (scene.onRoad) {
+                    Turn.UTURN -> drawUTurn(canvas, cx, horizon, road, w)
+                    Turn.ARRIVE -> drawFlag(canvas, cx, horizon, road)
+                    null -> Unit
+                    else -> if (scene.ahead) drawAhead(canvas, cx, horizon, road, w)
+                }
+            }
+        }
+        // The street to take, on a road sign over the far end of the turn.
+        if (scene.street != null) drawStreetSign(canvas, w, horizon, road, scene.street, left = scene.shape == Turn.LEFT)
+    }
+
+    /** An arrow filled with light: a soft halo, a body that brightens towards its head, a thin bright rim. */
+    private fun drawLitArrow(canvas: Canvas, arrow: Path, top: Float, bottom: Float) {
+        linePaint.color = ColorUtils.setAlphaComponent(guideColor, 0x38)
+        linePaint.strokeWidth = 7 * density
+        canvas.drawPath(arrow, linePaint)
+        arrowPaint.shader = linear(0f, top, 0f, bottom, 0xFF7CC0FF.toInt(), 0xFF2468E0.toInt())
+        canvas.drawPath(arrow, arrowPaint)
+        arrowPaint.shader = null
+        linePaint.color = 0x73FFFFFF
+        linePaint.strokeWidth = 1.1f * density
+        canvas.drawPath(arrow, linePaint)
+    }
+
     /** The turn is drawn on the road only once it is close; before that the road stays straight. */
     private val close get() = (liveMeters ?: 0) <= NEAR_M
     private val cameraFirst get() = cameraMeters != null && (maneuver == null || cameraMeters!! < (liveMeters ?: Int.MAX_VALUE))
@@ -141,7 +184,27 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
     private val badgePaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
         colorFilter = android.graphics.PorterDuffColorFilter(0xFF39414E.toInt(), android.graphics.PorterDuff.Mode.SRC_IN)
     }
+    // Gradients are built once and kept: making them again at every frame was most of the drawing time.
+    private val shaders = HashMap<Long, Shader>()
+
+    private fun key(a: Float, b: Float, c: Float, d: Float, e: Int, f: Int, kind: Int): Long {
+        var hash = kind.toLong()
+        for (bits in intArrayOf(a.toBits(), b.toBits(), c.toBits(), d.toBits(), e, f)) hash = hash * 1_000_003L + bits
+        return hash
+    }
+
+    private fun linear(x0: Float, y0: Float, x1: Float, y1: Float, from: Int, to: Int): Shader {
+        if (shaders.size > 160) shaders.clear()
+        return shaders.getOrPut(key(x0, y0, x1, y1, from, to, 1)) { LinearGradient(x0, y0, x1, y1, from, to, Shader.TileMode.CLAMP) }
+    }
+
+    private fun radial(x: Float, y: Float, radius: Float, from: Int, to: Int): Shader {
+        if (shaders.size > 160) shaders.clear()
+        return shaders.getOrPut(key(x, y, radius, 0f, from, to, 2)) { RadialGradient(x, y, radius, from, to, Shader.TileMode.CLAMP) }
+    }
+
     private val path = Path()
+    private val part = Path()
     private val rect = RectF()
 
     override var limit: Int? = null
@@ -198,43 +261,57 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
         val horizon = if (guiding) maxOf(h * .36f, baseline + 16 * density) else baseline + 20 * density
         val road = h - horizon
         // The sky of the moment above the horizon, then a soft glow where the road meets it.
-        roadPaint.shader = LinearGradient(0f, 0f, 0f, horizon, ColorUtils.setAlphaComponent(skyTop, 0xB0),
-            ColorUtils.setAlphaComponent(skyBottom, 0xB0), Shader.TileMode.CLAMP)
+        roadPaint.shader = linear(0f, 0f, 0f, horizon, ColorUtils.setAlphaComponent(skyTop, 0xB0),
+            ColorUtils.setAlphaComponent(skyBottom, 0xB0))
         canvas.drawRect(0f, 0f, w, horizon, roadPaint)
-        glowPaint.shader = RadialGradient(cx, horizon, w * .55f, ColorUtils.setAlphaComponent(tone, 0x26),
-            ColorUtils.setAlphaComponent(tone, 0), Shader.TileMode.CLAMP)
+        glowPaint.shader = radial(cx, horizon, w * .55f, ColorUtils.setAlphaComponent(tone, 0x26),
+            ColorUtils.setAlphaComponent(tone, 0))
         canvas.drawRect(0f, 0f, w, h, glowPaint)
 
         val now = System.nanoTime()
         if (lastFrame != 0L) {
             val seconds = (now - lastFrame) / 1e9f
+            if (seconds < .5f) frameMs += (seconds * 1000f - frameMs) * .08f
             travel = (travel + shown * seconds * .05f) % 2f
+            // The light running along the arrows: slow when stopped, quicker with the car.
+            if (seconds < 1.5f) flowPhase = (flowPhase + seconds * (.55f + shown / 110f)) % 1f
             // Only over short gaps: after a pause in drawing (another app in front) the app's own value is kept.
             if (seconds < 1.5f) travelled += shown / 3.6f * seconds
         }
         lastFrame = now
         val bend = turn != null && close && (turn.turn == Turn.LEFT || turn.turn == Turn.RIGHT)
         val circle = turn != null && close && turn.turn == Turn.ROUNDABOUT
-        when {
-            bend -> drawBend(canvas, w, horizon, road, tone, left = turn!!.turn == Turn.LEFT)
-            circle -> drawRoundabout(canvas, w, horizon, road, tone, turn!!.exit)
-            else -> {
-                drawStraight(canvas, w, h, horizon, tone)
-                when (turn?.turn) {
-                    Turn.UTURN -> drawUTurn(canvas, cx, horizon, road, w)
-                    Turn.ARRIVE -> drawFlag(canvas, cx, horizon, road)
-                    null -> Unit
-                    else -> if (!cameraFirst) drawAhead(canvas, cx, horizon, road, w)
-                }
+        val scene = Scene(when { bend -> turn!!.turn; circle -> Turn.ROUNDABOUT; else -> null },
+            turn?.turn.takeIf { !bend && !circle }, turn?.exit.takeIf { circle }, turn?.street.takeIf { bend || circle },
+            ahead = !cameraFirst)
+        // A new scene fades in over the one before it instead of replacing it at once.
+        if (scene != shownScene) {
+            if (shownScene != null && isLaidOut) {
+                previousScene = shownScene
+                enter = 0f
+                enterStart = now
             }
+            shownScene = scene
         }
+        if (previousScene != null) {
+            enter = ((now - enterStart) / 1e9f / FADE_S).coerceIn(0f, 1f)
+            if (enter >= 1f) previousScene = null
+        }
+        val before = previousScene
+        if (before != null) {
+            val eased = enter * enter * (3f - 2f * enter)
+            canvas.saveLayerAlpha(0f, horizon - 30 * density, w, h, ((1f - eased) * 255).toInt())
+            drawScene(canvas, before, w, h, horizon, road, tone)
+            canvas.restore()
+            canvas.saveLayerAlpha(0f, horizon - 30 * density, w, h, (eased * 255).toInt())
+            drawScene(canvas, scene, w, h, horizon, road, tone)
+            canvas.restore()
+        } else drawScene(canvas, scene, w, h, horizon, road, tone)
         if (cameraMeters != null && !bend && !circle) drawCamera(canvas, cx, w, h, horizon)
-        // The street to take, on a road sign over the far end of the turn.
-        if ((bend || circle) && turn?.street != null) drawStreetSign(canvas, w, horizon, road, turn.street, left = turn.turn == Turn.LEFT)
 
         // A dark band at the bottom keeps the trip line readable over the road.
         val band = 26 * density
-        roadPaint.shader = LinearGradient(0f, h - band, 0f, h, 0x000B1018, 0xD90B1018.toInt(), Shader.TileMode.CLAMP)
+        roadPaint.shader = linear(0f, h - band, 0f, h, 0x000B1018, 0xD90B1018.toInt())
         canvas.drawRect(0f, h - band, w, h, roadPaint)
         // How close the turn (or the camera) is: a thin bar that fills over the last 500 m.
         val metres = if (cameraFirst) cameraMeters else liveMeters
@@ -268,7 +345,10 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
         if (footer > 0f) canvas.restore()
 
         when {
-            shown > .5f && isShown && windowVisibility == VISIBLE -> postInvalidateDelayed(33)
+            // Every display frame where the head unit keeps up; every other one where it does not, rather than
+            // asking for frames it cannot draw.
+            (shown > .5f || guiding || previousScene != null) && isShown && windowVisibility == VISIBLE ->
+                if (frameMs < 24f) postInvalidateOnAnimation() else postInvalidateDelayed(33)
             blinkSide != 0 && isShown && windowVisibility == VISIBLE -> { lastFrame = 0L; postInvalidateDelayed(225) }
             else -> lastFrame = 0L
         }
@@ -286,22 +366,22 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
         path.lineTo(cx + near, h)
         path.lineTo(cx - near, h)
         path.close()
-        roadPaint.shader = LinearGradient(0f, horizon, 0f, h, 0x001A2230, 0xF01A2230.toInt(), Shader.TileMode.CLAMP)
+        roadPaint.shader = linear(0f, horizon, 0f, h, 0x001A2230, 0xF01A2230.toInt())
         canvas.drawPath(path, roadPaint)
-        roadPaint.shader = LinearGradient(0f, horizon, 0f, h, ColorUtils.setAlphaComponent(tone, 0),
-            ColorUtils.setAlphaComponent(tone, 0x2E), Shader.TileMode.CLAMP)
+        roadPaint.shader = linear(0f, horizon, 0f, h, ColorUtils.setAlphaComponent(tone, 0),
+            ColorUtils.setAlphaComponent(tone, 0x2E))
         canvas.drawPath(path, roadPaint)
-        edgePaint.shader = LinearGradient(0f, horizon, 0f, h, ColorUtils.setAlphaComponent(tone, 0x10),
-            ColorUtils.setAlphaComponent(tone, 0x50), Shader.TileMode.CLAMP)
+        edgePaint.shader = linear(0f, horizon, 0f, h, ColorUtils.setAlphaComponent(tone, 0x10),
+            ColorUtils.setAlphaComponent(tone, 0x50))
         edgePaint.strokeWidth = 7 * density
         canvas.drawLine(cx - far, horizon, cx - near, h, edgePaint)
         canvas.drawLine(cx + far, horizon, cx + near, h, edgePaint)
-        edgePaint.shader = LinearGradient(0f, horizon, 0f, h, ColorUtils.setAlphaComponent(tone, 0x20), tone, Shader.TileMode.CLAMP)
+        edgePaint.shader = linear(0f, horizon, 0f, h, ColorUtils.setAlphaComponent(tone, 0x20), tone)
         edgePaint.strokeWidth = 2.2f * density
         canvas.drawLine(cx - far, horizon, cx - near, h, edgePaint)
         canvas.drawLine(cx + far, horizon, cx + near, h, edgePaint)
-        edgePaint.shader = LinearGradient(0f, horizon, 0f, h, ColorUtils.setAlphaComponent(textColor, 0x10),
-            ColorUtils.setAlphaComponent(textColor, 0xB0), Shader.TileMode.CLAMP)
+        edgePaint.shader = linear(0f, horizon, 0f, h, ColorUtils.setAlphaComponent(textColor, 0x10),
+            ColorUtils.setAlphaComponent(textColor, 0xB0))
         edgePaint.strokeWidth = 1.6f * density
         canvas.drawLine(cx - far * .86f, horizon, cx - near * .86f, h, edgePaint)
         canvas.drawLine(cx + far * .86f, horizon, cx + near * .86f, h, edgePaint)
@@ -338,20 +418,35 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
         }
     }
 
-    /** Going straight on while guiding: a blue arrow lying on the car's lane. */
+    /**
+     * Going straight on while guiding: chevrons of light running up the car's lane towards the horizon, smaller and
+     * fainter with the distance, like the lane guidance of a recent head-up display.
+     */
     private fun drawAhead(canvas: Canvas, cx: Float, horizon: Float, road: Float, w: Float) {
-        path.reset()
-        path.moveTo(cx, horizon + road * .1f)
-        path.lineTo(cx + w * .075f, horizon + road * .27f)
-        path.lineTo(cx + w * .03f, horizon + road * .27f)
-        path.lineTo(cx + w * .048f, horizon + road * .52f)
-        path.lineTo(cx - w * .048f, horizon + road * .52f)
-        path.lineTo(cx - w * .03f, horizon + road * .27f)
-        path.lineTo(cx - w * .075f, horizon + road * .27f)
-        path.close()
+        val count = 5
+        for (index in 0 until count) {
+            // 0 just ahead of the car, 1 at the far end; evenly spread in depth and moving away.
+            val t = (index + flowPhase) / count
+            val depth = 1f + t * 5.2f
+            val y = horizon + road * .66f / depth
+            val scale = 1f / depth
+            val half = w * .15f * scale
+            val tall = road * .2f * scale
+            val thick = tall * .52f
+            val fade = (minOf(t / .14f, 1f) * minOf((1f - t) / .3f, 1f)).coerceIn(0f, 1f)
+            path.reset()
+            path.moveTo(cx, y - tall)
+            path.lineTo(cx + half, y)
+            path.lineTo(cx + half, y + thick)
+            path.lineTo(cx, y - tall + thick)
+            path.lineTo(cx - half, y + thick)
+            path.lineTo(cx - half, y)
+            path.close()
+            arrowPaint.shader = null
+            arrowPaint.color = ColorUtils.setAlphaComponent(ColorUtils.blendARGB(0xFF2E78F0.toInt(), 0xFF9CD0FF.toInt(), t), (fade * 245).toInt())
+            canvas.drawPath(path, arrowPaint)
+        }
         arrowPaint.shader = null
-        arrowPaint.color = guideColor
-        canvas.drawPath(path, arrowPaint)
     }
 
     /**
@@ -407,20 +502,20 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
         path.cubicTo(x(.567f), y(.347f), x(.5375f), y(.379f), x(.533f), y(.463f))
         path.lineTo(x(.5375f), y(.663f))
         path.close()
-        arrowPaint.shader = null
-        arrowPaint.color = guideColor
-        canvas.drawPath(path, arrowPaint)
-        // Chevrons running towards the arrow's head.
-        arrowPaint.color = 0xE6DCEBFF.toInt()
-        val phase = if (shown > .5f) travel % 1f else (System.nanoTime() / 900_000_000.0 % 1.0).toFloat()
+        drawLitArrow(canvas, path, y(.147f), y(.663f))
+        // Chevrons of light running to the arrow's head, fading in and out.
         for (index in 0 until 3) {
-            val f = .6f + ((index + phase) % 3f) * .05f
-            path.reset()
-            path.moveTo(x(f), y(.265f))
-            path.lineTo(x(f + .022f), y(.295f))
-            path.lineTo(x(f), y(.325f))
-            path.close()
-            canvas.drawPath(path, arrowPaint)
+            val t = (index + flowPhase) / 3f
+            val f = .585f + t * .17f
+            val fade = (minOf(t / .2f, 1f) * minOf((1f - t) / .25f, 1f)).coerceIn(0f, 1f)
+            arrowPaint.color = ColorUtils.setAlphaComponent(Color.WHITE, (fade * 230).toInt())
+            part.reset()
+            part.moveTo(x(f), y(.262f))
+            part.lineTo(x(f + .024f), y(.295f))
+            part.lineTo(x(f), y(.328f))
+            part.lineTo(x(f + .008f), y(.295f))
+            part.close()
+            canvas.drawPath(part, arrowPaint)
         }
         canvas.restore()
     }
@@ -469,9 +564,14 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
         val endX = cx + dx * r * 1.2f
         val endY = cy + dy * r * 1.2f
         path.lineTo(endX, endY)
+        linePaint.color = ColorUtils.setAlphaComponent(guideColor, 0x38)
+        linePaint.strokeWidth = w * .034f + 7 * density
+        canvas.drawPath(path, linePaint)
+        linePaint.shader = linear(0f, cy - r, 0f, horizon + road * .62f, 0xFF7CC0FF.toInt(), 0xFF2468E0.toInt())
         linePaint.color = guideColor
         linePaint.strokeWidth = w * .034f
         canvas.drawPath(path, linePaint)
+        linePaint.shader = null
         val head = w * .055f
         path.reset()
         path.moveTo(endX + dx * head, endY + dy * head)
@@ -505,9 +605,14 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
         rect.set(left, top, right, top + road * .24f)
         path.arcTo(rect, 0f, -180f)
         path.lineTo(left, horizon + road * .44f)
+        linePaint.color = ColorUtils.setAlphaComponent(guideColor, 0x38)
+        linePaint.strokeWidth = w * .036f + 7 * density
+        canvas.drawPath(path, linePaint)
+        linePaint.shader = linear(0f, top, 0f, horizon + road * .58f, 0xFF7CC0FF.toInt(), 0xFF2468E0.toInt())
         linePaint.color = guideColor
         linePaint.strokeWidth = w * .036f
         canvas.drawPath(path, linePaint)
+        linePaint.shader = null
         val head = w * .055f
         path.reset()
         path.moveTo(left, horizon + road * .44f + head)
@@ -704,7 +809,7 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
         fun y(f: Float) = top + v * f
         // At night, the headlights' beam on the road ahead.
         if (night) {
-            carPaint.shader = LinearGradient(0f, top - v * .9f, 0f, top + v * .3f, 0x00FFF4D6, 0x38FFF4D6, Shader.TileMode.CLAMP)
+            carPaint.shader = linear(0f, top - v * .9f, 0f, top + v * .3f, 0x00FFF4D6, 0x38FFF4D6)
             path.reset()
             path.moveTo(cx - u * .34f, top + v * .3f)
             path.lineTo(cx - u * .62f, top - v * .9f)
@@ -714,7 +819,7 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
             canvas.drawPath(path, carPaint)
         }
         // Shadow and tyres.
-        carPaint.shader = RadialGradient(cx, bottom, u * .8f, 0xA0000000.toInt(), 0, Shader.TileMode.CLAMP)
+        carPaint.shader = radial(cx, bottom, u * .8f, 0xA0000000.toInt(), 0)
         rect.set(x(-.8f), bottom - v * .22f, x(.8f), bottom + v * .22f)
         canvas.drawOval(rect, carPaint)
         carPaint.shader = null
@@ -731,8 +836,8 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
         canvas.drawOval(rect, carPaint)
         // Cabin: a sloping greenhouse, narrower at the roof.
         // The body in the driver's colour, lit from above.
-        val pearl = LinearGradient(0f, top, 0f, bottom, ColorUtils.blendARGB(bodyColor, Color.WHITE, .12f),
-            ColorUtils.blendARGB(bodyColor, Color.BLACK, .26f), Shader.TileMode.CLAMP)
+        val pearl = linear(0f, top, 0f, bottom, ColorUtils.blendARGB(bodyColor, Color.WHITE, .12f),
+            ColorUtils.blendARGB(bodyColor, Color.BLACK, .26f))
         carPaint.shader = pearl
         path.reset()
         path.moveTo(x(-.42f), y(.46f))
@@ -742,7 +847,7 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
         path.close()
         canvas.drawPath(path, carPaint)
         // Rear window, dark glass with a reflection.
-        carPaint.shader = LinearGradient(0f, y(.04f), 0f, y(.4f), 0xFF2E3A4E.toInt(), 0xFF070B12.toInt(), Shader.TileMode.CLAMP)
+        carPaint.shader = linear(0f, y(.04f), 0f, y(.4f), 0xFF2E3A4E.toInt(), 0xFF070B12.toInt())
         path.reset()
         path.moveTo(x(-.35f), y(.4f))
         path.cubicTo(x(-.3f), y(.2f), x(-.26f), y(.07f), x(-.16f), y(.05f))
@@ -831,6 +936,7 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
 
     private companion object {
         // A turn is drawn on the road within this distance; the countdown bar fills over the second one.
+        const val FADE_S = .45f
         const val NEAR_M = 400
         const val FAR_M = 500
         val LANES = floatArrayOf(-1f / 3f, 1f / 3f)
