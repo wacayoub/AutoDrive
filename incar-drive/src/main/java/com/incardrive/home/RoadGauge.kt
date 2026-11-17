@@ -60,6 +60,10 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
         invalidate()
     }
 
+    /** The traffic the car is in, which colours the road green, orange or red; null leaves it ice blue. */
+    var flow: Flow? = null
+        set(value) { if (field != value) { field = value; invalidate() } }
+
     /** The speed camera ahead on this road, or null. */
     fun camera(meters: Int?, limit: Int?) {
         cameraMeters = meters
@@ -139,7 +143,7 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
         val turn = maneuver
         val guiding = turn != null || cameraMeters != null
         val arriving = turn?.turn == Turn.ARRIVE
-        val tone = if (over) alert else accent
+        val tone = if (over) alert else flow?.color ?: accent
         val cx = w / 2f
         // The figure on top, then the horizon just under it; while guiding the figure is smaller and to the right,
         // leaving the left for the instruction and more of the card for the road.

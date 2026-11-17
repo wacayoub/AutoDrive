@@ -186,6 +186,7 @@ class HomeActivity : Activity() {
     private var quiet: QuietMode? = null
     // The « Route » speed card, which also draws the guidance and the speed cameras; null with the other styles.
     private var roadGauge: RoadGauge? = null
+    private val trafficMeter = Traffic.Meter()
     private lateinit var dockDivider: View
     private var guiding = false
     private var mapsFrame: View? = null
@@ -242,6 +243,8 @@ class HomeActivity : Activity() {
         }
         gps.onFix = { fix, kmh ->
             info.usePosition(fix.latitude, fix.longitude)
+            if (kmh != null) trafficMeter.add(System.currentTimeMillis(), kmh)
+            roadGauge?.flow = trafficMeter.flow(roadLimit)
             ownMap.position(fix.latitude, fix.longitude, fix.bearing.takeIf { fix.hasBearing() && (kmh ?: 0) >= 5 })
             wazeMap.position(fix.latitude, fix.longitude)
             googleWeb.position(fix.latitude, fix.longitude)
@@ -1250,6 +1253,7 @@ class HomeActivity : Activity() {
         navDetail.maxLines = 2
         navDetail.setTextColor(text)
         navEta.text = listOfNotNull(nav.remaining, nav.arrival).joinToString("\n")
+        navEta.setTextColor(nav.flow?.color ?: navColor)
         navEta.visibility = if (navEta.text.isNullOrEmpty()) View.GONE else View.VISIBLE
         navChevron.visibility = View.GONE
         placesRow.visibility = View.GONE
@@ -1315,6 +1319,8 @@ class HomeActivity : Activity() {
             listOfNotNull(nav.remaining, nav.arrival?.let { "arrivée $it" }, nav.distance).joinToString(" · ")
                 .takeIf { it.isNotBlank() }?.let { speedStatus.text = it }
         }
+        // The time left in the traffic's colour, like in Maps; the trip line stays white.
+        speedStatus.setTextColor(lastNav?.flow?.color ?: 0xE6FFFFFF.toInt())
     }
 
     /** The next turn goes to the island only where the navigation card is not on screen: page 2 or under a panel. */
