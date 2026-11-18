@@ -294,6 +294,7 @@ internal class OwnMap(private val home: HomeActivity, private val open: () -> Un
         private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
         private val arrow = Path()
         private val rect = RectF()
+        private val source = android.graphics.Rect()
         // Where the car is and where it heads, as the navigation reports it…
         private var latitude = Double.NaN
         private var longitude = Double.NaN
@@ -302,7 +303,11 @@ internal class OwnMap(private val home: HomeActivity, private val open: () -> Un
         private var shownLat = Double.NaN
         private var shownLon = Double.NaN
         private var shownBearing = 0f
-        private var zoom = 16
+        // The zoom the speed (or + / −) asks for, and the one drawn, which glides towards it: between two map levels
+        // the tiles of the nearest level are drawn a little larger or smaller, so a little more speed widens the map a little.
+        private var targetZoom = 16.5f
+        private var shownZoom = 16.5f
+        private var smoothKmh = -1f
         // A zoom chosen with + / − holds for a minute; then the zoom follows the speed again.
         private var manualZoomUntil = 0L
         /** The map turns so that the road ahead points up; false keeps the north up. */
@@ -339,16 +344,23 @@ internal class OwnMap(private val home: HomeActivity, private val open: () -> Un
             longitude = lon
             if (heading != null) bearing = heading
             if (shownLat.isNaN()) { shownLat = lat; shownLon = lon; shownBearing = bearing }
-            // Closer in town, wider on fast roads.
-            if (kmh != null && System.currentTimeMillis() > manualZoomUntil) {
-                val wanted = when { kmh < 35 -> 17; kmh < 75 -> 16; kmh < 105 -> 15; else -> 14 }
-                if (wanted != zoom) { zoom = wanted; panX = 0f; panY = 0f }
+            // Closer in town, wider on fast roads, step by step with the speed (smoothed, so a short burst does not
+            // pump the map).
+            if (kmh != null) {
+                smoothKmh = if (smoothKmh < 0) kmh.toFloat() else smoothKmh + (kmh - smoothKmh) * .25f
+                if (System.currentTimeMillis() > manualZoomUntil) {
+                    val wanted = speedZoom(smoothKmh)
+                    if (kotlin.math.abs(wanted - targetZoom) >= .08f) targetZoom = wanted
+                }
             }
             invalidate()
         }
 
+        /** About 17.4 standing still, 16 at 55 km/h, 15 at 95 km/h, 14 at 130 km/h, in between in between. */
+        private fun speedZoom(kmh: Float) = (17.4f - kmh * .026f).coerceIn(13.8f, 17.4f)
+
         fun zoomBy(step: Int) {
-            zoom = (zoom + step).coerceIn(12, 18)
+            targetZoom = (kotlin.math.round(targetZoom) + step).coerceIn(12f, 18f)
             manualZoomUntil = System.currentTimeMillis() + 60_000
             panX = 0f
             panY = 0f
@@ -412,8 +424,12 @@ internal class OwnMap(private val home: HomeActivity, private val open: () -> Un
             shownLon += (longitude - shownLon) * .12
             val turn = ((bearing - shownBearing + 540f) % 360f) - 180f
             shownBearing = (shownBearing + turn * .1f + 360f) % 360f
+            val zoomGap = targetZoom - shownZoom
+            shownZoom = if (kotlin.math.abs(zoomGap) < .004f) targetZoom else shownZoom + zoomGap * .06f
+            val zoom = kotlin.math.round(shownZoom).toInt().coerceIn(12, 18)
+            val tileSize = this.tileSize * Math.pow(2.0, (shownZoom - zoom).toDouble()).toFloat()
             val settled = kotlin.math.abs(latitude - shownLat) < 2e-7 && kotlin.math.abs(longitude - shownLon) < 2e-7 &&
-                kotlin.math.abs(turn) < .4f
+                kotlin.math.abs(turn) < .4f && shownZoom == targetZoom
             // A look around ends by itself after fifteen seconds.
             if ((panX != 0f || panY != 0f) && !dragging && System.currentTimeMillis() - pannedAt > 15_000) recentre()
             onRotated?.invoke(turned)
@@ -440,7 +456,13 @@ internal class OwnMap(private val home: HomeActivity, private val open: () -> Un
                         val wrapped = ((tx % count) + count) % count
                         // One pixel over the edge, so no seam shows between turned tiles.
                         rect.set(left, top, left + tileSize + 1, top + tileSize + 1)
+                        // Not fetched yet at this level: the level above, enlarged, rather than a hole.
                         tile(zoom, wrapped, ty)?.let { canvas.drawBitmap(it, null, rect, tilePaint) }
+                            ?: memory.get("${zoom - 1}/${wrapped / 2}/${ty / 2}")?.let { above ->
+                                val half = above.width / 2
+                                source.set(wrapped % 2 * half, ty % 2 * half, wrapped % 2 * half + half, ty % 2 * half + half)
+                                canvas.drawBitmap(above, source, rect, tilePaint)
+                            }
                         trafficTile(zoom, wrapped, ty)?.let { canvas.drawBitmap(it, null, rect, trafficPaint) }
                     }
                     tx++

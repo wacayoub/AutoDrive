@@ -1,15 +1,20 @@
-Incar Drive 1.0.19 — écran d’accueil pour l’Incarlink (Android 11 à 13, conçu pour 800 × 480).
+Incar Drive 1.0.20 — écran d’accueil pour l’Incarlink (Android 11 à 13, conçu pour 800 × 480).
 
 **Mettre à jour** : Réglages › Mises à jour, ou la proposition automatique.
 
 **Changements**
+- Bulle de la radio au démarrage : quand Radio Maroc & Coran reprend toute seule au démarrage du boîtier, sa bulle flottante ne s’affiche plus par-dessus l’accueil (la radio n’avait pas encore été prévenue que l’accueil était devant).
+- Jour ou nuit au démarrage : tant que l’horloge du boîtier n’est pas encore à l’heure (elle l’est quelques secondes après, par le réseau ou le GPS), l’accueil démarre en jour au lieu de passer en nuit par erreur ; il suit ensuite l’heure, comme avant.
+- Carte : le zoom suit la vitesse en douceur, petit à petit : un peu plus vite, la carte s’élargit un peu ; plus vite encore, davantage ; en ralentissant elle se rapproche, sans saut. Les boutons + et − gardent la main une minute.
+
+Comprend aussi la 1.0.19 :
 - Appel en bandeau en haut de l’accueil, sans cacher l’écran : la photo du contact quand l’appli téléphone la donne (sinon ses initiales), avec un anneau vert qui bat pendant que ça sonne, le nom, le numéro, et des boutons ronds Refuser et Répondre. En appel : la durée qui défile, Raccrocher et Couper le micro (si l’appli téléphone n’a pas son propre bouton). Un toucher sur le nom ouvre l’appli téléphone. Les boutons sont ceux de l’appli téléphone du boîtier.
 - Carnet de trajets quotidiens : dans Trajet › Carnet, les kilomètres, le temps de conduite, le nombre de trajets et le carburant d’aujourd’hui, de la semaine et du mois, puis chaque jour avec son total et ses trajets (heures, distance, durée, vitesse moyenne, carburant). Un trajet est rangé quand le suivant commence (au démarrage suivant, après deux heures d’arrêt, ou avec « Remettre à zéro ») ; ceux de moins de 200 m ne sont pas gardés. Tout reste sur le boîtier (les 500 derniers trajets, des mois de trajets quotidiens).
 - Carburant estimé : pour chaque trajet, chaque jour, la semaine et le mois, et dans Trajet (« Carburant estimé »). Incar Drive ne lit pas la voiture : il part de la consommation moyenne que montre l’écran de ta voiture (4,5 L/100 km par défaut, à régler dans Carnet › Carburant) et l’ajuste à la vitesse moyenne du trajet, comme une hybride : moins en ville, plus dans les bouchons, sur route rapide et sur les trajets courts moteur froid. Avec le prix du litre (facultatif), le coût en dirhams s’affiche aussi. C’est une estimation, pas la mesure de la voiture.
 - Profils conducteur : deux conducteurs (Réglages › Conducteur, ou un toucher sur le bonjour en haut). Chacun garde son compteur, la couleur de sa voiture et du tableau de bord, son thème, Maison, Travail et ses lieux, son appli de navigation et sa carte, sa barre d’applis, ses favoris, son alerte de vitesse et sa dernière appli média. « Renommer » donne un prénom, repris dans le bonjour (« Bonjour, Sara »).
 - Nouvelle police d’écriture : Manrope, moderne et très lisible d’un coup d’œil, sur tout l’accueil, les compteurs et la bulle de guidage.
 
-Comprend aussi la 1.0.18 :
+Et la 1.0.18 :
 - Carte OpenStreetMap améliorée : elle tourne avec la voiture, la route devant toi en haut (touche la boussole pour remettre le nord en haut) ; elle glisse en douceur au lieu de sauter à chaque position ; le zoom s’adapte à la vitesse (plus près en ville, plus large sur route rapide) ; tu peux la déplacer au doigt pour regarder autour, puis « Recentrer » (elle revient seule après 15 secondes) ; le nom de la rue où tu roules s’affiche en bas.
 - Ciel réel derrière la route : le fond de la carte de conduite suit le soleil et la météo du jour. Le soleil se lève à gauche, monte, puis se couche à droite, avec les couleurs de l’aube, du plein jour, du couchant et de la nuit étoilée ; des nuages passent quand le ciel est couvert, la pluie ou la neige tombent quand il y en a. La route, les phares et les chiffres passent en mode nuit quand il fait nuit dehors, quel que soit le thème choisi.
 

@@ -225,7 +225,7 @@ class HomeActivity : Activity() {
 
     override fun attachBaseContext(newBase: Context) {
         val appearance = Appearance.restore(newBase.getSharedPreferences(PREFS, MODE_PRIVATE))
-        val night = appearance.night ?: if (runCatching { SystemNight.isNight(newBase) }.getOrDefault(true))
+        val night = appearance.night ?: if (systemNight(newBase) ?: false)
             Configuration.UI_MODE_NIGHT_YES else Configuration.UI_MODE_NIGHT_NO
         val type = newBase.resources.configuration.uiMode and Configuration.UI_MODE_TYPE_MASK
         super.attachBaseContext(newBase.createConfigurationContext(Configuration().apply { uiMode = type or night }))
@@ -470,6 +470,7 @@ class HomeActivity : Activity() {
     // Radio Maroc & Coran hides its floating bubble while this home screen, which already shows the radio, is in front.
     override fun onResume() {
         super.onResume()
+        homeInFront = true
         tellRadio(visible = true)
         renderHomeBadge()
         status.render()
@@ -485,9 +486,12 @@ class HomeActivity : Activity() {
     }
 
     override fun onPause() {
+        homeInFront = false
         tellRadio(visible = false)
         super.onPause()
     }
+
+    private var homeInFront = false
 
     private fun tellRadio(visible: Boolean) {
         sendBroadcast(Intent(RADIO_HOME_VISIBLE).setPackage(RADIO_PACKAGE).putExtra("visible", visible))
@@ -510,8 +514,19 @@ class HomeActivity : Activity() {
      */
     private fun followSystemTheme() {
         if (Appearance.restore(prefs) != Appearance.SYSTEM || shownPage != Page.HOME || isFinishing || isDestroyed) return
-        val wanted = runCatching { SystemNight.isNight(applicationContext) }.getOrNull() ?: return
+        val wanted = systemNight(applicationContext) ?: return
         if (wanted != night) recreate()
+    }
+
+    /**
+     * Night by the clock, or null while the clock cannot be believed: a head unit starts with the date it had when it
+     * was built (or 1970) until the network or the GPS sets it, which read as night for a moment. Until then: day,
+     * and the screen turns to night by itself as soon as the clock is set and says so.
+     */
+    private fun systemNight(context: Context): Boolean? {
+        val installed = runCatching { context.packageManager.getPackageInfo(context.packageName, 0).lastUpdateTime }.getOrDefault(0L)
+        if (System.currentTimeMillis() < maxOf(installed, CLOCK_FLOOR)) return false
+        return runCatching { SystemNight.isNight(context) }.getOrNull()
     }
 
     private val tick = object : Runnable {
@@ -2088,6 +2103,12 @@ class HomeActivity : Activity() {
     private fun renderMedia() {
         if (!::mediaTitle.isInitialized) return
         val state = media.snapshot()
+        // The radio started after the home screen (at boot, by the resume): tell it the home is in front, or it would
+        // show its floating bubble over the home screen.
+        if (state.source == RADIO_PACKAGE && mediaSource != RADIO_PACKAGE && homeInFront) {
+            tellRadio(visible = true)
+            handler.postDelayed({ if (homeInFront) tellRadio(visible = true) }, 2_000)
+        }
         mediaSource = state.source
         val hasMedia = state.source != null && (state.title != null || state.playing)
         // Radio Maroc & Coran gets its own player look; every other app the common card.
@@ -2811,6 +2832,8 @@ class HomeActivity : Activity() {
         const val GOOGLE_WEB = "google_web"
         const val PREFS = "incar_drive_home"
         const val APPEARANCE = "appearance"
+        /** 1 November 2026: a clock before this has not been set yet. */
+        const val CLOCK_FLOOR = 1_793_491_200_000L
         const val ACCENT = "accent"
         val COORDINATES = Regex("""-?\d+(\.\d+)?,-?\d+(\.\d+)?""")
         const val CITY = "city"

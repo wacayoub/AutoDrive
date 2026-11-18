@@ -17,8 +17,8 @@ android {
         applicationId 'com.incardrive.home'
         minSdk 30
         targetSdk 35
-        versionCode providers.gradleProperty('incarDriveVersionCode').getOrElse('20').toInteger()
-        versionName providers.gradleProperty('incarDriveVersionName').getOrElse('1.0.19')
+        versionCode providers.gradleProperty('incarDriveVersionCode').getOrElse('21').toInteger()
+        versionName providers.gradleProperty('incarDriveVersionName').getOrElse('1.0.20')
     }
 
     // Signed with the Radio Maroc & Coran key: same publisher for both apps.
