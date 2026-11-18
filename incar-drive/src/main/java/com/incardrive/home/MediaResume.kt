@@ -5,21 +5,23 @@ import android.content.Context
 import android.content.Intent
 import android.media.browse.MediaBrowser
 import android.media.session.MediaController
+import android.media.session.MediaSessionManager
 import android.media.session.PlaybackState
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.provider.Settings
 import android.view.KeyEvent
 
 /**
- * Starts the last app that played, without a tap on Lecture: when the head unit starts with the car, and from the
+ * Starts the last app that played, without a tap on Lecture: each time the car starts, and from the
  * media card's button. Documented ways only, best first:
  * 1. the app's session if it is still there: Play;
  * 2. its MediaBrowserService (Radio Maroc & Coran accepts Incar Drive, signed with the same key): connect, then Play,
  *    which makes the radio resume its last station;
  * 3. a « play » media button sent to the app's media button receiver, which apps such as Spotify answer by resuming.
  */
-internal class MediaResume(private val context: Context) {
+internal class MediaResume private constructor(private val context: Context) {
     private val prefs = context.getSharedPreferences(NavBubble.PREFS, Context.MODE_PRIVATE)
     private val handler = Handler(Looper.getMainLooper())
     private var browser: MediaBrowser? = null
@@ -36,16 +38,47 @@ internal class MediaResume(private val context: Context) {
     }
 
     /**
-     * Once per start of the head unit (Android's boot count), a few seconds after the home screen appears, plays the
-     * last app unless something already plays.
+     * The car started: the head unit booted, or woke after its screen was off a while (contact off, the Incarlink goes
+     * to sleep instead of shutting down). Called by the home screen and by the notification listener, which Android
+     * starts at boot even when another app is in front; each start ([key]) is handled once. A few seconds later the
+     * last app plays, unless something already plays; if it does not start (network or the app not ready yet), it
+     * is asked again, three times at most.
      */
-    fun onHomeShown(alreadyPlaying: () -> Boolean, live: () -> List<MediaController>) {
-        if (!enabled) return
-        val boot = runCatching { Settings.Global.getInt(context.contentResolver, Settings.Global.BOOT_COUNT, -1) }.getOrDefault(-1)
-        if (boot < 0 || boot == prefs.getInt(BOOT, -1)) return
-        prefs.edit().putInt(BOOT, boot).apply()
-        handler.postDelayed({ if (!alreadyPlaying()) last?.let { play(it, live()) } }, START_DELAY_MS)
+    fun onDriveStart(key: String = bootKey()) {
+        if (!enabled || last == null) return
+        synchronized(MediaResume) {
+            if (prefs.getString(TRIGGER, null) == key) return
+            prefs.edit().putString(TRIGGER, key).apply()
+        }
+        handler.removeCallbacks(attempt)
+        tries = 0
+        handler.postDelayed(attempt, START_DELAY_MS)
     }
+
+    /** This boot of the head unit: Android's boot count, or the minute it booted when the box does not count. */
+    fun bootKey(): String {
+        val count = runCatching { Settings.Global.getInt(context.contentResolver, Settings.Global.BOOT_COUNT, -1) }.getOrDefault(-1)
+        if (count >= 0) return "boot:$count"
+        return "booted:" + (System.currentTimeMillis() - SystemClock.elapsedRealtime()) / 60_000
+    }
+
+    private var tries = 0
+    private val attempt = object : Runnable {
+        override fun run() {
+            val app = last ?: return
+            val live = sessions()
+            // Playing, or on its way (the radio connecting to its stream): nothing more to do.
+            if (live.any { it.playbackState?.state in STARTED }) return
+            tries++
+            play(app, live)
+            if (tries < MAX_TRIES) handler.postDelayed(this, RETRY_MS)
+        }
+    }
+
+    private fun sessions(): List<MediaController> = runCatching {
+        context.getSystemService(MediaSessionManager::class.java)
+            .getActiveSessions(ComponentName(context, MediaAccessService::class.java))
+    }.getOrDefault(emptyList())
 
     fun play(packageName: String, live: List<MediaController>): Boolean {
         live.firstOrNull { it.packageName == packageName }?.let { controller ->
@@ -92,16 +125,23 @@ internal class MediaResume(private val context: Context) {
         return true
     }
 
-    fun release() {
-        browser?.disconnect()
-        browser = null
-        handler.removeCallbacksAndMessages(null)
-    }
 
     companion object {
         const val ENABLED = "media_resume"
         const val LAST = "media_last_app"
-        const val BOOT = "media_resume_boot"
+        const val TRIGGER = "media_resume_start"
         const val START_DELAY_MS = 4_000L
+        const val RETRY_MS = 9_000L
+        const val MAX_TRIES = 3
+        private val STARTED = setOf(PlaybackState.STATE_PLAYING, PlaybackState.STATE_BUFFERING, PlaybackState.STATE_CONNECTING)
+        /** Off at least this long, the screen coming back on is a new drive. */
+        const val SLEEP_MS = 90_000L
+
+        @Volatile private var shared: MediaResume? = null
+
+        /** One for the whole app, so that the home screen and the listener share the pending start. */
+        fun get(context: Context): MediaResume = shared ?: synchronized(this) {
+            shared ?: MediaResume(context.applicationContext).also { shared = it }
+        }
     }
 }

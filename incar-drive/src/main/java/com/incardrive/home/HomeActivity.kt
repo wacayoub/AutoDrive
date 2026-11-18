@@ -271,7 +271,7 @@ class HomeActivity : Activity() {
             if (waze != null) startSafely(waze) else Toast.makeText(this, "Waze n’est pas installé sur ce boîtier.", Toast.LENGTH_LONG).show()
         }
         ownMap = OwnMap(this) { if (NavWatch.nav.value != null) { if (!navigation.resume()) navMissing() } else if (!navigation.open()) navMissing() }
-        mediaResume = MediaResume(this)
+        mediaResume = MediaResume.get(this)
         widgets = WidgetBoard(this)
         phone = PhoneLink(this)
         updatesUi = IncarUpdates(this)
@@ -321,7 +321,6 @@ class HomeActivity : Activity() {
     override fun onDestroy() {
         if (::wazeMap.isInitialized) wazeMap.destroy()
         if (::googleWeb.isInitialized) googleWeb.destroy()
-        if (::mediaResume.isInitialized) mediaResume.release()
         if (::clicks.isInitialized) clicks.release()
         super.onDestroy()
     }
@@ -413,7 +412,7 @@ class HomeActivity : Activity() {
         HomeVisibility.changed?.invoke()
         media.start()
         // When the car (and the head unit) starts: play the last app again, without a tap.
-        mediaResume.onHomeShown({ media.live().any { it.playbackState?.state == PlaybackState.STATE_PLAYING } }, media::live)
+        mediaResume.onDriveStart()
         if (gps.permitted()) gps.start()
         // Weather where the car is, from the last known position until the GPS answers; the chosen city otherwise.
         currentPosition()?.split(',')?.let { (lat, lon) -> info.usePosition(lat.toDouble(), lon.toDouble()) }

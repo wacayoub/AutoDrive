@@ -15,12 +15,44 @@ import java.util.Locale
  * left and the arrival on the Maps card. Nothing else is read or kept.
  */
 class MediaAccessService : NotificationListenerService() {
+
     private val bubble by lazy { NavBubble(this) }
+
+    // The screen going off and on: the head unit asleep with the contact off, then the car starting again.
+    private val screen = object : android.content.BroadcastReceiver() {
+        override fun onReceive(context: android.content.Context, intent: android.content.Intent) {
+            val prefs = getSharedPreferences(NavBubble.PREFS, MODE_PRIVATE)
+            val now = android.os.SystemClock.elapsedRealtime()
+            when (intent.action) {
+                android.content.Intent.ACTION_SCREEN_OFF -> prefs.edit().putLong("screen_off_at", now).apply()
+                android.content.Intent.ACTION_SCREEN_ON -> {
+                    val offAt = prefs.getLong("screen_off_at", 0L)
+                    if (offAt in 1..now && now - offAt >= MediaResume.SLEEP_MS) MediaResume.get(context).onDriveStart("wake:$offAt")
+                }
+            }
+        }
+    }
+    private var watchingScreen = false
 
     override fun onListenerConnected() {
         Fonts.init(this)
+        // Android binds this listener at boot, whichever app is in front: the car has started.
+        MediaResume.get(this).onDriveStart()
+        if (!watchingScreen) {
+            registerReceiver(screen, android.content.IntentFilter().apply {
+                addAction(android.content.Intent.ACTION_SCREEN_OFF)
+                addAction(android.content.Intent.ACTION_SCREEN_ON)
+            })
+            watchingScreen = true
+        }
         HomeVisibility.changed = { bubble.render(NavWatch.nav.value, NavWatch.source) }
         refresh(current())
+    }
+
+    override fun onDestroy() {
+        if (watchingScreen) runCatching { unregisterReceiver(screen) }
+        watchingScreen = false
+        super.onDestroy()
     }
 
     override fun onListenerDisconnected() {

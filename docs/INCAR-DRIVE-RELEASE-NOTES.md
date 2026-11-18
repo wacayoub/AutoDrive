@@ -3,6 +3,7 @@ Incar Drive 1.0.20 — écran d’accueil pour l’Incarlink (Android 11 à 13, 
 **Mettre à jour** : Réglages › Mises à jour, ou la proposition automatique.
 
 **Changements**
+- Reprise du dernier média à chaque démarrage de la voiture : la dernière appli écoutée (Radio Maroc & Coran et sa dernière station, ou une autre) se relance toute seule quand le boîtier démarre, mais aussi quand il se réveille de sa veille après le contact coupé (écran éteint plus d’une minute et demie), même si une autre appli est devant. Si elle ne démarre pas du premier coup (Internet ou l’appli pas encore prêts), Incar Drive redemande jusqu’à trois fois. Rien n’est relancé si un son joue déjà. À désactiver dans Réglages (reprise automatique).
 - Bulle de la radio au démarrage : quand Radio Maroc & Coran reprend toute seule au démarrage du boîtier, sa bulle flottante ne s’affiche plus par-dessus l’accueil (la radio n’avait pas encore été prévenue que l’accueil était devant).
 - Jour ou nuit au démarrage : tant que l’horloge du boîtier n’est pas encore à l’heure (elle l’est quelques secondes après, par le réseau ou le GPS), l’accueil démarre en jour au lieu de passer en nuit par erreur ; il suit ensuite l’heure, comme avant.
 - Carte : le zoom suit la vitesse en douceur, petit à petit : un peu plus vite, la carte s’élargit un peu ; plus vite encore, davantage ; en ralentissant elle se rapproche, sans saut. Les boutons + et − gardent la main une minute.
