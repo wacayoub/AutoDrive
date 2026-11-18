@@ -1919,7 +1919,8 @@ class HomeActivity : Activity() {
             })
             addView(statRow("Distance", "Temps de conduite", "Moyenne", "Maximum"),
                 LinearLayout.LayoutParams(-1, 0, 1f).apply { topMargin = dp(8) })
-            addView(statRow("Départ", "Durée du trajet", "Altitude"), LinearLayout.LayoutParams(-1, 0, 1f).apply { topMargin = dp(8) })
+            addView(statRow("Départ", "Durée du trajet", "Carburant estimé", "Altitude"),
+                LinearLayout.LayoutParams(-1, 0, 1f).apply { topMargin = dp(8) })
             addView(caps("Alerte de vitesse · Route = limite lue sur la carte"), wrap().apply { topMargin = dp(12) })
             val limits = listOf(ROAD_LIMIT, 0, 60, 80, 100, 120)
             addView(choices(limits, alertSetting(), { when (it) { ROAD_LIMIT -> "Route"; 0 -> "Non"; else -> "$it" } }, { null }) {
@@ -1939,6 +1940,7 @@ class HomeActivity : Activity() {
             values["Durée du trajet"]?.text = current.startedAt.takeIf { it > 0 }
                 ?.let { hours((System.currentTimeMillis() - it).coerceAtLeast(0)) } ?: "—"
             values["Altitude"]?.text = state.altitude?.let { "≈ $it m" } ?: "—"
+            values["Carburant estimé"]?.text = fuelText(Fuel.litres(current, usualL100()))
         }
         tripValues?.invoke()
     }
@@ -1953,67 +1955,133 @@ class HomeActivity : Activity() {
         setOnClickListener { click() }
     }
 
-    /** The trips driven: totals for today, the week and the month, then each trip, newest first. */
+    /** The car's usual consumption, in L/100 km, as the driver gave it. */
+    private fun usualL100() = prefs.getFloat(FUEL_L100, Fuel.DEFAULT_L100)
+
+    /** « ≈ 0,8 L », and its cost when the driver gave the price of a litre. */
+    private fun fuelText(litres: Double): String {
+        if (litres <= 0) return "—"
+        val price = prefs.getFloat(FUEL_PRICE, 0f)
+        val amount = String.format(Locale.FRENCH, if (litres < 10) "≈ %.1f L" else "≈ %.0f L", litres)
+        return if (price > 0) amount + String.format(Locale.FRENCH, " · %.0f DH", litres * price) else amount
+    }
+
+    /** The car's usual consumption and the price of a litre, for the fuel estimates. */
+    private fun askFuel(then: () -> Unit) {
+        fun field(value: String, hint: String) = android.widget.EditText(this).apply {
+            setText(value)
+            this.hint = hint
+            isSingleLine = true
+            inputType = android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL
+        }
+        val price = prefs.getFloat(FUEL_PRICE, 0f)
+        val usual = field(String.format(Locale.FRENCH, "%.1f", usualL100()), "Consommation moyenne, L/100 km")
+        val litre = field(if (price > 0) String.format(Locale.FRENCH, "%.2f", price) else "", "Prix du litre, DH (facultatif)")
+        AlertDialog.Builder(this)
+            .setTitle("Carburant")
+            .setMessage("Incar Drive ne lit pas la voiture : il estime le carburant de chaque trajet avec sa distance et sa " +
+                "vitesse moyenne, à partir de la consommation moyenne que donne l’écran de ta voiture.")
+            .setView(column().apply {
+                setPadding(dp(20), dp(4), dp(20), 0)
+                addView(label("Consommation moyenne (L/100 km)", 13, 0xFFB8BEC8.toInt()), wrap())
+                addView(usual, LinearLayout.LayoutParams(-1, -2))
+                addView(label("Prix du litre (DH)", 13, 0xFFB8BEC8.toInt()), wrap().apply { topMargin = dp(8) })
+                addView(litre, LinearLayout.LayoutParams(-1, -2))
+            })
+            .setPositiveButton("Enregistrer") { _, _ ->
+                fun number(text: CharSequence) = text.toString().trim().replace(',', '.').toFloatOrNull()
+                prefs.edit().apply {
+                    number(usual.text)?.takeIf { it in 1f..30f }?.let { putFloat(FUEL_L100, it) }
+                    val given = number(litre.text)
+                    if (given != null && given in .5f..100f) putFloat(FUEL_PRICE, given) else if (litre.text.isBlank()) remove(FUEL_PRICE)
+                }.apply()
+                then()
+            }
+            .setNegativeButton("Annuler", null)
+            .show()
+    }
+
+    /**
+     * The trips driven: totals for today, the week and the month, then the days, newest first, each with its
+     * kilometres, time and fuel, and its trips under it.
+     */
     private fun showTripLog() {
         tripValues = null
         val now = System.currentTimeMillis()
         val zone = ZoneId.systemDefault()
-        val (today, week, month) = tripLog.totals(trip.trip, now, zone)
+        val usual = usualL100()
+        val (today, week, month) = tripLog.totals(trip.trip, now, zone, usual)
         fun total(name: String, total: TripTotal, color: Int) = column().apply {
-            setPadding(dp(14), dp(10), dp(14), dp(10))
+            setPadding(dp(14), dp(8), dp(14), dp(8))
             background = GradientDrawable().apply {
                 cornerRadius = dp(12).toFloat()
                 setColor(getColor(R.color.home_chip))
                 setStroke(dp(1), getColor(R.color.home_card_border))
             }
             addView(caps(name, color))
-            addView(label(kilometres(total.meters), 24, text, 700, condensed = true), wrap().apply { topMargin = dp(4) })
+            addView(label(kilometres(total.meters), 22, text, 700, condensed = true), wrap().apply { topMargin = dp(3) })
             addView(label(listOf(hours(total.movingMs), if (total.trips == 1) "1 trajet" else "${total.trips} trajets")
-                .joinToString(" · "), 12, muted), wrap().apply { topMargin = dp(3) })
+                .joinToString(" · "), 12, muted), wrap().apply { topMargin = dp(2) })
+            addView(row().apply {
+                addView(ImageView(context).apply {
+                    setImageResource(R.drawable.ic_home_fuel)
+                    imageTintList = ColorStateList.valueOf(color)
+                }, LinearLayout.LayoutParams(dp(13), dp(13)).apply { marginEnd = dp(5) })
+                addView(label(fuelText(total.litres), 12, text, 600))
+            }, wrap().apply { topMargin = dp(3) })
         }
-        val days = DateTimeFormatter.ofPattern("EEE d MMM", java.util.Locale.FRENCH)
+        val dayName = DateTimeFormatter.ofPattern("EEEE d MMMM", Locale.FRENCH)
         val clock = DateTimeFormatter.ofPattern("HH:mm")
         openPanel(Page.TRIP, column().apply {
             background = sheet()
             setPadding(dp(18), dp(12), dp(18), dp(12))
-            addView(panelHeader("Carnet de trajets", "Gardé sur le boîtier uniquement").apply {
-                addView(headerButton("Trajet en cours") { showTrip() }, 1, LinearLayout.LayoutParams(-2, dp(40)).apply { marginEnd = dp(10) })
+            addView(panelHeader("Carnet de trajets", "Gardé sur le boîtier · carburant estimé").apply {
+                addView(headerButton("Carburant") { askFuel { showTripLog() } }, 1,
+                    LinearLayout.LayoutParams(-2, dp(40)).apply { marginEnd = dp(10) })
+                addView(headerButton("Trajet en cours") { showTrip() }, 2, LinearLayout.LayoutParams(-2, dp(40)).apply { marginEnd = dp(10) })
             })
             addView(row().apply {
                 addView(total("Aujourd’hui", today, accent), LinearLayout.LayoutParams(0, -2, 1f))
                 addView(total("Cette semaine", week, navColor), LinearLayout.LayoutParams(0, -2, 1f).apply { marginStart = dp(8) })
                 addView(total("Ce mois", month, prayerColor), LinearLayout.LayoutParams(0, -2, 1f).apply { marginStart = dp(8) })
-            }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+            }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(6) })
             val list = column()
-            val shown = listOfNotNull(trip.trip.takeIf { it.startedAt > 0 && it.meters > 0 }) +
-                tripLog.trips.filter { it.startedAt != trip.trip.startedAt }
+            val current = trip.trip.takeIf { it.startedAt > 0 && it.meters > 0 }
+            val shown = listOfNotNull(current) + tripLog.trips.filter { it.startedAt != trip.trip.startedAt }
             if (shown.isEmpty()) list.addView(label("Les trajets apparaîtront ici après la première route.", 14, muted),
                 wrap().apply { topMargin = dp(14) })
-            shown.forEachIndexed { index, item ->
-                val start = Instant.ofEpochMilli(item.startedAt).atZone(zone)
-                val end = item.lastMoveAt.takeIf { it > item.startedAt }?.let { Instant.ofEpochMilli(it).atZone(zone) }
+            TripLog.byDay(shown, zone).forEach { (day, trips) ->
+                val sum = TripLog.total(trips, usual)
+                // The day: its name, then what was driven that day.
                 list.addView(row().apply {
-                    setPadding(dp(12), 0, dp(12), 0)
-                    background = GradientDrawable().apply {
-                        cornerRadius = dp(10).toFloat()
-                        setColor(if (index % 2 == 0) getColor(R.color.home_chip) else Color.TRANSPARENT)
-                    }
-                    addView(column().apply {
-                        addView(label(if (index == 0 && item.startedAt == trip.trip.startedAt) "En cours"
-                            else start.format(days).replaceFirstChar { it.uppercase() }, 14, text, 700))
-                        addView(label(start.format(clock) + (end?.let { " → " + it.format(clock) } ?: ""), 12, muted),
-                            wrap().apply { topMargin = dp(2) })
-                    }, LinearLayout.LayoutParams(0, -2, 1.2f))
-                    addView(label(kilometres(item.meters), 17, text, 700, condensed = true), LinearLayout.LayoutParams(0, -2, 1f))
-                    addView(label(hours(item.movingMs), 14, text, 500), LinearLayout.LayoutParams(0, -2, 1f))
-                    addView(label(item.averageKmh?.let { "moy. $it km/h" } ?: "—", 14, muted, 500), LinearLayout.LayoutParams(0, -2, 1f))
-                    addView(label(if (item.maxKmh > 0) "max ${item.maxKmh}" else "—", 14, muted, 500), LinearLayout.LayoutParams(0, -2, .8f))
-                }, LinearLayout.LayoutParams(-1, dp(50)).apply { topMargin = dp(4) })
+                    setPadding(dp(4), 0, dp(4), 0)
+                    addView(label(day.format(dayName).replaceFirstChar { it.uppercase() }, 15, text, 700), LinearLayout.LayoutParams(0, -2, 1f))
+                    addView(label(listOf(kilometres(sum.meters), hours(sum.movingMs), fuelText(sum.litres)).joinToString("  ·  "),
+                        13, accent, 700))
+                }, LinearLayout.LayoutParams(-1, dp(30)).apply { topMargin = dp(8) })
+                trips.forEach { item ->
+                    val start = Instant.ofEpochMilli(item.startedAt).atZone(zone)
+                    val end = item.lastMoveAt.takeIf { it > item.startedAt }?.let { Instant.ofEpochMilli(it).atZone(zone) }
+                    list.addView(row().apply {
+                        setPadding(dp(12), 0, dp(12), 0)
+                        background = GradientDrawable().apply {
+                            cornerRadius = dp(10).toFloat()
+                            setColor(getColor(R.color.home_chip))
+                        }
+                        addView(label(if (item === current) "En cours" else
+                            start.format(clock) + (end?.let { " → " + it.format(clock) } ?: ""), 14, text, 600),
+                            LinearLayout.LayoutParams(0, -2, 1.3f))
+                        addView(label(kilometres(item.meters), 16, text, 700, condensed = true), LinearLayout.LayoutParams(0, -2, 1f))
+                        addView(label(hours(item.movingMs), 13, text, 500), LinearLayout.LayoutParams(0, -2, .9f))
+                        addView(label(item.averageKmh?.let { "moy. $it km/h" } ?: "—", 13, muted, 500), LinearLayout.LayoutParams(0, -2, 1.1f))
+                        addView(label(fuelText(Fuel.litres(item, usual)), 13, text, 600), LinearLayout.LayoutParams(0, -2, 1.2f))
+                    }, LinearLayout.LayoutParams(-1, dp(40)).apply { topMargin = dp(4) })
+                }
             }
             addView(android.widget.ScrollView(context).apply {
                 isVerticalScrollBarEnabled = false
                 addView(list, FrameLayout.LayoutParams(-1, -2))
-            }, LinearLayout.LayoutParams(-1, 0, 1f).apply { topMargin = dp(8) })
+            }, LinearLayout.LayoutParams(-1, 0, 1f).apply { topMargin = dp(4) })
         })
     }
 
@@ -2722,6 +2790,8 @@ class HomeActivity : Activity() {
         const val CALL_RED = 0xFFE5394F.toInt()
         const val REQUEST_CONTACTS = 6
         const val TRIP = "trip"
+        const val FUEL_L100 = "fuel_l100"
+        const val FUEL_PRICE = "fuel_price"
         const val SPEED_LIMIT = "speed_limit"
         const val ROAD_LIMIT = -1
         const val ASKED_HOME = "asked_home"

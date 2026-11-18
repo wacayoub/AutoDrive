@@ -160,8 +160,8 @@ internal object CallWatch {
     }
 
     /**
-     * Debug builds only: `cmd notification post -t '<name>' call-test '<number>'` shows a ringing call, and the tag
-     * `call-test-on` an answered one, so the call screen can be tried without a phone. Their buttons do nothing.
+     * Debug builds only: `cmd notification post -t '<name>' call-test '<number>'` shows a ringing call, and a tag ending in
+     * `-on` (`call-test-on`) an answered one, so the call screen can be tried without a phone. Their buttons do nothing.
      */
     private fun test(sbn: StatusBarNotification, context: android.content.Context?): CallAlert? {
         if (context == null || sbn.packageName != "com.android.shell" || sbn.tag?.startsWith("call-test") != true ||
@@ -169,7 +169,7 @@ internal object CallWatch {
         val nothing = PendingIntent.getBroadcast(context, 0, android.content.Intent("com.incardrive.home.TEST_CALL")
             .setPackage(context.packageName), PendingIntent.FLAG_IMMUTABLE)
         val extras = sbn.notification.extras
-        val answered = sbn.tag == "call-test-on"
+        val answered = sbn.tag?.endsWith("-on") == true
         val actions = listOfNotNull(CallAction("Raccrocher", CallButton.DECLINE, nothing),
             if (answered) null else CallAction("Répondre", CallButton.ANSWER, nothing))
         return CallAlert(sbn.key, extras.getCharSequence(Notification.EXTRA_TITLE)?.toString() ?: "Appel",
