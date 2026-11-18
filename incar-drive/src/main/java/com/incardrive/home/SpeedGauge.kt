@@ -24,26 +24,25 @@ internal class SpeedGauge(context: Context, private val track: Int, private val 
     private val textColor: Int, private val mutedColor: Int) : View(context), SpeedDial {
     private val density = resources.displayMetrics.density
     private val stroke = 9 * density
-    private val condensed = Typeface.create("sans-serif-condensed", Typeface.NORMAL)
     private val trackPaint = arc(stroke).apply { color = track }
     private val arcPaint = arc(stroke)
     private val glowPaint = arc(stroke * 2.6f)
     private val tipPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE }
     private val valuePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         textAlign = Paint.Align.CENTER
-        typeface = Typeface.create(condensed, 700, false)
+        typeface = Fonts.get(700)
     }
     private val unitPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = mutedColor
         textAlign = Paint.Align.CENTER
         letterSpacing = .12f
-        typeface = Typeface.create(Typeface.DEFAULT, 600, false)
+        typeface = Fonts.get(600)
     }
     private val scalePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = mutedColor
         textAlign = Paint.Align.CENTER
         textSize = 9 * density
-        typeface = Typeface.create(condensed, 500, false)
+        typeface = Fonts.get(500)
     }
     private val tickPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         strokeCap = Paint.Cap.ROUND
@@ -185,7 +184,7 @@ internal class LimitSign(context: Context) : View(context) {
     private val figures = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = 0xFF111111.toInt()
         textAlign = Paint.Align.CENTER
-        typeface = Typeface.create(Typeface.create("sans-serif-condensed", Typeface.NORMAL), 700, false)
+        typeface = Fonts.get(700)
     }
 
     var limit: Int? = null

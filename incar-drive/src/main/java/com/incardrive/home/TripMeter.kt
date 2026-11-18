@@ -40,8 +40,12 @@ internal class TripMeter(restored: Trip?) {
 
     private data class Fix(val at: Long, val latitude: Double, val longitude: Double)
 
+    /** Called with each trip that ends, before the next one starts. */
+    var onFinished: ((Trip) -> Unit)? = null
+
     /** A new trip: it starts at [now], or, with 0, at the car's first movement. */
     fun reset(now: Long) {
+        trip.takeIf { it.meters > 0 }?.let { onFinished?.invoke(it) }
         trip = Trip(startedAt = now, lastMoveAt = now)
         anchor = null
         previous = null

@@ -1,12 +1,18 @@
-Incar Drive 1.0.18 — écran d’accueil pour l’Incarlink (Android 11 à 13, conçu pour 800 × 480).
+Incar Drive 1.0.19 — écran d’accueil pour l’Incarlink (Android 11 à 13, conçu pour 800 × 480).
 
 **Mettre à jour** : Réglages › Mises à jour, ou la proposition automatique.
 
 **Changements**
+- Écran d’appel : un appel prend tout l’écran, avec la photo du contact quand l’appli téléphone la donne (sinon ses initiales), son nom en grand, son numéro, et de gros boutons ronds Refuser et Répondre ; un anneau vert bat pendant que ça sonne. En appel : la durée qui défile, Raccrocher, Couper le micro (si l’appli téléphone n’a pas son propre bouton) et Réduire, qui fait de l’appel une bande en haut pour garder la route et la carte ; un toucher sur le nom l’agrandit à nouveau. Les boutons sont ceux de l’appli téléphone du boîtier.
+- Carnet de trajets : dans Trajet › Carnet, les kilomètres, le temps de conduite et le nombre de trajets d’aujourd’hui, de la semaine et du mois, puis chaque trajet avec sa date, ses heures, sa distance, sa durée, sa moyenne et sa vitesse maximale. Un trajet est rangé quand le suivant commence (au démarrage suivant, après deux heures d’arrêt, ou avec « Remettre à zéro ») ; ceux de moins de 200 m ne sont pas gardés. Tout reste sur le boîtier (les 120 derniers trajets).
+- Profils conducteur : deux conducteurs (Réglages › Conducteur, ou un toucher sur le bonjour en haut). Chacun garde son compteur, la couleur de sa voiture et du tableau de bord, son thème, Maison, Travail et ses lieux, son appli de navigation et sa carte, sa barre d’applis, ses favoris, son alerte de vitesse et sa dernière appli média. « Renommer » donne un prénom, repris dans le bonjour (« Bonjour, Sara »).
+- Nouvelle police d’écriture : Manrope, moderne et très lisible d’un coup d’œil, sur tout l’accueil, les compteurs et la bulle de guidage.
+
+Comprend aussi la 1.0.18 :
 - Carte OpenStreetMap améliorée : elle tourne avec la voiture, la route devant toi en haut (touche la boussole pour remettre le nord en haut) ; elle glisse en douceur au lieu de sauter à chaque position ; le zoom s’adapte à la vitesse (plus près en ville, plus large sur route rapide) ; tu peux la déplacer au doigt pour regarder autour, puis « Recentrer » (elle revient seule après 15 secondes) ; le nom de la rue où tu roules s’affiche en bas.
 - Ciel réel derrière la route : le fond de la carte de conduite suit le soleil et la météo du jour. Le soleil se lève à gauche, monte, puis se couche à droite, avec les couleurs de l’aube, du plein jour, du couchant et de la nuit étoilée ; des nuages passent quand le ciel est couvert, la pluie ou la neige tombent quand il y en a. La route, les phares et les chiffres passent en mode nuit quand il fait nuit dehors, quel que soit le thème choisi.
 
-Comprend aussi la 1.0.17 :
+Et la 1.0.17 :
 - Icônes d’état refaites : le Wi-Fi en éventail qui se remplit avec le signal, suivi de sa génération dans un badge quand le boîtier la donne (4, 5, 6, 6E, 7) ; le réseau mobile en barres arrondies avec un badge « 5G », « 5G+ », « 4G+ » ou « 4G » (le 5G est reconnu aussi quand il passe par une ancre 4G) ; une icône de partage de connexion quand le boîtier sert de point d’accès. Réglages rapides : nouvelle tuile « Partage », qui ouvre les réglages réseau d’Android. Le badge réseau demande l’autorisation « Téléphone » (touche les barres).
 - Barre du haut : le logo de la voiture et le badge n’y sont plus, pour laisser tout le milieu aux notifications (alertes de la route, prochain virage, radar, prière), qui peuvent tenir sur deux lignes. Le logo reste sur la voiture du compteur Route et dans la scène d’accueil ; le badge HYBRID est retiré.
 - Alertes de la route d’après Google Maps (ou Waze) : quand l’appli de navigation écrit une alerte dans une de ses notifications (accident, route fermée, danger, ralentissement, travaux, contrôle de vitesse…), elle s’affiche dans la pastille en haut de l’accueil, en rouge pour un accident, une route fermée ou un danger, en orange pour le reste, avec un bip. Elle disparaît quand l’appli la retire. Incar Drive ne montre que ce que l’appli écrit ; il ne cherche pas les incidents ailleurs.

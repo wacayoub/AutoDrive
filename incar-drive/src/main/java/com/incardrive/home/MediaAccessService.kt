@@ -18,6 +18,7 @@ class MediaAccessService : NotificationListenerService() {
     private val bubble by lazy { NavBubble(this) }
 
     override fun onListenerConnected() {
+        Fonts.init(this)
         HomeVisibility.changed = { bubble.render(NavWatch.nav.value, NavWatch.source) }
         refresh(current())
     }
@@ -45,7 +46,7 @@ class MediaAccessService : NotificationListenerService() {
     private fun current() = runCatching { activeNotifications?.toList() }.getOrNull()
 
     private fun refresh(active: List<StatusBarNotification>?) {
-        CallWatch.refresh(active.orEmpty())
+        CallWatch.refresh(active.orEmpty(), this)
         val wasGuiding = NavWatch.nav.value != null
         NavWatch.refresh(active.orEmpty(), this)
         bubble.render(NavWatch.nav.value, NavWatch.source)
@@ -115,6 +116,8 @@ internal data class CallAlert(
     val detail: String?,
     val actions: List<CallAction>,
     val open: PendingIntent?,
+    /** The contact's picture, when the phone app puts one in its notification. */
+    val photo: android.graphics.drawable.Icon? = null,
 ) {
     /** An answered call shows only a hang-up button. */
     val ongoing get() = actions.none { it.kind == CallButton.ANSWER } && actions.any { it.kind == CallButton.DECLINE }
@@ -152,8 +155,25 @@ internal object CallWatch {
         return packageName in phoneApps && actionTitles.map(::classify).any { it != CallButton.OTHER }
     }
 
-    fun refresh(active: List<StatusBarNotification>) {
-        state.value = active.asSequence().mapNotNull(::read).firstOrNull()
+    fun refresh(active: List<StatusBarNotification>, context: android.content.Context? = null) {
+        state.value = active.asSequence().mapNotNull { read(it) ?: test(it, context) }.firstOrNull()
+    }
+
+    /**
+     * Debug builds only: `cmd notification post -t '<name>' call-test '<number>'` shows a ringing call, and the tag
+     * `call-test-on` an answered one, so the call screen can be tried without a phone. Their buttons do nothing.
+     */
+    private fun test(sbn: StatusBarNotification, context: android.content.Context?): CallAlert? {
+        if (context == null || sbn.packageName != "com.android.shell" || sbn.tag?.startsWith("call-test") != true ||
+            context.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE == 0) return null
+        val nothing = PendingIntent.getBroadcast(context, 0, android.content.Intent("com.incardrive.home.TEST_CALL")
+            .setPackage(context.packageName), PendingIntent.FLAG_IMMUTABLE)
+        val extras = sbn.notification.extras
+        val answered = sbn.tag == "call-test-on"
+        val actions = listOfNotNull(CallAction("Raccrocher", CallButton.DECLINE, nothing),
+            if (answered) null else CallAction("Répondre", CallButton.ANSWER, nothing))
+        return CallAlert(sbn.key, extras.getCharSequence(Notification.EXTRA_TITLE)?.toString() ?: "Appel",
+            extras.getCharSequence(Notification.EXTRA_TEXT)?.toString(), actions, null)
     }
 
     fun clear() {
@@ -170,7 +190,7 @@ internal object CallWatch {
         val extras = notification.extras
         val caller = extras.getCharSequence(Notification.EXTRA_TITLE)?.toString()?.takeIf { it.isNotBlank() } ?: "Appel"
         val detail = extras.getCharSequence(Notification.EXTRA_TEXT)?.toString()?.takeIf { it.isNotBlank() }
-        return CallAlert(sbn.key, caller, detail, actions, notification.contentIntent)
+        return CallAlert(sbn.key, caller, detail, actions, notification.contentIntent, notification.getLargeIcon())
     }
 }
 

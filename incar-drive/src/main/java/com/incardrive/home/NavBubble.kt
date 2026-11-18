@@ -78,7 +78,7 @@ internal class NavBubble(private val context: Context) {
         fun text(size: Float, color: Int, bold: Boolean) = TextView(context).apply {
             setTextColor(color)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, size)
-            if (bold) typeface = Typeface.create(Typeface.create("sans-serif-condensed", Typeface.NORMAL), 700, false)
+            if (bold) typeface = Fonts.get(700)
             maxLines = 1
             ellipsize = TextUtils.TruncateAt.END
             setShadowLayer(dp(2).toFloat(), 0f, 0f, 0x80000000.toInt())

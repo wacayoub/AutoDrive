@@ -36,8 +36,7 @@ internal class BrandGauge(context: Context, private val style: Style, private va
     private val orange = 0xFFFF8A1F.toInt()
     private val turquoise = 0xFF4FD8C8.toInt()
     private val silver = 0xFFC9CDD3.toInt()
-    private val condensed = Typeface.create("sans-serif-condensed", Typeface.NORMAL)
-    private val light = Typeface.create("sans-serif-light", Typeface.NORMAL)
+    private val light = Fonts.get(300)
     private val stroke = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND }
     private val fill = Paint(Paint.ANTI_ALIAS_FLAG)
     private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { textAlign = Paint.Align.CENTER }
@@ -108,7 +107,7 @@ internal class BrandGauge(context: Context, private val style: Style, private va
         textPaint.color = if (over) alert else textColor
         val baseline = h * .58f
         canvas.drawText(figure, w / 2f, baseline, textPaint)
-        textPaint.typeface = Typeface.DEFAULT
+        textPaint.typeface = Fonts.get(400)
         textPaint.textSize = 12 * density
         textPaint.color = 0xFF85B7EB.toInt()
         canvas.drawText("km/h", w / 2f, baseline + 16 * density, textPaint)
@@ -174,11 +173,11 @@ internal class BrandGauge(context: Context, private val style: Style, private va
             val (x1, y1) = point(cx, cy, r * .86f, angle)
             canvas.drawLine(x0, y0, x1, y1, stroke)
         }
-        textPaint.typeface = Typeface.create(condensed, 700, false)
+        textPaint.typeface = Fonts.get(700)
         textPaint.textSize = r * .62f
         textPaint.color = if (over) alert else textColor
         canvas.drawText(figure, cx, cy + r * .2f, textPaint)
-        textPaint.typeface = Typeface.DEFAULT_BOLD
+        textPaint.typeface = Fonts.get(700)
         textPaint.textSize = 10 * density
         textPaint.letterSpacing = .2f
         textPaint.color = orange
@@ -228,11 +227,11 @@ internal class BrandGauge(context: Context, private val style: Style, private va
         stroke.strokeWidth = 1.5f * density
         stroke.color = 0xFF5F5E5A.toInt()
         canvas.drawCircle(cx, cy, r * .32f, stroke)
-        textPaint.typeface = Typeface.create(condensed, 700, false)
+        textPaint.typeface = Fonts.get(700)
         textPaint.textSize = r * .3f
         textPaint.color = if (over) alert else textColor
         canvas.drawText(figure, cx, cy + r * .1f, textPaint)
-        textPaint.typeface = Typeface.DEFAULT
+        textPaint.typeface = Fonts.get(400)
         textPaint.textSize = 9 * density
         textPaint.color = mutedColor
         canvas.drawText("km/h", cx, cy + r * .23f, textPaint)
@@ -262,7 +261,7 @@ internal class BrandGauge(context: Context, private val style: Style, private va
         textPaint.textSize = r * .58f
         textPaint.color = if (over) alert else textColor
         canvas.drawText(figure, cx, cy + r * .2f, textPaint)
-        textPaint.typeface = Typeface.DEFAULT
+        textPaint.typeface = Fonts.get(400)
         textPaint.textSize = 10 * density
         textPaint.letterSpacing = .25f
         textPaint.color = silver

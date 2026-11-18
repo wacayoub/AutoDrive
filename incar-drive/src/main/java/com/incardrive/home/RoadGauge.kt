@@ -307,7 +307,7 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
     private val density = resources.displayMetrics.density
     private val alert = 0xFFFF4D4F.toInt()
     private val valuePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        typeface = Typeface.create(Typeface.create("sans-serif-condensed", Typeface.NORMAL), 700, false)
+        typeface = Fonts.get(700)
         textAlign = Paint.Align.CENTER
     }
     private val unitPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -781,7 +781,7 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
             canvas.drawCircle(bx, by, 9 * density, arrowPaint)
             textPaint.color = Color.WHITE
             textPaint.textAlign = Paint.Align.CENTER
-            textPaint.typeface = Typeface.DEFAULT_BOLD
+            textPaint.typeface = Fonts.get(700)
             textPaint.textSize = 11 * density
             canvas.drawText(exit.toString(), bx, by + 4 * density, textPaint)
         }
@@ -887,14 +887,14 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
         canvas.drawCircle(lx, y - pole - radius, radius - 1.5f * density * scale, linePaint)
         textPaint.color = 0xFF222222.toInt()
         textPaint.textAlign = Paint.Align.CENTER
-        textPaint.typeface = Typeface.DEFAULT_BOLD
+        textPaint.typeface = Fonts.get(700)
         textPaint.textSize = 10 * density * scale
         canvas.drawText(limit.toString(), lx, y - pole - radius + 3.6f * density * scale, textPaint)
     }
 
     /** The street to take, white on green like a road sign, over the far end of the turn. */
     private fun drawStreetSign(canvas: Canvas, w: Float, horizon: Float, road: Float, street: String, left: Boolean) {
-        textPaint.typeface = Typeface.DEFAULT_BOLD
+        textPaint.typeface = Fonts.get(700)
         textPaint.textAlign = Paint.Align.CENTER
         textPaint.textSize = 11 * density
         val name = if (street.length > 20) street.take(19) + "…" else street
@@ -933,10 +933,10 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
             }
         }
         textPaint.textAlign = Paint.Align.LEFT
-        textPaint.typeface = Typeface.create(Typeface.create("sans-serif-condensed", Typeface.NORMAL), 700, false)
+        textPaint.typeface = Fonts.get(700)
         textPaint.textSize = 17 * density
         val titleWidth = textPaint.measureText(title)
-        textPaint.typeface = Typeface.DEFAULT
+        textPaint.typeface = Fonts.get(400)
         textPaint.textSize = 10 * density
         val detailWidth = textPaint.measureText(detail)
         val icon = 26 * density
@@ -979,10 +979,10 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
         canvas.save()
         canvas.clipRect(left, top, left + wide - 4 * density, top + 40 * density)
         textPaint.color = Color.WHITE
-        textPaint.typeface = Typeface.create(Typeface.create("sans-serif-condensed", Typeface.NORMAL), 700, false)
+        textPaint.typeface = Fonts.get(700)
         textPaint.textSize = 17 * density
         canvas.drawText(title, tx, top + 19 * density, textPaint)
-        textPaint.typeface = Typeface.DEFAULT
+        textPaint.typeface = Fonts.get(400)
         textPaint.textSize = 10 * density
         textPaint.color = 0xE6FFFFFF.toInt()
         canvas.drawText(detail, tx, top + 32 * density, textPaint)

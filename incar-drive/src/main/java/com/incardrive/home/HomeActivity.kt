@@ -210,6 +210,9 @@ class HomeActivity : Activity() {
     private lateinit var altitudeText: TextView
     private var shownPage = Page.HOME
     private lateinit var callBanner: FrameLayout
+    private var callScreen: CallScreen? = null
+    private lateinit var tripLog: TripLog
+    private val profiles by lazy { Profiles(prefs) }
     private lateinit var screenRoot: FrameLayout
     private var shownSky: Sky? = null
     private var alerted = false
@@ -230,11 +233,14 @@ class HomeActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        Fonts.init(this)
         prefs = getSharedPreferences(PREFS, MODE_PRIVATE)
         links = AppLinks(this)
         media = MediaSessions(this, ::renderMedia).apply { followActive = true }
         gps = GpsMonitor(this, ::renderSpeed)
         trip = TripMeter(Trip.decode(prefs.getString(TRIP, null)))
+        tripLog = TripLog(prefs.getString(TripLog.KEY, null))
+        trip.onFinished = { if (tripLog.add(it)) prefs.edit().putString(TripLog.KEY, tripLog.encode()).apply() }
         // The head unit starts with the car: a trip from before this start is over; the new one starts when the car
         // first moves, so its time counts the drive and not the minutes parked.
         val bootAt = System.currentTimeMillis() - android.os.SystemClock.elapsedRealtime()
@@ -514,12 +520,12 @@ class HomeActivity : Activity() {
             clock.text = now.format(DateTimeFormatter.ofPattern("HH:mm"))
             date.text = now.format(DateTimeFormatter.ofPattern("EEEE d MMMM", Locale.FRENCH))
                 .replaceFirstChar { it.titlecase(Locale.FRENCH) }
-            greeting.text = when (now.hour) {
+            greeting.text = (when (now.hour) {
                 in 5..11 -> "Bonjour"
                 in 12..17 -> "Bon après-midi"
                 in 18..21 -> "Bonsoir"
                 else -> "Bonne nuit"
-            }
+            }) + (driverName()?.let { ", $it" } ?: "")
             renderPrayer()
             renderSky()
             status.render()
@@ -537,8 +543,9 @@ class HomeActivity : Activity() {
         text = value
         setTextColor(color)
         setTextSize(TypedValue.COMPLEX_UNIT_SP, size.toFloat())
-        typeface = Typeface.create(if (condensed) Typeface.create("sans-serif-condensed", Typeface.NORMAL) else Typeface.DEFAULT,
-            weight, false)
+        typeface = Fonts.get(weight)
+        // Manrope is wide: big numbers and titles are set a little tighter.
+        if (condensed) letterSpacing = -.02f
         maxLines = 1
         ellipsize = TextUtils.TruncateAt.END
         includeFontPadding = false
@@ -639,17 +646,18 @@ class HomeActivity : Activity() {
         }
         panelHost = FrameLayout(this).apply { visibility = View.GONE }
         callBanner = FrameLayout(this).apply { visibility = View.GONE }
+        callScreen = null
         return FrameLayout(this).apply {
             screenRoot = this
             background = backdrop
             addView(content, FrameLayout.LayoutParams(-1, -1))
             addView(panelHost, FrameLayout.LayoutParams(-1, -1))
-            addView(callBanner, FrameLayout.LayoutParams(-1, -2, Gravity.TOP))
+            addView(callBanner, FrameLayout.LayoutParams(-1, -1))
             setOnApplyWindowInsetsListener { _, insets ->
                 val bars = insets.getInsets(WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout())
                 content.setPadding(bars.left + dp(14), bars.top + dp(8), bars.right + dp(14), bars.bottom + dp(10))
                 panelHost.setPadding(bars.left + dp(14), bars.top + dp(8), bars.right + dp(14), bars.bottom + dp(62))
-                callBanner.setPadding(bars.left + dp(14), bars.top + dp(8), bars.right + dp(14), 0)
+                callBanner.setPadding(bars.left + dp(14), bars.top + dp(8), bars.right + dp(14), bars.bottom + dp(10))
                 insets
             }
         }
@@ -796,7 +804,7 @@ class HomeActivity : Activity() {
                 carLogo.bitmap()?.let { logo ->
                     addView(ImageView(context).apply { setImageBitmap(CarLogo.fit(logo, dp(84))) }, LinearLayout.LayoutParams(-2, dp(84)))
                 }
-                addView(label(hello, 30, text, 300, condensed = true).apply { gravity = Gravity.CENTER },
+                addView(label(hello + (driverName()?.let { ", $it" } ?: ""), 30, text, 300, condensed = true).apply { gravity = Gravity.CENTER },
                     wrap().apply { topMargin = dp(18) })
                 addView(label("Incar Drive", 12, muted, 600).apply { letterSpacing = .2f; gravity = Gravity.CENTER },
                     wrap().apply { topMargin = dp(6) })
@@ -821,14 +829,14 @@ class HomeActivity : Activity() {
 
     private fun topBar() = row().apply {
         addView(column().apply {
-            greeting = caps("")
+            greeting = caps("").apply { setOnClickListener { askDriver() } }
             addView(row().apply {
                 addView(greeting)
                 addView(status.view(), wrap().apply { marginStart = dp(14) })
             }, wrap()) // as wide as its icons, not as the clock's row below: no icon is cut off
             addView(row().apply {
                 gravity = Gravity.BOTTOM
-                clock = label("--:--", 38, text, 300, condensed = true)
+                clock = label("--:--", 32, text, 300, condensed = true)
                 addView(clock)
                 date = label("", 14, muted, 500)
                 addView(date, wrap().apply { marginStart = dp(12); bottomMargin = dp(6) })
@@ -1365,6 +1373,44 @@ class HomeActivity : Activity() {
     }
 
     /** The traffic layer needs the driver's own free TomTom key: explained and typed here, kept on the head unit. */
+    /** The driver's own name, once they have given one; « Conducteur 1 » is not said in the greeting. */
+    private fun driverName() = prefs.getString("${Profiles.NAME}${profiles.active}", null)?.takeIf { it.isNotBlank() }
+
+    /** A touch on the greeting: who drives now. */
+    private fun askDriver() {
+        val names = (0 until profiles.count).map { profiles.name(it) }
+        AlertDialog.Builder(this)
+            .setTitle("Qui conduit ?")
+            .setSingleChoiceItems(names.toTypedArray(), profiles.active) { dialog, index ->
+                dialog.dismiss()
+                if (profiles.switchTo(index)) {
+                    Toast.makeText(this, "Bienvenue ${names[index]}", Toast.LENGTH_SHORT).show()
+                    recreate()
+                }
+            }
+            .setNeutralButton("Renommer") { _, _ -> renameDriver() }
+            .show()
+    }
+
+    private fun renameDriver() {
+        val index = profiles.active
+        val field = android.widget.EditText(this).apply {
+            setText(driverName().orEmpty())
+            hint = "Prénom"
+            isSingleLine = true
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_CAP_WORDS
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Nom de ${profiles.name(index)}")
+            .setView(FrameLayout(this).apply {
+                setPadding(dp(20), dp(4), dp(20), 0)
+                addView(field, FrameLayout.LayoutParams(-1, -2))
+            })
+            .setPositiveButton("Enregistrer") { _, _ -> profiles.rename(index, field.text.toString()); recreate() }
+            .setNegativeButton("Annuler", null)
+            .show()
+    }
+
     private fun askTrafficKey() {
         val field = android.widget.EditText(this).apply {
             setText(prefs.getString(OwnMap.TRAFFIC_KEY, null).orEmpty())
@@ -1744,65 +1790,8 @@ class HomeActivity : Activity() {
      */
     private fun renderCall(call: CallAlert?) {
         if (!::callBanner.isInitialized) return
-        if (call == null) {
-            if (callBanner.visibility == View.VISIBLE) callBanner.animate().alpha(0f).translationY(-dp(20).toFloat())
-                .setDuration(150).withEndAction { callBanner.visibility = View.GONE; callBanner.removeAllViews() }.start()
-            return
-        }
-        val wasShown = callBanner.visibility == View.VISIBLE && callBanner.alpha > 0f
-        callBanner.removeAllViews()
-        callBanner.addView(row().apply {
-            background = GradientDrawable().apply {
-                cornerRadius = dp(18).toFloat()
-                setColor(getColor(R.color.home_background_top))
-                setStroke(dp(1), getColor(R.color.home_card_border))
-            }
-            elevation = dp(12).toFloat()
-            setPadding(dp(16), dp(10), dp(12), dp(10))
-            addView(FrameLayout(context).apply {
-                background = GradientDrawable().apply { cornerRadius = dp(14).toFloat(); setColor(CALL_GREEN) }
-                addView(ImageView(context).apply {
-                    setImageResource(R.drawable.ic_home_phone)
-                    imageTintList = ColorStateList.valueOf(Color.WHITE)
-                }, FrameLayout.LayoutParams(dp(26), dp(26), Gravity.CENTER))
-            }, LinearLayout.LayoutParams(dp(52), dp(52)))
-            addView(column().apply {
-                addView(caps(if (call.ongoing) "En appel" else "Appel entrant", if (call.ongoing) muted else CALL_GREEN))
-                addView(label(call.caller, 22, text, 700, condensed = true), wrap().apply { topMargin = dp(3) })
-                call.detail?.takeIf { it != call.caller }?.let { addView(label(it, 12, muted), wrap().apply { topMargin = dp(2) }) }
-                setOnClickListener { runCatching { call.open?.send() } }
-            }, LinearLayout.LayoutParams(0, -2, 1f).apply { marginStart = dp(14) })
-            // Decline first, then answer, as on phones; other buttons (speaker, mute…) after them.
-            call.actions.sortedBy { it.kind.ordinal.let { order -> if (order == 1) -1 else order } }.take(3).forEach { action ->
-                val color = when (action.kind) {
-                    CallButton.ANSWER -> CALL_GREEN
-                    CallButton.DECLINE -> CALL_RED
-                    CallButton.OTHER -> getColor(R.color.home_chip)
-                }
-                addView(label(action.title, 15, if (action.kind == CallButton.OTHER) text else Color.WHITE, 700).apply {
-                    gravity = Gravity.CENTER
-                    setPadding(dp(18), 0, dp(18), 0)
-                    background = pressable(GradientDrawable().apply {
-                        cornerRadius = dp(14).toFloat()
-                        setColor(color)
-                    }, 14)
-                    contentDescription = "${action.title} ${call.caller}"
-                    setOnClickListener {
-                        try {
-                            action.intent.send()
-                        } catch (_: PendingIntent.CanceledException) {
-                            Toast.makeText(context, "L’appel n’est plus disponible.", Toast.LENGTH_SHORT).show()
-                        }
-                    }
-                }, LinearLayout.LayoutParams(-2, dp(52)).apply { marginStart = dp(10) })
-            }
-        }, FrameLayout.LayoutParams(-1, -2))
-        callBanner.visibility = View.VISIBLE
-        if (!wasShown) {
-            callBanner.alpha = 0f
-            callBanner.translationY = -dp(20).toFloat()
-            callBanner.animate().alpha(1f).translationY(0f).setDuration(200).start()
-        }
+        if (callScreen == null) callScreen = CallScreen(this, callBanner)
+        callScreen?.render(call)
     }
 
     /** The alert setting: [ROAD_LIMIT] follows the road's legal limit (the default), 0 is off, else a fixed speed. */
@@ -1926,6 +1915,7 @@ class HomeActivity : Activity() {
                     }, 12)
                     setOnClickListener { trip.reset(System.currentTimeMillis()); saveTrip(); tripValues?.invoke(); renderSpeed() }
                 }, 1, LinearLayout.LayoutParams(-2, dp(40)).apply { marginEnd = dp(10) })
+                addView(headerButton("Carnet") { showTripLog() }, 1, LinearLayout.LayoutParams(-2, dp(40)).apply { marginEnd = dp(10) })
             })
             addView(statRow("Distance", "Temps de conduite", "Moyenne", "Maximum"),
                 LinearLayout.LayoutParams(-1, 0, 1f).apply { topMargin = dp(8) })
@@ -1951,6 +1941,80 @@ class HomeActivity : Activity() {
             values["Altitude"]?.text = state.altitude?.let { "≈ $it m" } ?: "—"
         }
         tripValues?.invoke()
+    }
+
+    private fun headerButton(word: String, click: () -> Unit) = label(word, 13, text, 700).apply {
+        gravity = Gravity.CENTER
+        setPadding(dp(14), 0, dp(14), 0)
+        background = pressable(GradientDrawable().apply {
+            cornerRadius = dp(12).toFloat()
+            setColor(getColor(R.color.home_chip))
+        }, 12)
+        setOnClickListener { click() }
+    }
+
+    /** The trips driven: totals for today, the week and the month, then each trip, newest first. */
+    private fun showTripLog() {
+        tripValues = null
+        val now = System.currentTimeMillis()
+        val zone = ZoneId.systemDefault()
+        val (today, week, month) = tripLog.totals(trip.trip, now, zone)
+        fun total(name: String, total: TripTotal, color: Int) = column().apply {
+            setPadding(dp(14), dp(10), dp(14), dp(10))
+            background = GradientDrawable().apply {
+                cornerRadius = dp(12).toFloat()
+                setColor(getColor(R.color.home_chip))
+                setStroke(dp(1), getColor(R.color.home_card_border))
+            }
+            addView(caps(name, color))
+            addView(label(kilometres(total.meters), 24, text, 700, condensed = true), wrap().apply { topMargin = dp(4) })
+            addView(label(listOf(hours(total.movingMs), if (total.trips == 1) "1 trajet" else "${total.trips} trajets")
+                .joinToString(" · "), 12, muted), wrap().apply { topMargin = dp(3) })
+        }
+        val days = DateTimeFormatter.ofPattern("EEE d MMM", java.util.Locale.FRENCH)
+        val clock = DateTimeFormatter.ofPattern("HH:mm")
+        openPanel(Page.TRIP, column().apply {
+            background = sheet()
+            setPadding(dp(18), dp(12), dp(18), dp(12))
+            addView(panelHeader("Carnet de trajets", "Gardé sur le boîtier uniquement").apply {
+                addView(headerButton("Trajet en cours") { showTrip() }, 1, LinearLayout.LayoutParams(-2, dp(40)).apply { marginEnd = dp(10) })
+            })
+            addView(row().apply {
+                addView(total("Aujourd’hui", today, accent), LinearLayout.LayoutParams(0, -2, 1f))
+                addView(total("Cette semaine", week, navColor), LinearLayout.LayoutParams(0, -2, 1f).apply { marginStart = dp(8) })
+                addView(total("Ce mois", month, prayerColor), LinearLayout.LayoutParams(0, -2, 1f).apply { marginStart = dp(8) })
+            }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+            val list = column()
+            val shown = listOfNotNull(trip.trip.takeIf { it.startedAt > 0 && it.meters > 0 }) +
+                tripLog.trips.filter { it.startedAt != trip.trip.startedAt }
+            if (shown.isEmpty()) list.addView(label("Les trajets apparaîtront ici après la première route.", 14, muted),
+                wrap().apply { topMargin = dp(14) })
+            shown.forEachIndexed { index, item ->
+                val start = Instant.ofEpochMilli(item.startedAt).atZone(zone)
+                val end = item.lastMoveAt.takeIf { it > item.startedAt }?.let { Instant.ofEpochMilli(it).atZone(zone) }
+                list.addView(row().apply {
+                    setPadding(dp(12), 0, dp(12), 0)
+                    background = GradientDrawable().apply {
+                        cornerRadius = dp(10).toFloat()
+                        setColor(if (index % 2 == 0) getColor(R.color.home_chip) else Color.TRANSPARENT)
+                    }
+                    addView(column().apply {
+                        addView(label(if (index == 0 && item.startedAt == trip.trip.startedAt) "En cours"
+                            else start.format(days).replaceFirstChar { it.uppercase() }, 14, text, 700))
+                        addView(label(start.format(clock) + (end?.let { " → " + it.format(clock) } ?: ""), 12, muted),
+                            wrap().apply { topMargin = dp(2) })
+                    }, LinearLayout.LayoutParams(0, -2, 1.2f))
+                    addView(label(kilometres(item.meters), 17, text, 700, condensed = true), LinearLayout.LayoutParams(0, -2, 1f))
+                    addView(label(hours(item.movingMs), 14, text, 500), LinearLayout.LayoutParams(0, -2, 1f))
+                    addView(label(item.averageKmh?.let { "moy. $it km/h" } ?: "—", 14, muted, 500), LinearLayout.LayoutParams(0, -2, 1f))
+                    addView(label(if (item.maxKmh > 0) "max ${item.maxKmh}" else "—", 14, muted, 500), LinearLayout.LayoutParams(0, -2, .8f))
+                }, LinearLayout.LayoutParams(-1, dp(50)).apply { topMargin = dp(4) })
+            }
+            addView(android.widget.ScrollView(context).apply {
+                isVerticalScrollBarEnabled = false
+                addView(list, FrameLayout.LayoutParams(-1, -2))
+            }, LinearLayout.LayoutParams(-1, 0, 1f).apply { topMargin = dp(8) })
+        })
     }
 
     private fun renderMedia() {
@@ -2237,7 +2301,16 @@ class HomeActivity : Activity() {
             }, LinearLayout.LayoutParams(-1, 0, 1f))
         })
         body.apply {
-            addView(caps("Thème"), wrap().apply { topMargin = dp(10) })
+            addView(caps("Conducteur"), wrap().apply { topMargin = dp(10) })
+            addView(row().apply {
+                addView(choices((0 until profiles.count).toList(), profiles.active, { profiles.name(it) }, { null }) { index ->
+                    if (profiles.switchTo(index)) Toast.makeText(this@HomeActivity, "Bienvenue ${profiles.name(index)}", Toast.LENGTH_SHORT).show()
+                }, LinearLayout.LayoutParams(0, -2, 1f))
+                addView(headerButton("Renommer") { renameDriver() }, LinearLayout.LayoutParams(-2, dp(46)))
+            }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+            addView(label("Chaque conducteur garde son compteur, ses couleurs, Maison, Travail, sa carte, sa barre d’applis et son alerte de vitesse.",
+                12, muted).apply { maxLines = 2 }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(6) })
+            addView(caps("Thème"), wrap().apply { topMargin = dp(14) })
             addView(choices(Appearance.entries, Appearance.restore(prefs), { it.label }, { null }) {
                 prefs.edit().putString(APPEARANCE, it.name).apply()
             }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
