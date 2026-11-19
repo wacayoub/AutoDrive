@@ -322,6 +322,8 @@ class HomeActivity : Activity() {
 
     override fun onDestroy() {
         CallDiagnostic.changed = null
+        HotspotReminder.changed = null
+        HotspotReminder.detach()
         if (::wazeMap.isInitialized) wazeMap.destroy()
         if (::googleWeb.isInitialized) googleWeb.destroy()
         if (::clicks.isInitialized) clicks.release()
@@ -417,6 +419,9 @@ class HomeActivity : Activity() {
         media.start()
         // When the car (and the head unit) starts: play the last app again, without a tap.
         mediaResume.onDriveStart()
+        // The hotspot only the head unit itself may switch on: a bubble opens its screen, once per start.
+        HotspotReminder.changed = { runOnUiThread { showHotspotReminder() } }
+        HotspotReminder.driveStarted(this, mediaResume.bootKey())
         if (gps.permitted()) gps.start()
         // Weather where the car is, from the last known position until the GPS answers; the chosen city otherwise.
         currentPosition()?.split(',')?.let { (lat, lon) -> info.usePosition(lat.toDouble(), lon.toDouble()) }
@@ -473,6 +478,7 @@ class HomeActivity : Activity() {
     // Radio Maroc & Coran hides its floating bubble while this home screen, which already shows the radio, is in front.
     override fun onResume() {
         super.onResume()
+        showHotspotReminder()
         homeInFront = true
         tellRadio(visible = true)
         renderHomeBadge()
@@ -2182,6 +2188,14 @@ class HomeActivity : Activity() {
                 ComponentName(this, MediaAccessService::class.java).flattenToString()))
     }
 
+    /** The « Point d'accès » bubble, a few seconds after the home screen comes up, unless the hotspot is already on. */
+    private fun showHotspotReminder() {
+        handler.postDelayed({
+            if (isDestroyed || !homeInFront || !::screenRoot.isInitialized) return@postDelayed
+            if (sharingConnection) HotspotReminder.skip(this) else HotspotReminder.show(this, screenRoot)
+        }, 3_000)
+    }
+
     internal fun startSafely(intent: Intent) {
         try {
             startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
@@ -2668,6 +2682,14 @@ class HomeActivity : Activity() {
                 if (equalizer != null) "›" else "—") {
                 if (equalizer != null) startSafely(equalizer)
                 else Toast.makeText(this@HomeActivity, "Ce boîtier ne propose pas de réglage Dolby aux applis.", Toast.LENGTH_LONG).show()
+            }, LinearLayout.LayoutParams(-1, dp(52)).apply { topMargin = dp(8) })
+            // POINT D'ACCÈS: Android lets only the head unit's own apps switch it on; Incar Drive offers its screen.
+            addView(caps("Point d’accès"), wrap().apply { topMargin = dp(14) })
+            addView(settingRow("Rappel au démarrage", "Une bulle ouvre l’écran du point d’accès quand la voiture démarre",
+                if (HotspotReminder.enabled(this@HomeActivity)) "ON" else "OFF") { state ->
+                val enabled = !HotspotReminder.enabled(this@HomeActivity)
+                HotspotReminder.setEnabled(this@HomeActivity, enabled)
+                state.text = if (enabled) "ON" else "OFF"
             }, LinearLayout.LayoutParams(-1, dp(52)).apply { topMargin = dp(8) })
             // DIAGNOSTIC D'APPEL: what the phone app shows during a test call, to see why the call strip does or not appear.
             addView(caps("Diagnostic d’appel"), wrap().apply { topMargin = dp(14) })

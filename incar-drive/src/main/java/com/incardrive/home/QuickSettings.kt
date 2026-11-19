@@ -48,7 +48,7 @@ internal class QuickSettings(private val home: HomeActivity) {
                 tile(R.drawable.ic_home_wifi, "Wi-Fi", wifi()) { startSafely(Intent(Settings.Panel.ACTION_WIFI)) }
                 tile(R.drawable.ic_home_bluetooth, "Bluetooth", bluetooth()) { startSafely(Intent(Settings.ACTION_BLUETOOTH_SETTINGS)) }
                 tile(R.drawable.ic_home_hotspot, "Partage", if (sharingConnection) "Activé" else "Désactivé") {
-                    startSafely(Intent(Settings.ACTION_WIRELESS_SETTINGS))
+                    startSafely(HotspotReminder.settingsIntent(home))
                 }
                 tile(R.drawable.ic_home_location, "Position", location()) { startSafely(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)) }
                 tile(R.drawable.ic_home_moon, if (night) "Mode jour" else "Mode nuit", "Thème") { toggleNight() }

@@ -1,14 +1,18 @@
-Incar Drive 1.0.22 — écran d’accueil pour l’Incarlink (Android 11 à 13, conçu pour 800 × 480).
+Incar Drive 1.0.23 — écran d’accueil pour l’Incarlink (Android 11 à 13, conçu pour 800 × 480).
 
 **Mettre à jour** : Réglages › Mises à jour, ou la proposition automatique.
 
 **Changements**
+- Point d’accès au démarrage : quand la voiture démarre (le boîtier qui s’allume, ou qui se réveille de sa veille après le contact coupé), une bulle « Allumer le point d’accès » s’affiche une minute en bas de l’accueil. Un toucher ouvre directement l’écran Point d’accès et partage de connexion d’Android : il reste à toucher l’interrupteur. Rien ne s’affiche si le point d’accès est déjà allumé. Android réserve l’allumage du point d’accès aux applis système du boîtier ; Incar Drive ne peut donc pas l’allumer lui-même. À désactiver dans Réglages › Point d’accès.
+- La tuile « Partage » des réglages rapides ouvre aussi directement l’écran du point d’accès.
+
+Comprend aussi la 1.0.22 :
 - Diagnostic d’appel (Réglages › Diagnostic d’appel) : pendant un appel de test, Incar Drive note les notifications que publient les applis du boîtier (le nom de l’appli, son type, si elle reste affichée, les noms de ses boutons, si elle parle d’un appel, et si Incar Drive l’affiche en bandeau ou l’ignore). Le nom et le numéro de l’appelant, et le texte des notifications, ne sont jamais gardés. Les 14 dernières restent sur le boîtier ; « Effacer » vide la liste.
 - Appels détectés plus largement : le bandeau d’appel d’Incar Drive s’affiche aussi quand l’appli téléphone publie une notification d’appel sans boutons Répondre ou Raccrocher (« Calling... », « Appel en cours », « 通话中 »). Un toucher sur le nom ouvre l’appli téléphone.
 - Avec l’appli téléphone de l’Incarlink, le bandeau se place sous sa barre grise « Calling... », que l’Incarlink affiche par-dessus tous les écrans et qu’Incar Drive ne peut pas cacher.
 - Si l’appli téléphone de l’Incarlink ne publie aucune notification pendant l’appel, le diagnostic restera vide pour elle : dans ce cas, aucun moyen autorisé ne permet à Incar Drive d’afficher l’appel, et seule la barre de l’Incarlink reste.
 
-Comprend aussi la 1.0.21 :
+Et la 1.0.21 :
 - Limitations de vitesse et radars plus fiables : la carte des routes est maintenant gardée sur le boîtier, par carrés d’environ 2 km, pendant 45 jours. Sur tes trajets habituels, la limitation, les radars et le nom de la rue s’affichent tout de suite, même sans Internet. Les serveurs gratuits d’OpenStreetMap répondent souvent en 30 à 40 secondes ou pas du tout : Incar Drive patiente plus longtemps (60 s) et réessaie, et un carré réussi n’est plus redemandé.
 - Correction : quand tu passais sur Maps pendant un téléchargement des routes, la limitation et les radars restaient bloqués jusqu’au redémarrage d’Incar Drive.
 - Sur autoroute, quand la carte n’indique pas de limitation : 120 km/h, la limite des autoroutes marocaines.

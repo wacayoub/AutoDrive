@@ -27,7 +27,10 @@ class MediaAccessService : NotificationListenerService() {
                 android.content.Intent.ACTION_SCREEN_OFF -> prefs.edit().putLong("screen_off_at", now).apply()
                 android.content.Intent.ACTION_SCREEN_ON -> {
                     val offAt = prefs.getLong("screen_off_at", 0L)
-                    if (offAt in 1..now && now - offAt >= MediaResume.SLEEP_MS) MediaResume.get(context).onDriveStart("wake:$offAt")
+                    if (offAt in 1..now && now - offAt >= MediaResume.SLEEP_MS) {
+                        MediaResume.get(context).onDriveStart("wake:$offAt")
+                        HotspotReminder.driveStarted(context, "wake:$offAt")
+                    }
                 }
             }
         }
