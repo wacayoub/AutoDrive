@@ -1,14 +1,20 @@
-Incar Drive 1.0.21 — écran d’accueil pour l’Incarlink (Android 11 à 13, conçu pour 800 × 480).
+Incar Drive 1.0.22 — écran d’accueil pour l’Incarlink (Android 11 à 13, conçu pour 800 × 480).
 
 **Mettre à jour** : Réglages › Mises à jour, ou la proposition automatique.
 
 **Changements**
+- Diagnostic d’appel (Réglages › Diagnostic d’appel) : pendant un appel de test, Incar Drive note les notifications que publient les applis du boîtier (le nom de l’appli, son type, si elle reste affichée, les noms de ses boutons, si elle parle d’un appel, et si Incar Drive l’affiche en bandeau ou l’ignore). Le nom et le numéro de l’appelant, et le texte des notifications, ne sont jamais gardés. Les 14 dernières restent sur le boîtier ; « Effacer » vide la liste.
+- Appels détectés plus largement : le bandeau d’appel d’Incar Drive s’affiche aussi quand l’appli téléphone publie une notification d’appel sans boutons Répondre ou Raccrocher (« Calling... », « Appel en cours », « 通话中 »). Un toucher sur le nom ouvre l’appli téléphone.
+- Avec l’appli téléphone de l’Incarlink, le bandeau se place sous sa barre grise « Calling... », que l’Incarlink affiche par-dessus tous les écrans et qu’Incar Drive ne peut pas cacher.
+- Si l’appli téléphone de l’Incarlink ne publie aucune notification pendant l’appel, le diagnostic restera vide pour elle : dans ce cas, aucun moyen autorisé ne permet à Incar Drive d’afficher l’appel, et seule la barre de l’Incarlink reste.
+
+Comprend aussi la 1.0.21 :
 - Limitations de vitesse et radars plus fiables : la carte des routes est maintenant gardée sur le boîtier, par carrés d’environ 2 km, pendant 45 jours. Sur tes trajets habituels, la limitation, les radars et le nom de la rue s’affichent tout de suite, même sans Internet. Les serveurs gratuits d’OpenStreetMap répondent souvent en 30 à 40 secondes ou pas du tout : Incar Drive patiente plus longtemps (60 s) et réessaie, et un carré réussi n’est plus redemandé.
 - Correction : quand tu passais sur Maps pendant un téléchargement des routes, la limitation et les radars restaient bloqués jusqu’au redémarrage d’Incar Drive.
 - Sur autoroute, quand la carte n’indique pas de limitation : 120 km/h, la limite des autoroutes marocaines.
 - Rappel : les limitations et radars viennent d’OpenStreetMap ; au Maroc, beaucoup de rues n’ont pas encore leur limitation et peu de radars y sont cartographiés. Sans donnée, rien n’est affiché plutôt qu’une valeur inventée.
 
-Comprend aussi la 1.0.20 :
+Et la 1.0.20 :
 - Reprise du dernier média à chaque démarrage de la voiture : la dernière appli écoutée (Radio Maroc & Coran et sa dernière station, ou une autre) se relance toute seule quand le boîtier démarre, mais aussi quand il se réveille de sa veille après le contact coupé (écran éteint plus d’une minute et demie), même si une autre appli est devant. Si elle ne démarre pas du premier coup (Internet ou l’appli pas encore prêts), Incar Drive redemande jusqu’à trois fois. Rien n’est relancé si un son joue déjà. À désactiver dans Réglages (reprise automatique).
 - Bulle de la radio au démarrage : quand Radio Maroc & Coran reprend toute seule au démarrage du boîtier, sa bulle flottante ne s’affiche plus par-dessus l’accueil (la radio n’avait pas encore été prévenue que l’accueil était devant).
 - Jour ou nuit au démarrage : tant que l’horloge du boîtier n’est pas encore à l’heure (elle l’est quelques secondes après, par le réseau ou le GPS), l’accueil démarre en jour au lieu de passer en nuit par erreur ; il suit ensuite l’heure, comme avant.

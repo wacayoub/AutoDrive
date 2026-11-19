@@ -63,6 +63,7 @@ class MediaAccessService : NotificationListenerService() {
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
+        CallDiagnostic.record(this, sbn)
         // The guidance changes every few metres: its own notification is read at once, without asking Android for
         // the whole list again each time.
         if (NavWatch.post(sbn, this)) {
@@ -150,9 +151,15 @@ internal data class CallAlert(
     val open: PendingIntent?,
     /** The contact's picture, when the phone app puts one in its notification. */
     val photo: android.graphics.drawable.Icon? = null,
+    /** Shown by the Incarlink's own phone app, which draws its grey call bar over the top of every screen. */
+    val incarlink: Boolean = false,
 ) {
-    /** An answered call shows only a hang-up button. */
-    val ongoing get() = actions.none { it.kind == CallButton.ANSWER } && actions.any { it.kind == CallButton.DECLINE }
+    /**
+     * An answered call shows only a hang-up button. A notification with no button at all is a call already under way
+     * (or being placed): there is nothing to answer.
+     */
+    val ongoing get() = actions.isEmpty() ||
+        actions.none { it.kind == CallButton.ANSWER } && actions.any { it.kind == CallButton.DECLINE }
 }
 
 /** The call notification currently shown, if any. */
@@ -163,6 +170,20 @@ internal object CallWatch {
     // Apps that handle calls on Android head units and phones.
     private val phoneApps = setOf("com.carsyso.bluetooth", "com.android.dialer", "com.google.android.dialer",
         "com.android.incallui", "com.android.server.telecom")
+
+    /** The Incarlink's Bluetooth phone app, and any other app of the same maker. */
+    fun isIncarlink(packageName: String) = packageName.startsWith("com.carsyso.")
+
+    fun isPhoneApp(packageName: String) = packageName in phoneApps || isIncarlink(packageName)
+
+    // Words a phone app writes in a call notification: « Calling... », « Appel en cours », « 通话中 ».
+    private val callWords = listOf("call", "appel", "incoming", "outgoing", "dialing", "dialling", "en ligne",
+        "来电", "通话", "去电", "呼叫", "拨号", "مكالمة", "اتصال")
+
+    fun mentionsCall(texts: List<String>) = texts.any { text ->
+        val lower = text.lowercase(Locale.ROOT)
+        callWords.any { lower.contains(it) }
+    }
 
     private val answerWords = listOf("answer", "accept", "pick up", "répondre", "repondre", "décrocher", "decrocher",
         "接听", "接通", "接受", "رد")
@@ -180,11 +201,23 @@ internal object CallWatch {
 
     /**
      * A notification is a call when Android marks it as one, or when a phone app shows one with an answer or
-     * hang-up button.
+     * hang-up button. Some head-unit phone apps put no button in it: then a phone app's ongoing notification, or one
+     * that speaks of a call, is one too.
      */
-    fun isCall(packageName: String, category: String?, actionTitles: List<String>): Boolean {
-        if (category == Notification.CATEGORY_CALL) return actionTitles.isNotEmpty()
-        return packageName in phoneApps && actionTitles.map(::classify).any { it != CallButton.OTHER }
+    fun isCall(packageName: String, category: String?, actionTitles: List<String>, ongoing: Boolean = false,
+               mentionsCall: Boolean = false): Boolean {
+        if (category == Notification.CATEGORY_CALL) return actionTitles.isNotEmpty() || ongoing
+        if (!isPhoneApp(packageName)) return false
+        if (actionTitles.map(::classify).any { it != CallButton.OTHER }) return true
+        return mentionsCall && (ongoing || actionTitles.isEmpty())
+    }
+
+    /** The words of a notification: title, text, sub-text and ticker. */
+    fun words(notification: Notification): List<String> {
+        val extras = notification.extras
+        return listOfNotNull(extras?.getCharSequence(Notification.EXTRA_TITLE), extras?.getCharSequence(Notification.EXTRA_TEXT),
+            extras?.getCharSequence(Notification.EXTRA_SUB_TEXT), extras?.getCharSequence(Notification.EXTRA_BIG_TEXT),
+            notification.tickerText).map { it.toString() }.filter { it.isNotBlank() }
     }
 
     fun refresh(active: List<StatusBarNotification>, context: android.content.Context? = null) {
@@ -218,11 +251,13 @@ internal object CallWatch {
             val title = action.title?.toString()?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
             CallAction(title, classify(title), action.actionIntent ?: return@mapNotNull null)
         }
-        if (!isCall(sbn.packageName, notification.category, actions.map { it.title })) return null
+        if (!isCall(sbn.packageName, notification.category, actions.map { it.title }, sbn.isOngoing,
+                mentionsCall(words(notification)))) return null
         val extras = notification.extras
         val caller = extras.getCharSequence(Notification.EXTRA_TITLE)?.toString()?.takeIf { it.isNotBlank() } ?: "Appel"
         val detail = extras.getCharSequence(Notification.EXTRA_TEXT)?.toString()?.takeIf { it.isNotBlank() }
-        return CallAlert(sbn.key, caller, detail, actions, notification.contentIntent, notification.getLargeIcon())
+        return CallAlert(sbn.key, caller, detail, actions, notification.contentIntent, notification.getLargeIcon(),
+            isIncarlink(sbn.packageName))
     }
 }
 

@@ -321,6 +321,7 @@ class HomeActivity : Activity() {
     }
 
     override fun onDestroy() {
+        CallDiagnostic.changed = null
         if (::wazeMap.isInitialized) wazeMap.destroy()
         if (::googleWeb.isInitialized) googleWeb.destroy()
         if (::clicks.isInitialized) clicks.release()
@@ -2668,6 +2669,26 @@ class HomeActivity : Activity() {
                 if (equalizer != null) startSafely(equalizer)
                 else Toast.makeText(this@HomeActivity, "Ce boîtier ne propose pas de réglage Dolby aux applis.", Toast.LENGTH_LONG).show()
             }, LinearLayout.LayoutParams(-1, dp(52)).apply { topMargin = dp(8) })
+            // DIAGNOSTIC D'APPEL: what the phone app shows during a test call, to see why the call strip does or not appear.
+            addView(caps("Diagnostic d’appel"), wrap().apply { topMargin = dp(14) })
+            val callLines = label("", 11, text).apply {
+                typeface = android.graphics.Typeface.MONOSPACE
+                isSingleLine = false
+                maxLines = 80
+                ellipsize = null
+            }
+            fun showCallLines() {
+                val lines = CallDiagnostic.lines(this@HomeActivity)
+                callLines.text = if (lines.isEmpty()) "Aucune notification notée. Fais un appel de test, puis reviens ici."
+                    else lines.joinToString("\n\n")
+            }
+            addView(settingRow("Notifications pendant un appel", "Appli, type et boutons, sans nom ni numéro", "Effacer") {
+                CallDiagnostic.clear(this@HomeActivity)
+                showCallLines()
+            }, LinearLayout.LayoutParams(-1, dp(52)).apply { topMargin = dp(8) })
+            showCallLines()
+            CallDiagnostic.changed = { runOnUiThread { if (!isDestroyed) showCallLines() } }
+            addView(callLines, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
             addView(caps("Mises à jour"), wrap().apply { topMargin = dp(14) })
             addView(row().apply {
                 val message = label("", 14, text, 600).apply { maxLines = 2 }

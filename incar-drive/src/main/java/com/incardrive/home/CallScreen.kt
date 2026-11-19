@@ -53,7 +53,10 @@ internal class CallScreen(private val home: HomeActivity, private val host: Fram
         if (call.ongoing && answeredAt == 0L) answeredAt = System.currentTimeMillis()
         stop()
         host.removeAllViews()
-        host.addView(strip(call), FrameLayout.LayoutParams(-1, -2, Gravity.TOP))
+        // The Incarlink's phone app draws its own grey call bar over the top of every screen: the strip goes under it.
+        host.addView(strip(call), FrameLayout.LayoutParams(-1, -2, Gravity.TOP).apply {
+            if (call.incarlink) topMargin = home.dp(INCARLINK_BAR)
+        })
         // The strip lets the home screen under it be used.
         host.isClickable = false
         host.visibility = View.VISIBLE
@@ -199,5 +202,10 @@ internal class CallScreen(private val home: HomeActivity, private val host: Fram
             addView(round(R.drawable.ic_home_phone, HomeActivity.CALL_GREEN, Color.WHITE, 0f, "Répondre ${call.caller}") { press(it.intent) },
                 LinearLayout.LayoutParams(home.dp(52), home.dp(52)).apply { marginStart = home.dp(10) })
         }
+    }
+
+    private companion object {
+        /** Height of the Incarlink's call bar, estimated from a photo of the X15 at 800 × 480. */
+        const val INCARLINK_BAR = 96
     }
 }
