@@ -1,14 +1,20 @@
-Incar Drive 1.0.20 — écran d’accueil pour l’Incarlink (Android 11 à 13, conçu pour 800 × 480).
+Incar Drive 1.0.21 — écran d’accueil pour l’Incarlink (Android 11 à 13, conçu pour 800 × 480).
 
 **Mettre à jour** : Réglages › Mises à jour, ou la proposition automatique.
 
 **Changements**
+- Limitations de vitesse et radars plus fiables : la carte des routes est maintenant gardée sur le boîtier, par carrés d’environ 2 km, pendant 45 jours. Sur tes trajets habituels, la limitation, les radars et le nom de la rue s’affichent tout de suite, même sans Internet. Les serveurs gratuits d’OpenStreetMap répondent souvent en 30 à 40 secondes ou pas du tout : Incar Drive patiente plus longtemps (60 s) et réessaie, et un carré réussi n’est plus redemandé.
+- Correction : quand tu passais sur Maps pendant un téléchargement des routes, la limitation et les radars restaient bloqués jusqu’au redémarrage d’Incar Drive.
+- Sur autoroute, quand la carte n’indique pas de limitation : 120 km/h, la limite des autoroutes marocaines.
+- Rappel : les limitations et radars viennent d’OpenStreetMap ; au Maroc, beaucoup de rues n’ont pas encore leur limitation et peu de radars y sont cartographiés. Sans donnée, rien n’est affiché plutôt qu’une valeur inventée.
+
+Comprend aussi la 1.0.20 :
 - Reprise du dernier média à chaque démarrage de la voiture : la dernière appli écoutée (Radio Maroc & Coran et sa dernière station, ou une autre) se relance toute seule quand le boîtier démarre, mais aussi quand il se réveille de sa veille après le contact coupé (écran éteint plus d’une minute et demie), même si une autre appli est devant. Si elle ne démarre pas du premier coup (Internet ou l’appli pas encore prêts), Incar Drive redemande jusqu’à trois fois. Rien n’est relancé si un son joue déjà. À désactiver dans Réglages (reprise automatique).
 - Bulle de la radio au démarrage : quand Radio Maroc & Coran reprend toute seule au démarrage du boîtier, sa bulle flottante ne s’affiche plus par-dessus l’accueil (la radio n’avait pas encore été prévenue que l’accueil était devant).
 - Jour ou nuit au démarrage : tant que l’horloge du boîtier n’est pas encore à l’heure (elle l’est quelques secondes après, par le réseau ou le GPS), l’accueil démarre en jour au lieu de passer en nuit par erreur ; il suit ensuite l’heure, comme avant.
 - Carte : le zoom suit la vitesse en douceur, petit à petit : un peu plus vite, la carte s’élargit un peu ; plus vite encore, davantage ; en ralentissant elle se rapproche, sans saut. Les boutons + et − gardent la main une minute.
 
-Comprend aussi la 1.0.19 :
+Et la 1.0.19 :
 - Appel en bandeau en haut de l’accueil, sans cacher l’écran : la photo du contact quand l’appli téléphone la donne (sinon ses initiales), avec un anneau vert qui bat pendant que ça sonne, le nom, le numéro, et des boutons ronds Refuser et Répondre. En appel : la durée qui défile, Raccrocher et Couper le micro (si l’appli téléphone n’a pas son propre bouton). Un toucher sur le nom ouvre l’appli téléphone. Les boutons sont ceux de l’appli téléphone du boîtier.
 - Carnet de trajets quotidiens : dans Trajet › Carnet, les kilomètres, le temps de conduite, le nombre de trajets et le carburant d’aujourd’hui, de la semaine et du mois, puis chaque jour avec son total et ses trajets (heures, distance, durée, vitesse moyenne, carburant). Un trajet est rangé quand le suivant commence (au démarrage suivant, après deux heures d’arrêt, ou avec « Remettre à zéro ») ; ceux de moins de 200 m ne sont pas gardés. Tout reste sur le boîtier (les 500 derniers trajets, des mois de trajets quotidiens).
 - Carburant estimé : pour chaque trajet, chaque jour, la semaine et le mois, et dans Trajet (« Carburant estimé »). Incar Drive ne lit pas la voiture : il part de la consommation moyenne que montre l’écran de ta voiture (4,5 L/100 km par défaut, à régler dans Carnet › Carburant) et l’ajuste à la vitesse moyenne du trajet, comme une hybride : moins en ville, plus dans les bouchons, sur route rapide et sur les trajets courts moteur froid. Avec le prix du litre (facultatif), le coût en dirhams s’affiche aussi. C’est une estimation, pas la mesure de la voiture.

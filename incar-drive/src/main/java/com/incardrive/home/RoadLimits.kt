@@ -1,6 +1,7 @@
 package com.incardrive.home
 
 import org.json.JSONObject
+import java.io.File
 import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URI
@@ -8,6 +9,7 @@ import java.net.URLEncoder
 import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.cos
+import kotlin.math.floor
 import kotlin.math.roundToInt
 import kotlin.math.sqrt
 
@@ -18,73 +20,114 @@ internal data class Road(val limit: Int?, val name: String?, val points: List<Pa
 internal data class Camera(val latitude: Double, val longitude: Double, val limit: Int?)
 
 /**
- * The legal speed limit of the road the car is on, from OpenStreetMap's `maxspeed` tags through the public Overpass
- * API. Roads within 800 m are fetched once and matched locally to each GPS fix; they are fetched again after 450 m.
- * Only the position is sent, with no identifier. Roads without a limit in the map give no limit, rather than a guess,
- * except the Moroccan default tags (urban 60, rural 100, motorway 120).
+ * The legal speed limit of the road the car is on, and the fixed speed cameras, from OpenStreetMap's tags through the
+ * public Overpass API. The map is fetched by squares of about 2 km and each square is kept on the head unit for
+ * [KEEP_DAYS] days: on the usual trips nothing is fetched again, and the limits and cameras work without Internet or
+ * when the free servers are busy (they often take 40 seconds, or do not answer). Only the square's corners are sent,
+ * with no identifier. Roads without a limit in the map give no limit, rather than a guess, except the Moroccan
+ * default tags (urban 60, rural 100, motorway 120) and a motorway, which is 120.
  */
-internal class RoadLimits {
-    private var roads: List<Road> = emptyList()
-    private var cameras: List<Camera> = emptyList()
-    private var center: Pair<Double, Double>? = null
-    private var lastAttempt = 0L
-    private var failures = 0
+internal class RoadLimits(private val folder: File? = null) {
+    @Volatile private var roads: List<Road> = emptyList()
+    @Volatile private var cameras: List<Camera> = emptyList()
+    // The squares read, from the disk or the server, while the car is around them.
+    private val tiles = HashMap<String, Pair<List<Road>, List<Camera>>>()
+    // Where the roads around the car were last gathered from the squares.
+    @Volatile private var gatheredAt: Pair<Double, Double>? = null
+    @Volatile private var lastAttempt = 0L
+    @Volatile private var failures = 0
 
-    /** True when the roads around [latitude], [longitude] should be fetched now. */
+    private fun waitMs() = if (failures == 0) 0L else (RETRY_MS shl (failures - 1).coerceAtMost(4)).coerceAtMost(300_000L)
+
+    /** True when something should be done for [latitude], [longitude] now (read a square, fetch one, or gather). */
     fun needsRefresh(latitude: Double, longitude: Double, now: Long): Boolean {
-        // After a failure (no network, or the free server is busy) wait longer each time, up to five minutes.
-        val wait = if (failures == 0) RETRY_MS else (RETRY_MS shl (failures - 1).coerceAtMost(4)).coerceAtMost(300_000L)
-        if (now - lastAttempt < wait) return false
-        val from = center ?: return true
-        return TripMeter.distanceMeters(from.first, from.second, latitude, longitude) > REFRESH_METERS
+        val from = gatheredAt ?: return true
+        if (TripMeter.distanceMeters(from.first, from.second, latitude, longitude) > GATHER_METERS) return true
+        val missing = needed(latitude, longitude).any { it !in tiles }
+        return missing && now - lastAttempt >= waitMs()
     }
 
     /** Blocking: call off the main thread. */
     fun refresh(latitude: Double, longitude: Double, now: Long) {
-        lastAttempt = now
-        // The public Overpass servers are often busy: try each in turn.
+        val wanted = needed(latitude, longitude)
+        wanted.forEach { key -> if (key !in tiles) readTile(key)?.let { tiles[key] = it } }
+        // One square from the server at a time: the one under the car first, then the next one ahead.
+        val missing = wanted.firstOrNull { it !in tiles }
+        if (missing != null && now - lastAttempt >= waitMs()) {
+            lastAttempt = now
+            val fetched = fetch(missing)
+            if (fetched == null) failures++ else {
+                failures = 0
+                tiles[missing] = fetched
+                writeTile(missing, fetched)
+            }
+        }
+        // Keep in memory only the squares around the car.
+        val around = around(latitude, longitude).toSet()
+        tiles.keys.retainAll(around)
+        val near = tiles.values
+        roads = near.flatMap { it.first }.filter { road ->
+            road.points.any { TripMeter.distanceMeters(latitude, longitude, it.first, it.second) < NEAR_METERS }
+        }
+        cameras = near.flatMap { it.second }
+        gatheredAt = latitude to longitude
+        android.util.Log.i(TAG, "${roads.size} roads around the car, ${roads.count { it.limit != null }} with a limit, " +
+            "${cameras.size} speed cameras, ${tiles.size} squares")
+    }
+
+    private fun fetch(key: String): Pair<List<Road>, List<Camera>>? {
+        val (south, west) = corner(key)
+        val query = query(south - MARGIN, west - MARGIN, south + TILE + MARGIN, west + TILE + MARGIN)
         var result: Result<Pair<List<Road>, List<Camera>>> = Result.failure(IOException("No server"))
         for (server in SERVERS) {
-            result = runCatching { download(server, query(latitude, longitude)).let { parse(it) to parseCameras(it) } }
+            result = runCatching { download(server, query).let { parse(it) to parseCameras(it) } }
             if (result.isSuccess) break
             android.util.Log.d(TAG, "$server: ${result.exceptionOrNull()?.message}")
         }
-        val fetched = result.getOrNull()
-        if (fetched == null) {
-            failures++
-            android.util.Log.w(TAG, "Road limits unavailable (attempt $failures): ${result.exceptionOrNull()?.message}")
-            return
+        if (result.isFailure) android.util.Log.w(TAG, "Square $key unavailable (attempt ${failures + 1}): ${result.exceptionOrNull()?.message}")
+        return result.getOrNull()
+    }
+
+    private fun file(key: String) = folder?.let { File(it, "$key.txt") }
+
+    private fun readTile(key: String): Pair<List<Road>, List<Camera>>? {
+        val file = file(key)?.takeIf { it.isFile } ?: return null
+        if (System.currentTimeMillis() - file.lastModified() > KEEP_DAYS * 86_400_000L) return null
+        return runCatching { decodeTile(file.readText()) }.getOrNull()
+    }
+
+    private fun writeTile(key: String, tile: Pair<List<Road>, List<Camera>>) {
+        val file = file(key) ?: return
+        runCatching {
+            file.parentFile?.mkdirs()
+            val temp = File(file.path + ".part")
+            temp.writeText(encodeTile(tile))
+            temp.renameTo(file)
         }
-        failures = 0
-        android.util.Log.i(TAG, "${fetched.first.size} roads around the car, ${fetched.first.count { it.limit != null }} with a limit, " +
-            "${fetched.second.size} speed cameras")
-        roads = fetched.first
-        cameras = fetched.second
-        center = latitude to longitude
     }
 
     /** The limit of the road the car is on, or null when unknown. */
     fun limitAt(latitude: Double, longitude: Double, bearing: Int?): Road? = match(roads, latitude, longitude, bearing)
 
-    /** The nearest speed camera ahead of the car, and its distance in metres. */
     /** The speed cameras found around the car, for the map. */
     fun cameraList(): List<Camera> = cameras
 
+    /** The nearest speed camera ahead of the car, and its distance in metres. */
     fun cameraAhead(latitude: Double, longitude: Double, bearing: Int?): Pair<Camera, Int>? =
         cameraAhead(cameras, latitude, longitude, bearing)
 
-    private fun query(latitude: Double, longitude: Double) =
-        "[out:json][timeout:30];(way(around:$RADIUS,$latitude,$longitude)[highway~\"^($ROAD_TYPES)$\"];" +
-            "node(around:$CAMERA_RADIUS,$latitude,$longitude)[highway=speed_camera];);out tags geom;"
+    private fun query(south: Double, west: Double, north: Double, east: Double) =
+        "[out:json][timeout:55][bbox:$south,$west,$north,$east];(way[highway~\"^($ROAD_TYPES)$\"];" +
+            "node[highway=speed_camera];);out tags geom;"
 
     private fun download(server: String, query: String): String {
         val url = URI("$server?data=" + URLEncoder.encode(query, "UTF-8")).toURL()
         val connection = url.openConnection() as HttpURLConnection
         try {
             connection.instanceFollowRedirects = false
-            // A busy public server can take 20 seconds or more to answer.
+            // A busy public server can take 40 seconds or more to answer.
             connection.connectTimeout = 8_000
-            connection.readTimeout = 35_000
+            connection.readTimeout = 60_000
             connection.setRequestProperty("User-Agent", "IncarDrive/1.0 (speed limit display)")
             if (connection.responseCode != HttpURLConnection.HTTP_OK) throw IOException("Overpass ${connection.responseCode}")
             val out = java.io.ByteArrayOutputStream()
@@ -107,15 +150,78 @@ internal class RoadLimits {
         const val TAG = "IncarDriveRoads"
         val SERVERS = listOf("https://overpass-api.de/api/interpreter", "https://overpass.kumi.systems/api/interpreter",
             "https://overpass.private.coffee/api/interpreter")
-        const val RADIUS = 800
-        const val CAMERA_RADIUS = 2000
         const val CAMERA_WARNING_METERS = 500
-        const val REFRESH_METERS = 450.0
+        /** A square of the map: 0.02° (about 2.2 × 1.9 km in Morocco), fetched with a small margin. */
+        const val TILE = 0.02
+        const val MARGIN = 0.001
+        const val KEEP_DAYS = 45
+        /** The squares within this distance of the car are read or fetched. */
+        const val AHEAD_METERS = 700.0
+        /** The roads this close to the car are matched; gathered again after [GATHER_METERS]. */
+        const val NEAR_METERS = 1_500.0
+        const val GATHER_METERS = 400.0
         const val RETRY_MS = 20_000L
         const val MATCH_METERS = 30.0
         const val LIMIT_BYTES = 3_000_000
         const val ROAD_TYPES = "motorway|motorway_link|trunk|trunk_link|primary|primary_link|secondary|secondary_link|" +
             "tertiary|tertiary_link|unclassified|residential|living_street|road"
+
+        fun key(latitude: Double, longitude: Double) = "${floor(latitude / TILE).toInt()}_${floor(longitude / TILE).toInt()}"
+
+        fun corner(key: String): Pair<Double, Double> {
+            val (row, column) = key.split('_').map { it.toInt() }
+            return row * TILE to column * TILE
+        }
+
+        /** The square under the car and its eight neighbours. */
+        fun around(latitude: Double, longitude: Double): List<String> {
+            val row = floor(latitude / TILE).toInt()
+            val column = floor(longitude / TILE).toInt()
+            return (-1..1).flatMap { dr -> (-1..1).map { dc -> "${row + dr}_${column + dc}" } }
+        }
+
+        /** The square under the car first, then the neighbours whose edge is within [AHEAD_METERS], nearest first. */
+        fun needed(latitude: Double, longitude: Double): List<String> {
+            val here = key(latitude, longitude)
+            return listOf(here) + around(latitude, longitude).filter { it != here }.map { key ->
+                val (south, west) = corner(key)
+                val lat = latitude.coerceIn(south, south + TILE)
+                val lon = longitude.coerceIn(west, west + TILE)
+                key to TripMeter.distanceMeters(latitude, longitude, lat, lon)
+            }.filter { it.second < AHEAD_METERS }.sortedBy { it.second }.map { it.first }
+        }
+
+        /** A square kept on the head unit, one line per road (R) or camera (C). */
+        fun encodeTile(tile: Pair<List<Road>, List<Camera>>): String = buildString {
+            tile.first.forEach { road ->
+                append("R|").append(road.limit ?: "").append('|').append(road.name?.replace(Regex("[|\\n\\r]"), " ") ?: "").append('|')
+                road.points.joinTo(this, ";") { "${it.first},${it.second}" }
+                append('\n')
+            }
+            tile.second.forEach { append("C|${it.latitude}|${it.longitude}|${it.limit ?: ""}\n") }
+        }
+
+        fun decodeTile(text: String): Pair<List<Road>, List<Camera>> {
+            val roads = mutableListOf<Road>()
+            val cameras = mutableListOf<Camera>()
+            text.lineSequence().forEach { line ->
+                val parts = line.split('|')
+                when (parts.firstOrNull()) {
+                    "R" -> if (parts.size == 4) {
+                        val points = parts[3].split(';').mapNotNull { point ->
+                            point.split(',').takeIf { it.size == 2 }?.let { (a, b) -> a.toDoubleOrNull()?.let { x -> b.toDoubleOrNull()?.let { x to it } } }
+                        }
+                        if (points.size >= 2) roads += Road(parts[1].toIntOrNull(), parts[2].ifEmpty { null }, points)
+                    }
+                    "C" -> if (parts.size == 4) {
+                        val lat = parts[1].toDoubleOrNull()
+                        val lon = parts[2].toDoubleOrNull()
+                        if (lat != null && lon != null) cameras += Camera(lat, lon, parts[3].toIntOrNull())
+                    }
+                }
+            }
+            return roads to cameras
+        }
 
         /** km/h from an OSM maxspeed value: « 60 », « 30 mph », or a Moroccan default like « MA:urban ». */
         fun parseMaxspeed(value: String?): Int? {
@@ -172,6 +278,8 @@ internal class RoadLimits {
                 val limit = parseMaxspeed(tags.optString("maxspeed").ifEmpty { null })
                     ?: parseMaxspeed(tags.optString("maxspeed:type").ifEmpty { null })
                     ?: parseMaxspeed(tags.optString("source:maxspeed").ifEmpty { null })
+                    // A motorway with no limit in the map: 120, the Moroccan motorway limit.
+                    ?: 120.takeIf { tags.optString("highway") == "motorway" }
                 Road(limit, tags.optString("name:fr").ifEmpty { tags.optString("name") }.ifEmpty { null }, points)
             }
         }

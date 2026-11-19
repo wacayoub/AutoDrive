@@ -216,7 +216,9 @@ class HomeActivity : Activity() {
     private lateinit var screenRoot: FrameLayout
     private var shownSky: Sky? = null
     private var alerted = false
-    private val roadLimits = RoadLimits()
+    private val roadLimits by lazy { RoadLimits(java.io.File(noBackupFilesDir, "roads")) }
+    // Its own thread: a fetch carries on (and ends) even when the home screen goes behind Maps meanwhile.
+    private val roadWorker = java.util.concurrent.Executors.newSingleThreadExecutor()
     private var roadLimit: Int? = null
     private var fetchingRoads = false
     private lateinit var limitSign: LimitSign
@@ -322,6 +324,7 @@ class HomeActivity : Activity() {
         if (::wazeMap.isInitialized) wazeMap.destroy()
         if (::googleWeb.isInitialized) googleWeb.destroy()
         if (::clicks.isInitialized) clicks.release()
+        roadWorker.shutdown()
         super.onDestroy()
     }
 
@@ -1816,16 +1819,22 @@ class HomeActivity : Activity() {
     /** The limit the dial and the beep use now. */
     private fun activeLimit(): Int? = if (roadMode()) roadLimit else alertSetting().takeIf { it > 0 }
 
-    /** Matches each GPS fix to the road under the car; fetches the roads around it again every 350 m. */
+    /** Matches each GPS fix to the road under the car; reads or fetches the map squares around it as it goes. */
     private fun followRoad(fix: android.location.Location, kmh: Int?) {
         val now = System.currentTimeMillis()
-        if (!fetchingRoads && roadLimits.needsRefresh(fix.latitude, fix.longitude, now)) {
+        if (!fetchingRoads && !roadWorker.isShutdown && roadLimits.needsRefresh(fix.latitude, fix.longitude, now)) {
             fetchingRoads = true
-            scope?.launch {
-                withContext(Dispatchers.IO) { roadLimits.refresh(fix.latitude, fix.longitude, now) }
-                ownMap.cameras(roadLimits.cameraList())
-                fetchingRoads = false
-            } ?: run { fetchingRoads = false }
+            roadWorker.execute {
+                try {
+                    roadLimits.refresh(fix.latitude, fix.longitude, now)
+                } catch (_: Exception) {
+                } finally {
+                    runOnUiThread {
+                        fetchingRoads = false
+                        if (!isDestroyed) ownMap.cameras(roadLimits.cameraList())
+                    }
+                }
+            }
         }
         val bearing = if ((kmh ?: 0) >= 5 && fix.hasBearing()) fix.bearing.toInt() else null
         val road = roadLimits.limitAt(fix.latitude, fix.longitude, bearing)

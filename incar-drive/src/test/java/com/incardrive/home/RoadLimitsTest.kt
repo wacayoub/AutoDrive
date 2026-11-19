@@ -77,4 +77,27 @@ class RoadLimitsTest {
         // Driving south, away from it: no warning.
         assertNull(RoadLimits.cameraAhead(cameras, 33.5873, -7.6200, 180))
     }
+
+    @Test
+    fun aSquareSurvivesBeingKept() {
+        val tile = listOf(Road(60, "Bd | Zerktouni", listOf(33.58 to -7.62, 33.581 to -7.621)), Road(null, null, listOf(33.5 to -7.6, 33.6 to -7.7))) to
+            listOf(Camera(33.59, -7.63, 80), Camera(33.6, -7.64, null))
+        val again = RoadLimits.decodeTile(RoadLimits.encodeTile(tile))
+        assertEquals(2, again.first.size)
+        assertEquals("Bd   Zerktouni", again.first[0].name)
+        assertEquals(60, again.first[0].limit)
+        assertNull(again.first[1].limit)
+        assertEquals(tile.first[1].points, again.first[1].points)
+        assertEquals(tile.second, again.second)
+    }
+
+    @Test
+    fun theSquareUnderTheCarComesFirst() {
+        // In the middle of a square: only that one; near its north edge: the one to the north as well.
+        assertEquals(listOf(RoadLimits.key(33.57, -7.59)), RoadLimits.needed(33.57, -7.59))
+        val nearEdge = RoadLimits.needed(33.5795, -7.59)
+        assertEquals(RoadLimits.key(33.5795, -7.59), nearEdge[0])
+        assertEquals(RoadLimits.key(33.5805, -7.59), nearEdge[1])
+        assertEquals(9, RoadLimits.around(33.57, -7.59).size)
+    }
 }
