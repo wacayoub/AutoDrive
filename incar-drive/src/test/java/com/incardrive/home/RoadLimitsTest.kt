@@ -100,4 +100,51 @@ class RoadLimitsTest {
         assertEquals(RoadLimits.key(33.5805, -7.59), nearEdge[1])
         assertEquals(9, RoadLimits.around(33.57, -7.59).size)
     }
+
+    // A divided boulevard: the eastern carriageway goes north, the western one south, 20 m apart; a service road
+    // (two-way) runs 12 m east of the northbound side.
+    private val divided = listOf(
+        Road(60, "Nord", listOf(33.580 to -7.6200, 33.590 to -7.6200), oneway = 1),
+        Road(80, "Sud", listOf(33.590 to -7.62022, 33.580 to -7.62022), oneway = 1),
+        Road(40, "Contre-allée", listOf(33.580 to -7.61987, 33.590 to -7.61987)),
+    )
+
+    @Test
+    fun onADividedRoadTheSideBeingDrivenIsChosen() {
+        // Between both carriageways, nearer the southbound one, but driving north: the northbound side.
+        assertEquals("Nord", RoadLimits.match(divided, 33.585, -7.62015, 0)?.name)
+        // The same place driving south: the southbound side.
+        assertEquals("Sud", RoadLimits.match(divided, 33.585, -7.62005, 180)?.name)
+    }
+
+    @Test
+    fun theRoadBeingDrivenIsKeptAgainstAParallelOne() {
+        // Halfway between the northbound side and the service road: the previous road is kept.
+        val halfway = -7.619935
+        assertEquals("Nord", RoadLimits.match(divided, 33.585, halfway, 0, divided[0])?.name)
+        assertEquals("Contre-allée", RoadLimits.match(divided, 33.585, halfway, 0, divided[2])?.name)
+    }
+
+    @Test
+    fun aOneWayRoadKeepsItsDirectionWhenKept() {
+        val again = RoadLimits.decodeTile(RoadLimits.encodeTile(divided to emptyList()))
+        assertEquals(listOf(1, 1, 0), again.first.map { it.oneway })
+        // A square kept by an older version, without the direction: two-way.
+        assertEquals(0, RoadLimits.decodeTile("R|60|Bd|33.5,-7.6;33.6,-7.6").first.single().oneway)
+    }
+
+    @Test
+    fun aRoadsideCameraCloseAheadIsAnnounced() {
+        // 80 m ahead and 30 m to the side (a pole across a wide road): about 20° off the heading.
+        val camera = Camera(33.58072, -7.61968, 60)
+        assertEquals(camera, RoadLimits.cameraAhead(listOf(camera), 33.580, -7.6200, 0)?.first)
+        // 60 m to the side and 50 m ahead: another street, not announced.
+        assertNull(RoadLimits.cameraAhead(listOf(Camera(33.58045, -7.61935, null)), 33.580, -7.6200, 0))
+    }
+
+    @Test
+    fun anEnforcementNodeIsACamera() {
+        val json = """{"elements":[{"type":"node","lat":33.6,"lon":-7.6,"tags":{"enforcement":"maxspeed","maxspeed":"80"}}]}"""
+        assertEquals(80, RoadLimits.parseCameras(json).single().limit)
+    }
 }

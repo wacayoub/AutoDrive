@@ -13,10 +13,14 @@ import kotlin.math.floor
 import kotlin.math.roundToInt
 import kotlin.math.sqrt
 
-/** A road around the car: its speed limit (null when the map has none) and its shape. */
-internal data class Road(val limit: Int?, val name: String?, val points: List<Pair<Double, Double>>)
+/**
+ * A road around the car: its speed limit (null when the map has none) and its shape. [oneway] is 1 when it may only
+ * be driven in the direction of its points, -1 against them, 0 both ways: each side of a divided road is its own
+ * one-way road, which is how the side the car is on is told apart from the other one.
+ */
+internal data class Road(val limit: Int?, val name: String?, val points: List<Pair<Double, Double>>, val oneway: Int = 0)
 
-/** A fixed speed camera from OpenStreetMap (`highway=speed_camera`), with its limit when tagged. */
+/** A fixed speed camera from OpenStreetMap (`highway=speed_camera`, or `enforcement=maxspeed`), with its limit when tagged. */
 internal data class Camera(val latitude: Double, val longitude: Double, val limit: Int?)
 
 /**
@@ -36,6 +40,8 @@ internal class RoadLimits(private val folder: File? = null) {
     @Volatile private var gatheredAt: Pair<Double, Double>? = null
     @Volatile private var lastAttempt = 0L
     @Volatile private var failures = 0
+    // The road matched last: kept while it still fits, so the car does not jump to a road running beside it.
+    @Volatile private var lastRoad: Road? = null
 
     private fun waitMs() = if (failures == 0) 0L else (RETRY_MS shl (failures - 1).coerceAtMost(4)).coerceAtMost(300_000L)
 
@@ -51,6 +57,8 @@ internal class RoadLimits(private val folder: File? = null) {
     fun refresh(latitude: Double, longitude: Double, now: Long) {
         val wanted = needed(latitude, longitude)
         wanted.forEach { key -> if (key !in tiles) readTile(key)?.let { tiles[key] = it } }
+        // What is already on the head unit is used at once, before waiting for a server that may take minutes.
+        gather(latitude, longitude)
         // One square from the server at a time: the one under the car first, then the next one ahead.
         val missing = wanted.firstOrNull { it !in tiles }
         if (missing != null && now - lastAttempt >= waitMs()) {
@@ -60,8 +68,13 @@ internal class RoadLimits(private val folder: File? = null) {
                 failures = 0
                 tiles[missing] = fetched
                 writeTile(missing, fetched)
+                gather(latitude, longitude)
             }
         }
+    }
+
+    /** The roads near the car and the cameras of the squares around it, from the squares read so far. */
+    private fun gather(latitude: Double, longitude: Double) {
         // Keep in memory only the squares around the car.
         val around = around(latitude, longitude).toSet()
         tiles.keys.retainAll(around)
@@ -107,7 +120,8 @@ internal class RoadLimits(private val folder: File? = null) {
     }
 
     /** The limit of the road the car is on, or null when unknown. */
-    fun limitAt(latitude: Double, longitude: Double, bearing: Int?): Road? = match(roads, latitude, longitude, bearing)
+    fun limitAt(latitude: Double, longitude: Double, bearing: Int?): Road? =
+        match(roads, latitude, longitude, bearing, lastRoad).also { lastRoad = it }
 
     /** The speed cameras found around the car, for the map. */
     fun cameraList(): List<Camera> = cameras
@@ -118,7 +132,7 @@ internal class RoadLimits(private val folder: File? = null) {
 
     private fun query(south: Double, west: Double, north: Double, east: Double) =
         "[out:json][timeout:55][bbox:$south,$west,$north,$east];(way[highway~\"^($ROAD_TYPES)$\"];" +
-            "node[highway=speed_camera];);out tags geom;"
+            "node[highway=speed_camera];node[enforcement~\"^(maxspeed|average_speed)$\"];);out tags geom;"
 
     private fun download(server: String, query: String): String {
         val url = URI("$server?data=" + URLEncoder.encode(query, "UTF-8")).toURL()
@@ -162,6 +176,11 @@ internal class RoadLimits(private val folder: File? = null) {
         const val GATHER_METERS = 400.0
         const val RETRY_MS = 20_000L
         const val MATCH_METERS = 30.0
+        /** A one-way road whose direction is further than this from the car's heading is the other carriageway. */
+        const val WRONG_WAY_DEGREES = 100.0
+        const val KEEP_BONUS_METERS = 6.0
+        /** How far beside the car's path a camera ahead may stand: a roadside pole on a wide road. */
+        const val CAMERA_SIDE_METERS = 40.0
         const val LIMIT_BYTES = 3_000_000
         const val ROAD_TYPES = "motorway|motorway_link|trunk|trunk_link|primary|primary_link|secondary|secondary_link|" +
             "tertiary|tertiary_link|unclassified|residential|living_street|road"
@@ -196,7 +215,7 @@ internal class RoadLimits(private val folder: File? = null) {
             tile.first.forEach { road ->
                 append("R|").append(road.limit ?: "").append('|').append(road.name?.replace(Regex("[|\\n\\r]"), " ") ?: "").append('|')
                 road.points.joinTo(this, ";") { "${it.first},${it.second}" }
-                append('\n')
+                append('|').append(road.oneway).append('\n')
             }
             tile.second.forEach { append("C|${it.latitude}|${it.longitude}|${it.limit ?: ""}\n") }
         }
@@ -207,11 +226,12 @@ internal class RoadLimits(private val folder: File? = null) {
             text.lineSequence().forEach { line ->
                 val parts = line.split('|')
                 when (parts.firstOrNull()) {
-                    "R" -> if (parts.size == 4) {
+                    "R" -> if (parts.size == 4 || parts.size == 5) {
                         val points = parts[3].split(';').mapNotNull { point ->
                             point.split(',').takeIf { it.size == 2 }?.let { (a, b) -> a.toDoubleOrNull()?.let { x -> b.toDoubleOrNull()?.let { x to it } } }
                         }
-                        if (points.size >= 2) roads += Road(parts[1].toIntOrNull(), parts[2].ifEmpty { null }, points)
+                        val oneway = parts.getOrNull(4)?.toIntOrNull()?.coerceIn(-1, 1) ?: 0
+                        if (points.size >= 2) roads += Road(parts[1].toIntOrNull(), parts[2].ifEmpty { null }, points, oneway)
                     }
                     "C" -> if (parts.size == 4) {
                         val lat = parts[1].toDoubleOrNull()
@@ -242,15 +262,17 @@ internal class RoadLimits(private val folder: File? = null) {
             return (0 until elements.length()).mapNotNull { index ->
                 val node = elements.optJSONObject(index)?.takeIf { it.optString("type") == "node" } ?: return@mapNotNull null
                 val tags = node.optJSONObject("tags")
-                if (tags?.optString("highway") != "speed_camera") return@mapNotNull null
+                if (tags?.optString("highway") != "speed_camera" &&
+                    tags?.optString("enforcement") !in setOf("maxspeed", "average_speed")) return@mapNotNull null
                 Camera(node.optDouble("lat"), node.optDouble("lon"), parseMaxspeed(tags.optString("maxspeed").ifEmpty { null }))
                     .takeIf { !it.latitude.isNaN() && !it.longitude.isNaN() }
             }
         }
 
         /**
-         * The closest camera within [CAMERA_WARNING_METERS] that lies ahead: within 35° of the heading when it is
-         * known, otherwise within 200 m in any direction.
+         * The closest camera within [CAMERA_WARNING_METERS] that lies ahead: within 35° of the heading (the road may
+         * bend), or in front of the car and less than [CAMERA_SIDE_METERS] to the side of its path (a camera on a pole
+         * at the roadside, seen at a wide angle when close). Without a heading, within 200 m in any direction.
          */
         fun cameraAhead(cameras: List<Camera>, latitude: Double, longitude: Double, bearing: Int?): Pair<Camera, Int>? =
             cameras.mapNotNull { camera ->
@@ -262,7 +284,8 @@ internal class RoadLimits(private val folder: File? = null) {
                 val toward = (Math.toDegrees(atan2(dx, dy)) + 360) % 360
                 var diff = abs(toward - bearing) % 360
                 if (diff > 180) diff = 360 - diff
-                (camera to meters.toInt()).takeIf { diff <= 35 || meters < 40 }
+                val side = meters * kotlin.math.sin(Math.toRadians(diff))
+                (camera to meters.toInt()).takeIf { diff <= 35 || (diff < 90 && side <= CAMERA_SIDE_METERS) || meters < 40 }
             }.minByOrNull { it.second }
 
         fun parse(json: String): List<Road> {
@@ -280,15 +303,27 @@ internal class RoadLimits(private val folder: File? = null) {
                     ?: parseMaxspeed(tags.optString("source:maxspeed").ifEmpty { null })
                     // A motorway with no limit in the map: 120, the Moroccan motorway limit.
                     ?: 120.takeIf { tags.optString("highway") == "motorway" }
-                Road(limit, tags.optString("name:fr").ifEmpty { tags.optString("name") }.ifEmpty { null }, points)
+                Road(limit, tags.optString("name:fr").ifEmpty { tags.optString("name") }.ifEmpty { null }, points, oneway(tags))
             }
+        }
+
+        /** 1, -1 or 0 from OSM's `oneway`; motorways and roundabouts are one-way unless tagged otherwise. */
+        fun oneway(tags: JSONObject): Int = when (tags.optString("oneway").lowercase()) {
+            "yes", "true", "1" -> 1
+            "-1", "reverse" -> -1
+            "no", "false", "0", "reversible", "alternating" -> 0
+            else -> if (tags.optString("highway") in setOf("motorway", "motorway_link") ||
+                tags.optString("junction") in setOf("roundabout", "circular")) 1 else 0
         }
 
         /**
          * The road nearest to the position within [MATCH_METERS]. When the car's heading is known, a road running
-         * across it counts as further away, so a crossing street is not taken for the road being driven.
+         * across it counts as further away, so a crossing street is not taken for the road being driven; a one-way
+         * road going the other way is not taken at all, so on a divided road or beside a parallel one-way street the
+         * side the car drives on is chosen. The [previous] road keeps a small advantage while it still fits, so a
+         * road a few metres beside it (a service road, a slip road) does not take over at each GPS wobble.
          */
-        fun match(roads: List<Road>, latitude: Double, longitude: Double, bearing: Int?): Road? {
+        fun match(roads: List<Road>, latitude: Double, longitude: Double, bearing: Int?, previous: Road? = null): Road? {
             val metersPerLat = 111_195.0
             val metersPerLon = metersPerLat * cos(Math.toRadians(latitude))
             var best: Road? = null
@@ -305,14 +340,21 @@ internal class RoadLimits(private val folder: File? = null) {
                     val t = if (length == 0.0) 0.0 else (-(ax * dx + ay * dy) / length).coerceIn(0.0, 1.0)
                     val distance = sqrt((ax + t * dx).let { it * it } + (ay + t * dy).let { it * it })
                     if (distance > MATCH_METERS) return@forEach
+                    if (bearing != null && road.oneway != 0) {
+                        val forward = (Math.toDegrees(atan2(dx, dy)) + if (road.oneway > 0) 360 else 540) % 360
+                        var wrongWay = abs(forward - bearing) % 360
+                        if (wrongWay > 180) wrongWay = 360 - wrongWay
+                        if (wrongWay > WRONG_WAY_DEGREES) return@forEach
+                    }
                     val penalty = bearing?.let {
                         val segment = (Math.toDegrees(atan2(dx, dy)) + 360) % 360
                         var diff = abs(segment - it) % 180
                         if (diff > 90) diff = 180 - diff
                         diff / 90 * 20
                     } ?: 0.0
-                    if (distance + penalty < bestScore) {
-                        bestScore = distance + penalty
+                    val score = distance + penalty - if (previous != null && road == previous) KEEP_BONUS_METERS else 0.0
+                    if (score < bestScore) {
+                        bestScore = score
                         best = road
                     }
                 }

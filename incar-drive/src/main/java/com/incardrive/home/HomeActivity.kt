@@ -216,11 +216,9 @@ class HomeActivity : Activity() {
     private lateinit var screenRoot: FrameLayout
     private var shownSky: Sky? = null
     private var alerted = false
-    private val roadLimits by lazy { RoadLimits(java.io.File(noBackupFilesDir, "roads")) }
+    private val roadLimits get() = RoadWatch.limits(this)
     // Its own thread: a fetch carries on (and ends) even when the home screen goes behind Maps meanwhile.
-    private val roadWorker = java.util.concurrent.Executors.newSingleThreadExecutor()
     private var roadLimit: Int? = null
-    private var fetchingRoads = false
     private lateinit var limitSign: LimitSign
     private var lastTripSave = 0L
     private val iconColors = HashMap<ComponentName, Int?>()
@@ -327,7 +325,6 @@ class HomeActivity : Activity() {
         if (::wazeMap.isInitialized) wazeMap.destroy()
         if (::googleWeb.isInitialized) googleWeb.destroy()
         if (::clicks.isInitialized) clicks.release()
-        roadWorker.shutdown()
         super.onDestroy()
     }
 
@@ -423,6 +420,9 @@ class HomeActivity : Activity() {
         HotspotReminder.changed = { runOnUiThread { showHotspotReminder() } }
         HotspotReminder.driveStarted(this, mediaResume.bootKey())
         if (gps.permitted()) gps.start()
+        // Cameras and limits go on while Maps or another app is in front.
+        RoadWatch.limitSetting = alertSetting()
+        DriveWatch.start(this)
         // Weather where the car is, from the last known position until the GPS answers; the chosen city otherwise.
         currentPosition()?.split(',')?.let { (lat, lon) -> info.usePosition(lat.toDouble(), lon.toDouble()) }
         val tasks = MainScope()
@@ -1800,7 +1800,7 @@ class HomeActivity : Activity() {
         val kmh = state.speed.kmh ?: 0
         if (limit != null && kmh > limit && !alerted) {
             alerted = true
-            runCatching { ToneGenerator(AudioManager.STREAM_NOTIFICATION, 80).startTone(ToneGenerator.TONE_PROP_BEEP2, 400) }
+            RoadWatch.beep(400)
         } else if (limit == null || kmh <= limit - 3) alerted = false
         islandOver = if (limit != null && kmh > limit) "$kmh km/h · limite $limit" else null
         renderIsland()
@@ -1829,21 +1829,10 @@ class HomeActivity : Activity() {
     /** Matches each GPS fix to the road under the car; reads or fetches the map squares around it as it goes. */
     private fun followRoad(fix: android.location.Location, kmh: Int?) {
         val now = System.currentTimeMillis()
-        if (!fetchingRoads && !roadWorker.isShutdown && roadLimits.needsRefresh(fix.latitude, fix.longitude, now)) {
-            fetchingRoads = true
-            roadWorker.execute {
-                try {
-                    roadLimits.refresh(fix.latitude, fix.longitude, now)
-                } catch (_: Exception) {
-                } finally {
-                    runOnUiThread {
-                        fetchingRoads = false
-                        if (!isDestroyed) ownMap.cameras(roadLimits.cameraList())
-                    }
-                }
-            }
+        RoadWatch.follow(this, fix.latitude, fix.longitude) {
+            if (!isDestroyed) ownMap.cameras(roadLimits.cameraList())
         }
-        val bearing = if ((kmh ?: 0) >= 5 && fix.hasBearing()) fix.bearing.toInt() else null
+        val bearing = RoadWatch.bearing(fix, kmh)
         val road = roadLimits.limitAt(fix.latitude, fix.longitude, bearing)
         // The street under the car, shown on the navigation card when not guiding.
         if (road?.name != currentStreet) {
@@ -1861,7 +1850,6 @@ class HomeActivity : Activity() {
     }
 
     private var currentStreet: String? = null
-    private var warnedCamera: Camera? = null
     private lateinit var cameraBadge: TextView
 
     /** A red « Radar 350 m » badge on the speed card, with one double beep per camera, while one is ahead. */
@@ -1869,7 +1857,7 @@ class HomeActivity : Activity() {
         if (!::cameraBadge.isInitialized) return
         if (ahead == null || (kmh ?: 0) < 10) {
             cameraBadge.visibility = View.GONE
-            if (ahead == null) warnedCamera = null
+            if (ahead == null) RoadWatch.warnedCamera = null
             islandCamera = null
             roadGauge?.camera(debugCamera(), debugCamera()?.let { 60 })
             renderRoadCorner()
@@ -1887,9 +1875,9 @@ class HomeActivity : Activity() {
         renderRoadCorner()
         renderIsland()
         cameraBadge.visibility = View.VISIBLE
-        if (warnedCamera != camera) {
-            warnedCamera = camera
-            runCatching { ToneGenerator(AudioManager.STREAM_NOTIFICATION, 90).startTone(ToneGenerator.TONE_PROP_BEEP2, 600) }
+        if (RoadWatch.warnedCamera != camera) {
+            RoadWatch.warnedCamera = camera
+            RoadWatch.beep(600)
         }
     }
 
@@ -1955,6 +1943,7 @@ class HomeActivity : Activity() {
             val limits = listOf(ROAD_LIMIT, 0, 60, 80, 100, 120)
             addView(choices(limits, alertSetting(), { when (it) { ROAD_LIMIT -> "Route"; 0 -> "Non"; else -> "$it" } }, { null }) {
                 prefs.edit().putInt(SPEED_LIMIT, it).apply()
+                RoadWatch.limitSetting = it
             }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
         })
         tripValues = {

@@ -1,12 +1,21 @@
-Incar Drive 1.0.23 — écran d’accueil pour l’Incarlink (Android 11 à 13, conçu pour 800 × 480).
+Incar Drive 1.0.24 — écran d’accueil pour l’Incarlink (Android 11 à 13, conçu pour 800 × 480).
 
 **Mettre à jour** : Réglages › Mises à jour, ou la proposition automatique.
 
 **Changements**
+- Radars et limitations aussi quand Maps, Waze ou YouTube est devant : avant, Incar Drive ne suivait le GPS que lorsque l’accueil était affiché, donc aucun radar n’était annoncé avec Maps ouvert. Un service de position Android prend maintenant le relais : un bip pour chaque radar devant, un bip en dépassant la limite de la route, et une bulle rouge « Radar 400 m · 60 » ou « 72 km/h · limite 60 » en haut de l’écran.
+- Bip plus audible : les alertes passent par le son des médias, au volume de la radio, au lieu du son des notifications, souvent muet sur le boîtier pendant la radio.
+- Radars connus tout de suite : en arrivant dans une nouvelle zone, les radars et limitations déjà gardés sur le boîtier servent immédiatement, sans attendre la fin du téléchargement des zones voisines, qui pouvait prendre plusieurs minutes.
+- Radars mieux repérés : un radar sur un poteau au bord d’une route large est annoncé même vu de biais en approchant, et les radars cartographiés comme contrôle de vitesse (enforcement) sont aussi pris en compte.
+- La bonne route entre deux routes parallèles : sur un boulevard à deux chaussées, la chaussée dans ton sens est choisie (l’autre sens est ignoré), et la route suivie est gardée face à une contre-allée ou une bretelle à quelques mètres, au lieu de sauter de l’une à l’autre.
+- La carte des routes gardée sur le boîtier est téléchargée à nouveau une fois, pour y ajouter le sens des routes.
+- Rappel : les radars viennent d’OpenStreetMap ; un radar qui n’y est pas cartographié ne peut pas être annoncé.
+
+Comprend aussi la 1.0.23 :
 - Point d’accès au démarrage : quand la voiture démarre (le boîtier qui s’allume, ou qui se réveille de sa veille après le contact coupé), une bulle « Allumer le point d’accès » s’affiche une minute en bas de l’accueil. Un toucher ouvre directement l’écran Point d’accès et partage de connexion d’Android : il reste à toucher l’interrupteur. Rien ne s’affiche si le point d’accès est déjà allumé. Android réserve l’allumage du point d’accès aux applis système du boîtier ; Incar Drive ne peut donc pas l’allumer lui-même. À désactiver dans Réglages › Point d’accès.
 - La tuile « Partage » des réglages rapides ouvre aussi directement l’écran du point d’accès.
 
-Comprend aussi la 1.0.22 :
+Et la 1.0.22 :
 - Diagnostic d’appel (Réglages › Diagnostic d’appel) : pendant un appel de test, Incar Drive note les notifications que publient les applis du boîtier (le nom de l’appli, son type, si elle reste affichée, les noms de ses boutons, si elle parle d’un appel, et si Incar Drive l’affiche en bandeau ou l’ignore). Le nom et le numéro de l’appelant, et le texte des notifications, ne sont jamais gardés. Les 14 dernières restent sur le boîtier ; « Effacer » vide la liste.
 - Appels détectés plus largement : le bandeau d’appel d’Incar Drive s’affiche aussi quand l’appli téléphone publie une notification d’appel sans boutons Répondre ou Raccrocher (« Calling... », « Appel en cours », « 通话中 »). Un toucher sur le nom ouvre l’appli téléphone.
 - Avec l’appli téléphone de l’Incarlink, le bandeau se place sous sa barre grise « Calling... », que l’Incarlink affiche par-dessus tous les écrans et qu’Incar Drive ne peut pas cacher.

@@ -6,6 +6,9 @@
     <!-- GPS speed, asked when the listener taps the speed card. -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <!-- Speed cameras and limits while Google Maps or another app is in front. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
     <!-- Quick settings: Wi-Fi state, brightness (granted by the listener in Android's own screen). -->
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.WRITE_SETTINGS" />
@@ -91,5 +94,7 @@
                 <action android:name="android.service.notification.NotificationListenerService" />
             </intent-filter>
         </service>
+        <!-- Speed cameras and the speed limit while another app is in front of the home screen. -->
+        <service android:name=".DriveWatch" android:exported="false" android:foregroundServiceType="location" />
     </application>
 </manifest>
