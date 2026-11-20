@@ -8,6 +8,7 @@ Incar Drive 1.0.24 — écran d’accueil pour l’Incarlink (Android 11 à 13, 
 - Radars connus tout de suite : en arrivant dans une nouvelle zone, les radars et limitations déjà gardés sur le boîtier servent immédiatement, sans attendre la fin du téléchargement des zones voisines, qui pouvait prendre plusieurs minutes.
 - Radars mieux repérés : un radar sur un poteau au bord d’une route large est annoncé même vu de biais en approchant, et les radars cartographiés comme contrôle de vitesse (enforcement) sont aussi pris en compte.
 - La bonne route entre deux routes parallèles : sur un boulevard à deux chaussées, la chaussée dans ton sens est choisie (l’autre sens est ignoré), et la route suivie est gardée face à une contre-allée ou une bretelle à quelques mètres, au lieu de sauter de l’une à l’autre.
+- Zone radar sur la carte : la route est colorée en rouge 100 m avant et 100 m après chaque radar, en suivant la rue à travers les carrefours. L’icône du radar reste aussi sur la carte quand l’accueil se redessine (elle pouvait disparaître).
 - La carte des routes gardée sur le boîtier est téléchargée à nouveau une fois, pour y ajouter le sens des routes.
 - Rappel : les radars viennent d’OpenStreetMap ; un radar qui n’y est pas cartographié ne peut pas être annoncé.
 

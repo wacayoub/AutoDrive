@@ -65,7 +65,12 @@ internal class OwnMap(private val home: HomeActivity, private val open: () -> Un
             credits(null)
             val map = TileView(context, night, navColor, trafficKey) { refused ->
                 credits(if (refused) "clé trafic refusée" else null)
-            }.also { tiles = it }
+            }.also {
+                tiles = it
+                // The home screen is rebuilt now and then: the new map keeps the cameras found so far.
+                it.zones = shownZones
+                it.cameras = shownCameras
+            }
             map.contentDescription = "Carte autour de la voiture. Toucher pour ouvrir la navigation."
             map.setOnClickListener { open() }
             addView(map, FrameLayout.LayoutParams(-1, -1))
@@ -173,7 +178,13 @@ internal class OwnMap(private val home: HomeActivity, private val open: () -> Un
 
     private var streetChip: TextView? = null
 
-    fun cameras(list: List<Camera>) {
+    private var shownCameras: List<Camera> = emptyList()
+    private var shownZones: List<List<Pair<Double, Double>>> = emptyList()
+
+    fun cameras(list: List<Camera>, zones: List<List<Pair<Double, Double>>> = emptyList()) {
+        shownCameras = list
+        shownZones = zones
+        tiles?.zones = zones
         tiles?.cameras = list
     }
 
@@ -330,6 +341,14 @@ internal class OwnMap(private val home: HomeActivity, private val open: () -> Un
 
         var cameras: List<Camera> = emptyList()
             set(value) { field = value; invalidate() }
+        /** The road 100 m before and after each camera, coloured red under it. */
+        var zones: List<List<Pair<Double, Double>>> = emptyList()
+        private val zonePath = Path()
+        private val zonePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE
+            strokeCap = Paint.Cap.ROUND
+            strokeJoin = Paint.Join.ROUND
+        }
 
         init {
             // Tiles older than a month are fetched again: the map changes.
@@ -477,6 +496,19 @@ internal class OwnMap(private val home: HomeActivity, private val open: () -> Un
                 val dy = (worldY(lat, zoom) - centerY) * tileSize
                 return (carX + dx * cos(angle) - dy * kotlin.math.sin(angle)).toFloat() to
                     (carY + dx * kotlin.math.sin(angle) + dy * cos(angle)).toFloat()
+            }
+            // The camera's stretch of road, 100 m each side, in red over the street.
+            zonePaint.strokeWidth = 7 * density
+            zonePaint.color = 0xB3E5262E.toInt()
+            for (zone in zones) {
+                zonePath.reset()
+                var outside = true
+                zone.forEachIndexed { i, (lat, lon) ->
+                    val (x, y) = screen(lat, lon)
+                    if (x > -200 && y > -200 && x < width + 200 && y < height + 200) outside = false
+                    if (i == 0) zonePath.moveTo(x, y) else zonePath.lineTo(x, y)
+                }
+                if (!outside) canvas.drawPath(zonePath, zonePaint)
             }
             // Speed cameras: a red disc with a white rim, upright whichever way the map is turned.
             for (camera in cameras) {

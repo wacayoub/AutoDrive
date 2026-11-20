@@ -147,4 +147,29 @@ class RoadLimitsTest {
         val json = """{"elements":[{"type":"node","lat":33.6,"lon":-7.6,"tags":{"enforcement":"maxspeed","maxspeed":"80"}}]}"""
         assertEquals(80, RoadLimits.parseCameras(json).single().limit)
     }
+
+    @Test
+    fun theCameraZoneRuns100MetresEachSideAcrossJunctions() {
+        // A street going north, cut in two at a junction 50 m after the camera, with a side street there.
+        val south = Road(60, "Bd", listOf(33.5800 to -7.6200, 33.5810 to -7.6200, 33.58145 to -7.6200))
+        val north = Road(60, "Bd", listOf(33.58145 to -7.6200, 33.5830 to -7.6200))
+        val side = Road(null, "Rue", listOf(33.58145 to -7.6200, 33.58145 to -7.6180))
+        val camera = Camera(33.5810, -7.61985, 60)
+        val zone = RoadLimits.cameraZone(listOf(side, south, north), camera)
+        val first = zone.first()
+        val last = zone.last()
+        assertEquals(-7.6200, first.second, 1e-9)
+        assertEquals(-7.6200, last.second, 1e-9)
+        assertEquals(100.0, TripMeter.distanceMeters(33.5810, -7.6200, first.first, first.second), 0.5)
+        assertEquals(100.0, TripMeter.distanceMeters(33.5810, -7.6200, last.first, last.second), 0.5)
+        assertEquals(true, last.first > first.first)
+        // A road joined in the middle of another one: on along the one that goes straight.
+        val long = Road(60, "Av", listOf(33.5900 to -7.6200, 33.5910 to -7.6200, 33.5930 to -7.6200))
+        val stub = Road(60, "Av", listOf(33.5890 to -7.6200, 33.5910 to -7.6200))
+        val turned = RoadLimits.cameraZone(listOf(stub, long), Camera(33.5892, -7.6200, null))
+        assertEquals(-7.6200, turned.last().second, 1e-9)
+        assertEquals(100.0, TripMeter.distanceMeters(33.5892, -7.6200, turned.last().first, turned.last().second), 0.5)
+        // No road near: nothing to colour.
+        assertEquals(emptyList<Pair<Double, Double>>(), RoadLimits.cameraZone(listOf(side), Camera(33.5700, -7.6300, null)))
+    }
 }

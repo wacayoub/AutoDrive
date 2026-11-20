@@ -34,6 +34,7 @@ internal data class Camera(val latitude: Double, val longitude: Double, val limi
 internal class RoadLimits(private val folder: File? = null) {
     @Volatile private var roads: List<Road> = emptyList()
     @Volatile private var cameras: List<Camera> = emptyList()
+    @Volatile private var zones: List<List<Pair<Double, Double>>> = emptyList()
     // The squares read, from the disk or the server, while the car is around them.
     private val tiles = HashMap<String, Pair<List<Road>, List<Camera>>>()
     // Where the roads around the car were last gathered from the squares.
@@ -83,6 +84,8 @@ internal class RoadLimits(private val folder: File? = null) {
             road.points.any { TripMeter.distanceMeters(latitude, longitude, it.first, it.second) < NEAR_METERS }
         }
         cameras = near.flatMap { it.second }
+        val all = near.flatMap { it.first }
+        zones = cameras.map { cameraZone(all, it) }.filter { it.size >= 2 }
         gatheredAt = latitude to longitude
         android.util.Log.i(TAG, "${roads.size} roads around the car, ${roads.count { it.limit != null }} with a limit, " +
             "${cameras.size} speed cameras, ${tiles.size} squares")
@@ -125,6 +128,9 @@ internal class RoadLimits(private val folder: File? = null) {
 
     /** The speed cameras found around the car, for the map. */
     fun cameraList(): List<Camera> = cameras
+
+    /** The road [CAMERA_ZONE_METERS] before and after each camera, for the map to colour. */
+    fun cameraZones(): List<List<Pair<Double, Double>>> = zones
 
     /** The nearest speed camera ahead of the car, and its distance in metres. */
     fun cameraAhead(latitude: Double, longitude: Double, bearing: Int?): Pair<Camera, Int>? =
@@ -181,6 +187,8 @@ internal class RoadLimits(private val folder: File? = null) {
         const val KEEP_BONUS_METERS = 6.0
         /** How far beside the car's path a camera ahead may stand: a roadside pole on a wide road. */
         const val CAMERA_SIDE_METERS = 40.0
+        /** The stretch of road coloured on the map on each side of a camera. */
+        const val CAMERA_ZONE_METERS = 100.0
         const val LIMIT_BYTES = 3_000_000
         const val ROAD_TYPES = "motorway|motorway_link|trunk|trunk_link|primary|primary_link|secondary|secondary_link|" +
             "tertiary|tertiary_link|unclassified|residential|living_street|road"
@@ -287,6 +295,93 @@ internal class RoadLimits(private val folder: File? = null) {
                 val side = meters * kotlin.math.sin(Math.toRadians(diff))
                 (camera to meters.toInt()).takeIf { diff <= 35 || (diff < 90 && side <= CAMERA_SIDE_METERS) || meters < 40 }
             }.minByOrNull { it.second }
+
+        /**
+         * The road [meters] before and after [camera], as points from one end to the other: the road the camera
+         * stands beside, followed on through the roads joined to its ends (OpenStreetMap cuts roads at junctions),
+         * taking the one that goes on the straightest. Empty when no road passes within [CAMERA_SIDE_METERS].
+         */
+        fun cameraZone(roads: List<Road>, camera: Camera, meters: Double = CAMERA_ZONE_METERS): List<Pair<Double, Double>> {
+            val metersPerLat = 111_195.0
+            val metersPerLon = metersPerLat * cos(Math.toRadians(camera.latitude))
+            var road: Road? = null
+            var index = 0
+            var at = camera.latitude to camera.longitude
+            var nearest = CAMERA_SIDE_METERS
+            roads.forEach { candidate ->
+                candidate.points.zipWithNext().forEachIndexed { i, (a, b) ->
+                    val ax = (a.second - camera.longitude) * metersPerLon
+                    val ay = (a.first - camera.latitude) * metersPerLat
+                    val dx = (b.second - a.second) * metersPerLon
+                    val dy = (b.first - a.first) * metersPerLat
+                    val length = dx * dx + dy * dy
+                    val t = if (length == 0.0) 0.0 else (-(ax * dx + ay * dy) / length).coerceIn(0.0, 1.0)
+                    val distance = sqrt((ax + t * dx).let { it * it } + (ay + t * dy).let { it * it })
+                    if (distance < nearest) {
+                        nearest = distance
+                        road = candidate
+                        index = i
+                        at = (a.first + t * (b.first - a.first)) to (a.second + t * (b.second - a.second))
+                    }
+                }
+            }
+            val found = road ?: return emptyList()
+            val before = walk(roads, found, index, -1, at, meters)
+            val after = walk(roads, found, index + 1, 1, at, meters)
+            return before.reversed() + listOf(at) + after
+        }
+
+        /** The points met going [meters] along [start] from [from], its point [index] first, then [step] by step. */
+        private fun walk(roads: List<Road>, start: Road, index: Int, step: Int, from: Pair<Double, Double>,
+                         meters: Double): List<Pair<Double, Double>> {
+            val out = mutableListOf<Pair<Double, Double>>()
+            val seen = mutableSetOf(start)
+            var road = start
+            var i = index
+            var direction = step
+            var last = from
+            var previous = from
+            var left = meters
+            repeat(400) {
+                if (i !in road.points.indices) {
+                    // The end of this road: on along a road joined here (at its end or in its middle) that turns the least.
+                    val heading = heading(previous, last)
+                    val next = roads.filter { it !in seen }.flatMap { candidate ->
+                        candidate.points.indices.filter { joined(candidate.points[it], last) }.flatMap { j ->
+                            listOf(1, -1).filter { j + it in candidate.points.indices }.map { Triple(candidate, j + it, it) }
+                        }
+                    }.minByOrNull { (candidate, j, _) ->
+                        var turn = abs(heading(last, candidate.points[j]) - heading) % 360
+                        if (turn > 180) turn = 360 - turn
+                        turn
+                    } ?: return out
+                    seen += next.first
+                    road = next.first
+                    i = next.second
+                    direction = next.third
+                    return@repeat
+                }
+                val point = road.points[i]
+                val distance = TripMeter.distanceMeters(last.first, last.second, point.first, point.second)
+                if (distance >= left) {
+                    val f = left / distance
+                    out += (last.first + f * (point.first - last.first)) to (last.second + f * (point.second - last.second))
+                    return out
+                }
+                left -= distance
+                if (distance > 0) { previous = last; last = point; out += point }
+                i += direction
+            }
+            return out
+        }
+
+        private fun joined(a: Pair<Double, Double>, b: Pair<Double, Double>) =
+            TripMeter.distanceMeters(a.first, a.second, b.first, b.second) < 2.0
+
+        private fun heading(a: Pair<Double, Double>, b: Pair<Double, Double>): Double {
+            val dx = (b.second - a.second) * cos(Math.toRadians(a.first))
+            return (Math.toDegrees(atan2(dx, b.first - a.first)) + 360) % 360
+        }
 
         fun parse(json: String): List<Road> {
             val elements = JSONObject(json).optJSONArray("elements") ?: return emptyList()

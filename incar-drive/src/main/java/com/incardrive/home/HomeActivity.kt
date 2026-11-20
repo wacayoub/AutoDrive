@@ -1830,7 +1830,7 @@ class HomeActivity : Activity() {
     private fun followRoad(fix: android.location.Location, kmh: Int?) {
         val now = System.currentTimeMillis()
         RoadWatch.follow(this, fix.latitude, fix.longitude) {
-            if (!isDestroyed) ownMap.cameras(roadLimits.cameraList())
+            if (!isDestroyed) ownMap.cameras(roadLimits.cameraList(), roadLimits.cameraZones())
         }
         val bearing = RoadWatch.bearing(fix, kmh)
         val road = roadLimits.limitAt(fix.latitude, fix.longitude, bearing)
