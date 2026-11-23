@@ -126,6 +126,10 @@ internal class RoadLimits(private val folder: File? = null) {
     fun limitAt(latitude: Double, longitude: Double, bearing: Int?): Road? =
         match(roads, latitude, longitude, bearing, lastRoad).also { lastRoad = it }
 
+    /** The point [meters] ahead along the road the car was last matched to; null without a heading. */
+    fun pointAhead(latitude: Double, longitude: Double, bearing: Int?, meters: Double): Pair<Double, Double>? =
+        pointAhead(roads, lastRoad, latitude, longitude, bearing, meters)
+
     /** The speed cameras found around the car, for the map. */
     fun cameraList(): List<Camera> = cameras
 
@@ -329,6 +333,45 @@ internal class RoadLimits(private val folder: File? = null) {
             val before = walk(roads, found, index, -1, at, meters)
             val after = walk(roads, found, index + 1, 1, at, meters)
             return before.reversed() + listOf(at) + after
+        }
+
+        /**
+         * The point [meters] further along [road] in the direction of [bearing], on through the roads joined to it;
+         * along the heading in a straight line when no road is known.
+         */
+        fun pointAhead(roads: List<Road>, road: Road?, latitude: Double, longitude: Double, bearing: Int?,
+                       meters: Double): Pair<Double, Double>? {
+            bearing ?: return null
+            if (road != null) {
+                val metersPerLat = 111_195.0
+                val metersPerLon = metersPerLat * cos(Math.toRadians(latitude))
+                var index = -1
+                var at = latitude to longitude
+                var nearest = Double.MAX_VALUE
+                road.points.zipWithNext().forEachIndexed { i, (a, b) ->
+                    val ax = (a.second - longitude) * metersPerLon
+                    val ay = (a.first - latitude) * metersPerLat
+                    val dx = (b.second - a.second) * metersPerLon
+                    val dy = (b.first - a.first) * metersPerLat
+                    val length = dx * dx + dy * dy
+                    val t = if (length == 0.0) 0.0 else (-(ax * dx + ay * dy) / length).coerceIn(0.0, 1.0)
+                    val distance = sqrt((ax + t * dx).let { it * it } + (ay + t * dy).let { it * it })
+                    if (distance < nearest) {
+                        nearest = distance
+                        index = i
+                        at = (a.first + t * (b.first - a.first)) to (a.second + t * (b.second - a.second))
+                    }
+                }
+                if (index >= 0) {
+                    var diff = abs(heading(road.points[index], road.points[index + 1]) - bearing) % 360
+                    if (diff > 180) diff = 360 - diff
+                    val path = if (diff <= 90) walk(roads, road, index + 1, 1, at, meters) else walk(roads, road, index, -1, at, meters)
+                    path.lastOrNull()?.let { return it }
+                }
+            }
+            val r = Math.toRadians(bearing.toDouble())
+            return (latitude + meters * cos(r) / 111_195.0) to
+                (longitude + meters * kotlin.math.sin(r) / (111_195.0 * cos(Math.toRadians(latitude))))
         }
 
         /** The points met going [meters] along [start] from [from], its point [index] first, then [step] by step. */

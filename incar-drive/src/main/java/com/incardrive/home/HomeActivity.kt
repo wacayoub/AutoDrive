@@ -321,6 +321,7 @@ class HomeActivity : Activity() {
     override fun onDestroy() {
         CallDiagnostic.changed = null
         HotspotReminder.changed = null
+        TrafficAhead.changed = null
         HotspotReminder.detach()
         if (::wazeMap.isInitialized) wazeMap.destroy()
         if (::googleWeb.isInitialized) googleWeb.destroy()
@@ -418,6 +419,7 @@ class HomeActivity : Activity() {
         mediaResume.onDriveStart()
         // The hotspot only the head unit itself may switch on: a bubble opens its screen, once per start.
         HotspotReminder.changed = { runOnUiThread { showHotspotReminder() } }
+        TrafficAhead.changed = { renderFlow() }
         HotspotReminder.driveStarted(this, mediaResume.bootKey())
         if (gps.permitted()) gps.start()
         // Cameras and limits go on while Maps or another app is in front.
@@ -1347,8 +1349,7 @@ class HomeActivity : Activity() {
         // The turn is shown once: on the road of the « Route » card when that style is on, else on the map.
         ownMap.guide(nav.takeIf { roadGauge == null })
         lastNav = nav
-        // Green, orange or red only as Google Maps says it; no colour of our own.
-        roadGauge?.flow = nav?.flow
+        renderFlow()
         roadGauge?.guide(nav)
         renderRoadCorner()
         renderTurnIsland()
@@ -1444,7 +1445,7 @@ class HomeActivity : Activity() {
         }
         AlertDialog.Builder(this)
             .setTitle("Trafic en direct")
-            .setMessage("Les bouchons en couleurs sur la carte viennent de TomTom, gratuit jusqu’à 200 000 tuiles par mois, " +
+            .setMessage("Les bouchons en couleurs sur la carte et sur la route de la carte « Route » viennent de TomTom, gratuit jusqu’à 200 000 tuiles par mois, " +
                 "sans carte bancaire.\n\n1. Sur un téléphone ou un PC : developer.tomtom.com, crée un compte gratuit.\n" +
                 "2. Copie ta clé (« API key »).\n3. Tape-la ici.\n\nLaisse vide pour retirer le trafic.")
             .setView(FrameLayout(this).apply {
@@ -1841,12 +1842,22 @@ class HomeActivity : Activity() {
             if (NavWatch.nav.value == null) renderNav(null)
         }
         renderCamera(roadLimits.cameraAhead(fix.latitude, fix.longitude, bearing), kmh)
+        if (roadGauge != null) TrafficAhead.follow(prefs.getString(OwnMap.TRAFFIC_KEY, null), fix.latitude to fix.longitude,
+            roadLimits.pointAhead(fix.latitude, fix.longitude, bearing, TrafficAhead.AHEAD_METERS))
         val limit = road?.limit.takeIf { roadMode() }
         if (limit != roadLimit) {
             roadLimit = limit
             if (::gauge.isInitialized) gauge.limit = limit
             if (::limitSign.isInitialized) limitSign.limit = limit
         }
+    }
+
+    /**
+     * The road's colour: TomTom's traffic on the road just ahead when the driver gave a key (Google Maps keeps the
+     * red of its route line to itself), else the colour Google Maps gives its time left for the whole trip.
+     */
+    private fun renderFlow() {
+        roadGauge?.flow = TrafficAhead.flow ?: lastNav?.flow
     }
 
     private var currentStreet: String? = null

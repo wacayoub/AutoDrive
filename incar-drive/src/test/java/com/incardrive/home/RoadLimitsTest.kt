@@ -172,4 +172,27 @@ class RoadLimitsTest {
         // No road near: nothing to colour.
         assertEquals(emptyList<Pair<Double, Double>>(), RoadLimits.cameraZone(listOf(side), Camera(33.5700, -7.6300, null)))
     }
+
+    @Test
+    fun thePointAheadFollowsTheRoadInTheDrivingDirection() {
+        val road = Road(60, "Bd", listOf(33.5800 to -7.6200, 33.5900 to -7.6200))
+        val north = RoadLimits.pointAhead(listOf(road), road, 33.5850, -7.6201, 0, 500.0)!!
+        assertEquals(500.0, TripMeter.distanceMeters(33.5850, -7.6200, north.first, north.second), 1.0)
+        assertEquals(true, north.first > 33.5850)
+        val south = RoadLimits.pointAhead(listOf(road), road, 33.5850, -7.6201, 180, 500.0)!!
+        assertEquals(true, south.first < 33.5850)
+        assertNull(RoadLimits.pointAhead(listOf(road), road, 33.5850, -7.6201, null, 500.0))
+    }
+
+    @Test
+    fun tomTomSpeedsGiveTheTrafficColour() {
+        fun json(current: Int, free: Int, closed: Boolean = false) =
+            """{"flowSegmentData":{"currentSpeed":$current,"freeFlowSpeed":$free,"roadClosure":$closed}}"""
+        assertEquals(Flow.FLUID, TrafficAhead.parse(json(55, 60)))
+        assertEquals(Flow.SLOW, TrafficAhead.parse(json(30, 60)))
+        assertEquals(Flow.JAM, TrafficAhead.parse(json(12, 60)))
+        assertEquals(Flow.JAM, TrafficAhead.parse(json(60, 60, closed = true)))
+        assertNull(TrafficAhead.parse("{}"))
+        assertEquals(Flow.JAM, TrafficAhead.worst(listOf(Flow.FLUID, null, Flow.JAM)))
+    }
 }

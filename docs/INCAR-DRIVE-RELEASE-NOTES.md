@@ -1,8 +1,11 @@
-Incar Drive 1.0.24 — écran d’accueil pour l’Incarlink (Android 11 à 13, conçu pour 800 × 480).
+Incar Drive 1.0.25 — écran d’accueil pour l’Incarlink (Android 11 à 13, conçu pour 800 × 480).
 
 **Mettre à jour** : Réglages › Mises à jour, ou la proposition automatique.
 
 **Changements**
+- Trafic devant la voiture sur la carte « Route » : avec ta clé TomTom gratuite (Réglages › Trafic), la route se colore en vert, orange ou rouge selon le trafic sous la voiture et 500 m plus loin sur la route suivie, mis à jour chaque minute. Google Maps garde pour lui le rouge de sa ligne d’itinéraire ; sans clé, la couleur reste celle que Maps donne à l’ensemble du trajet. Seules ces deux positions et la clé sont envoyées à TomTom, environ 60 demandes par heure de conduite.
+
+Comprend aussi la 1.0.24 :
 - Radars et limitations aussi quand Maps, Waze ou YouTube est devant : avant, Incar Drive ne suivait le GPS que lorsque l’accueil était affiché, donc aucun radar n’était annoncé avec Maps ouvert. Un service de position Android prend maintenant le relais : un bip pour chaque radar devant, un bip en dépassant la limite de la route, et une bulle rouge « Radar 400 m · 60 » ou « 72 km/h · limite 60 » en haut de l’écran.
 - Bip plus audible : les alertes passent par le son des médias, au volume de la radio, au lieu du son des notifications, souvent muet sur le boîtier pendant la radio.
 - Radars connus tout de suite : en arrivant dans une nouvelle zone, les radars et limitations déjà gardés sur le boîtier servent immédiatement, sans attendre la fin du téléchargement des zones voisines, qui pouvait prendre plusieurs minutes.
@@ -12,7 +15,7 @@ Incar Drive 1.0.24 — écran d’accueil pour l’Incarlink (Android 11 à 13, 
 - La carte des routes gardée sur le boîtier est téléchargée à nouveau une fois, pour y ajouter le sens des routes.
 - Rappel : les radars viennent d’OpenStreetMap ; un radar qui n’y est pas cartographié ne peut pas être annoncé.
 
-Comprend aussi la 1.0.23 :
+Et la 1.0.23 :
 - Point d’accès au démarrage : quand la voiture démarre (le boîtier qui s’allume, ou qui se réveille de sa veille après le contact coupé), une bulle « Allumer le point d’accès » s’affiche une minute en bas de l’accueil. Un toucher ouvre directement l’écran Point d’accès et partage de connexion d’Android : il reste à toucher l’interrupteur. Rien ne s’affiche si le point d’accès est déjà allumé. Android réserve l’allumage du point d’accès aux applis système du boîtier ; Incar Drive ne peut donc pas l’allumer lui-même. À désactiver dans Réglages › Point d’accès.
 - La tuile « Partage » des réglages rapides ouvre aussi directement l’écran du point d’accès.
 
