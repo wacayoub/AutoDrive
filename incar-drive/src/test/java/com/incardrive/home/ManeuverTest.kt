@@ -54,4 +54,12 @@ class ManeuverTest {
         assertEquals(Turn.STRAIGHT, Maneuver.of(null, "200 m").turn)
         assertEquals(Turn.STRAIGHT, Maneuver.of("11 km", "11 km").turn)
     }
+
+    @Test fun readsSlightTurns() {
+        assertEquals(true, Maneuver.of("Tournez légèrement à droite", null).slight)
+        assertEquals(true, Maneuver.of("Serrez à gauche vers N1", null).slight)
+        assertEquals(true, Maneuver.of("Keep right at the fork", null).slight)
+        assertEquals(false, Maneuver.of("Tournez à droite", null).slight)
+        assertEquals(false, Maneuver.of("Au rond-point, prenez la 2e sortie", null).slight)
+    }
 }

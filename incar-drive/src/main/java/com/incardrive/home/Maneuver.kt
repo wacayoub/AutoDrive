@@ -10,13 +10,16 @@ internal enum class Turn { STRAIGHT, LEFT, RIGHT, ROUNDABOUT, UTURN, ARRIVE }
  * It is read from the instruction's words, in French, English and Arabic; an instruction that says nothing
  * recognisable is drawn as going straight on.
  */
-internal data class Maneuver(val turn: Turn, val exit: Int? = null, val street: String? = null, val meters: Int? = null) {
+internal data class Maneuver(val turn: Turn, val exit: Int? = null, val street: String? = null, val meters: Int? = null,
+                              /** A turn at an angle: keep to a side, a fork, a slip road; drawn as a road branching off. */
+                              val slight: Boolean = false) {
     companion object {
         private val arrive = Regex("""(?i)arriv|destination|الوصول|وجهتك""")
         private val uturn = Regex("""(?i)demi[- ]tour|u[- ]turn|faites? demi|استدر للخلف|انعطف للخلف""")
         private val roundabout = Regex("""(?i)rond[- ]point|giratoire|roundabout|الدوار|دوّار|دوار""")
         private val left = Regex("""(?i)\bgauche\b|\bleft\b|يسار""")
         private val right = Regex("""(?i)\bdroite\b|\bright\b|يمين""")
+        private val slightWords = Regex("""(?i)l[ée]g[èe]rement|\bserrez\b|\brestez\b|\bgardez\b|\btenez\b|bifurque|\bbretelle|\bslight|\bkeep\b|\bbear\b|\bfork\b|\bsortie\b|\bexit\b|\bramp\b|قليلا|قليلاً|ابق|المخرج""")
         private val exitNumber = Regex("""(?i)(\d)\s*(?:re|er|e|ème|eme|st|nd|rd|th)?\s*(?:sortie|exit)|(?:sortie|exit)\s*(\d)""")
         private val exitWords = listOf(
             Regex("""(?i)premi[èe]re|first|الأول""") to 1, Regex("""(?i)deuxi[èe]me|seconde|second|الثاني""") to 2,
@@ -47,7 +50,8 @@ internal data class Maneuver(val turn: Turn, val exit: Int? = null, val street: 
             val street = onto.find(text)?.groupValues?.get(1)?.trim()?.trimEnd('.', ',')
                 // A name, not a leftover of the instruction (« la gauche », « 2e sortie »…).
                 ?.takeUnless { distance.containsMatchIn(it) || it.first().isDigit() || notAStreet.containsMatchIn(it) }
-            return Maneuver(turn, exit, street, meters(step))
+            val slight = (turn == Turn.LEFT || turn == Turn.RIGHT) && slightWords.containsMatchIn(text)
+            return Maneuver(turn, exit, street, meters(step), slight)
         }
 
         /** « 110 m » or « 1,2 km » in metres. */

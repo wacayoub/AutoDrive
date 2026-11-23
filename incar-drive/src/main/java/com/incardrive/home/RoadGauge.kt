@@ -59,7 +59,12 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
         maneuver = nav?.let {
             val read = Maneuver.of(it.instruction, it.step ?: it.instruction)
             // No direction in the words (often there are none): the arrow's own shape says it.
-            if (read.turn == Turn.STRAIGHT && it.turn != null) read.copy(turn = it.turn) else read
+            when {
+                read.turn == Turn.STRAIGHT && it.turn != null -> read.copy(turn = it.turn, slight = it.slight)
+                // The words say « à droite », the arrow leans off to that side: a slip road or a fork, not a square turn.
+                read.turn == it.turn && it.slight -> read.copy(slight = true)
+                else -> read
+            }
         }
         turnIcon = nav?.arrow
         // The whole route, from where the guidance started (A) to the destination (B): the longest distance left
@@ -237,7 +242,8 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
     }
 
     /** What is drawn on the road: a bend or a roundabout when close, else the straight road with what lies on it. */
-    private data class Scene(val shape: Turn?, val onRoad: Turn?, val exit: Int?, val street: String?, val ahead: Boolean)
+    private data class Scene(val shape: Turn?, val onRoad: Turn?, val exit: Int?, val street: String?, val ahead: Boolean,
+                             val slight: Boolean = false)
 
     private var shownScene: Scene? = null
     private var previousScene: Scene? = null
@@ -250,7 +256,8 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
     private fun drawScene(canvas: Canvas, scene: Scene, w: Float, h: Float, horizon: Float, road: Float, tone: Int) {
         val cx = w / 2f
         when (scene.shape) {
-            Turn.LEFT, Turn.RIGHT -> drawBend(canvas, w, horizon, road, tone, left = scene.shape == Turn.LEFT)
+            Turn.LEFT, Turn.RIGHT -> if (scene.slight) drawFork(canvas, w, horizon, road, tone, left = scene.shape == Turn.LEFT)
+                else drawBend(canvas, w, horizon, road, tone, left = scene.shape == Turn.LEFT)
             Turn.ROUNDABOUT -> drawRoundabout(canvas, w, horizon, road, tone, scene.exit)
             else -> {
                 drawStraight(canvas, w, h, horizon, tone)
@@ -435,7 +442,7 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
         val circle = turn != null && close && turn.turn == Turn.ROUNDABOUT
         val scene = Scene(when { bend -> turn!!.turn; circle -> Turn.ROUNDABOUT; else -> null },
             turn?.turn.takeIf { !bend && !circle }, turn?.exit.takeIf { circle }, turn?.street.takeIf { bend || circle },
-            ahead = !cameraFirst)
+            ahead = !cameraFirst, slight = bend && turn!!.slight)
         // A new scene fades in over the one before it instead of replacing it at once.
         if (scene != shownScene) {
             if (shownScene != null && isLaidOut) {
@@ -714,6 +721,79 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
     }
 
     /**
+     * A road that branches off at an angle (keep to a side, a fork, a slip road): the road going on straight, the
+     * branch leaving it up to the right (mirrored for the left), and the arrow from the car into the branch.
+     */
+    private val shaft = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeJoin = Paint.Join.ROUND
+    }
+
+    private fun drawFork(canvas: Canvas, w: Float, horizon: Float, road: Float, tone: Int, left: Boolean) {
+        fun x(f: Float) = w * f
+        fun y(f: Float) = horizon + road * f
+        canvas.save()
+        if (left) canvas.scale(-1f, 1f, w / 2f, 0f)
+        path.reset()
+        path.moveTo(x(.02f), y(1f))
+        path.lineTo(x(.40f), y(0f))
+        path.lineTo(x(.56f), y(0f))
+        path.lineTo(x(.62f), y(.30f))
+        path.lineTo(x(.84f), y(0f))
+        path.lineTo(x(1f), y(0f))
+        path.lineTo(x(1f), y(.26f))
+        path.cubicTo(x(.88f), y(.40f), x(.80f), y(.55f), x(.80f), y(.66f))
+        path.lineTo(x(.98f), y(1f))
+        path.close()
+        roadPaint.shader = null
+        roadPaint.color = 0xF01C2535.toInt()
+        canvas.drawPath(path, roadPaint)
+        roadPaint.color = ColorUtils.setAlphaComponent(tone, 0x22)
+        canvas.drawPath(path, roadPaint)
+        // The curbs: the left one, the point between the two roads, the branch's outer one.
+        linePaint.strokeWidth = 2.4f * density
+        linePaint.color = tone
+        canvas.drawLine(x(.02f), y(1f), x(.40f), y(0f), linePaint)
+        path.reset()
+        path.moveTo(x(.56f), y(0f))
+        path.lineTo(x(.62f), y(.30f))
+        path.lineTo(x(.84f), y(0f))
+        canvas.drawPath(path, linePaint)
+        path.reset()
+        path.moveTo(x(.98f), y(1f))
+        path.lineTo(x(.80f), y(.66f))
+        path.cubicTo(x(.80f), y(.55f), x(.88f), y(.40f), x(1f), y(.26f))
+        canvas.drawPath(path, linePaint)
+        // The arrow: up from the car, then off at an angle into the branch.
+        shaft.strokeWidth = w * .055f
+        part.reset()
+        part.moveTo(x(.51f), y(.66f))
+        part.lineTo(x(.515f), y(.50f))
+        part.quadTo(x(.52f), y(.40f), x(.60f), y(.33f))
+        part.lineTo(x(.72f), y(.225f))
+        path.reset()
+        shaft.getFillPath(part, path)
+        // The head, square to the branch's direction.
+        val dx = x(.72f) - x(.60f)
+        val dy = y(.225f) - y(.33f)
+        val length = kotlin.math.hypot(dx, dy)
+        val ux = dx / length
+        val uy = dy / length
+        val baseX = x(.72f) - ux * w * .01f
+        val baseY = y(.225f) - uy * w * .01f
+        val half = w * .065f
+        val reach = w * .11f
+        part.reset()
+        part.moveTo(baseX + ux * reach, baseY + uy * reach)
+        part.lineTo(baseX - uy * half, baseY + ux * half)
+        part.lineTo(baseX + uy * half, baseY - ux * half)
+        part.close()
+        path.op(part, Path.Op.UNION)
+        drawLitArrow(canvas, path, baseY + uy * reach, y(.66f))
+        canvas.restore()
+    }
+
+    /**
      * A roundabout that is close: the ring, the roads joining it and the arrow going round (anticlockwise, as where
      * traffic keeps right) to the exit the instruction counts: first to the right, second straight on, third to the
      * left; when it gives no number, the arrow leaves up and to the right.
@@ -924,8 +1004,8 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
             camera -> listOfNotNull("Radar", cameraLimit?.toString()).joinToString(" · ")
             turn == null -> ""
             else -> when (turn.turn) {
-                Turn.LEFT -> "à gauche"
-                Turn.RIGHT -> "à droite"
+                Turn.LEFT -> if (turn.slight) "serrez à gauche" else "à gauche"
+                Turn.RIGHT -> if (turn.slight) "serrez à droite" else "à droite"
                 Turn.ROUNDABOUT -> turn.exit?.let { "sortie $it" } ?: "rond-point"
                 Turn.UTURN -> "demi-tour"
                 Turn.ARRIVE -> "arrivée"

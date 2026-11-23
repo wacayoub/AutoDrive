@@ -19,7 +19,10 @@ import kotlin.math.abs
 internal object ArrowShape {
     private const val SIZE = 48
 
-    fun turn(icon: Drawable?): Turn? {
+    fun turn(icon: Drawable?): Turn? = shape(icon)?.first
+
+    /** The arrow's direction, and true when it leans off at an angle (keep, fork, exit) rather than a square turn. */
+    fun shape(icon: Drawable?): Pair<Turn, Boolean>? {
         icon ?: return null
         return runCatching {
             val bitmap = Bitmap.createBitmap(SIZE, SIZE, Bitmap.Config.ARGB_8888)
@@ -29,7 +32,8 @@ internal object ArrowShape {
             val pixels = IntArray(SIZE * SIZE)
             bitmap.getPixels(pixels, 0, SIZE, 0, 0, SIZE, SIZE)
             bitmap.recycle()
-            turn(mask(pixels), SIZE, SIZE)
+            val mask = mask(pixels)
+            turn(mask, SIZE, SIZE)?.let { it to (it != Turn.UTURN && it != Turn.STRAIGHT && slight(mask, SIZE, SIZE)) }
         }.getOrNull()
     }
 
@@ -43,6 +47,28 @@ internal object ArrowShape {
             abs(Color.red(pixel) - Color.red(background)) + abs(Color.green(pixel) - Color.green(background)) +
                 abs(Color.blue(pixel) - Color.blue(background)) > 150
         }
+    }
+
+    /**
+     * True for an arrow whose head goes off at an angle: a square turn's head lies flat out to the side, so the arrow
+     * is about as wide as it is tall (Google's « turn right » icon: 14 × 14); a slanted one rises across and stays
+     * narrow (« turn slight right »: 10 × 16).
+     */
+    fun slight(arrow: BooleanArray, width: Int, height: Int): Boolean {
+        var left = width
+        var right = -1
+        var top = height
+        var bottom = -1
+        for (y in 0 until height) for (x in 0 until width) if (arrow[y * width + x]) {
+            if (x < left) left = x
+            if (x > right) right = x
+            if (y < top) top = y
+            if (y > bottom) bottom = y
+        }
+        val w = right - left + 1
+        val h = bottom - top + 1
+        if (w < 6 || h < 6) return false
+        return w < h * .85f
     }
 
     /** The direction of an arrow given as a [width] × [height] grid, true where the arrow is; null when unclear. */

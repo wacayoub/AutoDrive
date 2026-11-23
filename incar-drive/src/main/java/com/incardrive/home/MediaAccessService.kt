@@ -275,6 +275,8 @@ internal data class NavInfo(
     val flow: Flow? = null,
     /** Which way that arrow points, read from its shape: all there is when the notification has no words. */
     val turn: Turn? = null,
+    /** True when that arrow leans off at an angle (keep, fork, exit) rather than turning square. */
+    val slight: Boolean = false,
 )
 
 /** The guidance notification of the navigation app, read like the call notification. */
@@ -356,7 +358,8 @@ internal object NavWatch {
             when { "[vert]" in line -> Flow.FLUID; "[orange]" in line -> Flow.SLOW; "[rouge]" in line -> Flow.JAM; else -> null }
         }
         return parse(texts)?.let {
-            it.copy(arrow = arrow, flow = coloured ?: named, turn = ArrowShape.turn(arrow))
+            val shape = ArrowShape.shape(arrow)
+            it.copy(arrow = arrow, flow = coloured ?: named, turn = shape?.first, slight = shape?.second == true)
         }
     }
 

@@ -4,6 +4,7 @@ Incar Drive 1.0.25 — écran d’accueil pour l’Incarlink (Android 11 à 13, 
 
 **Changements**
 - Trafic devant la voiture sur la carte « Route » : avec ta clé TomTom gratuite (Réglages › Trafic), la route se colore en vert, orange ou rouge selon le trafic sous la voiture et 500 m plus loin sur la route suivie, mis à jour chaque minute. Google Maps garde pour lui le rouge de sa ligne d’itinéraire ; sans clé, la couleur reste celle que Maps donne à l’ensemble du trajet. Seules ces deux positions et la clé sont envoyées à TomTom, environ 60 demandes par heure de conduite.
+- Direction corrigée sur la carte « Route » : quand Google Maps indique de serrer à droite ou à gauche (sortie, bretelle, bifurcation, « légèrement à droite »), la route dessinée se sépare en biais avec la flèche dans la branche, au lieu d’un virage à angle droit. C’est lu dans les mots de Maps et, quand il n’y en a pas, dans la forme de sa flèche (une flèche en biais est plus haute que large).
 
 Comprend aussi la 1.0.24 :
 - Radars et limitations aussi quand Maps, Waze ou YouTube est devant : avant, Incar Drive ne suivait le GPS que lorsque l’accueil était affiché, donc aucun radar n’était annoncé avec Maps ouvert. Un service de position Android prend maintenant le relais : un bip pour chaque radar devant, un bip en dépassant la limite de la route, et une bulle rouge « Radar 400 m · 60 » ou « 72 km/h · limite 60 » en haut de l’écran.

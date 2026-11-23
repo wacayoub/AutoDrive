@@ -81,4 +81,38 @@ class ArrowShapeTest {
         assertNull(turn("            ", "            "))
         assertNull(turn("  ##  ", "  ##  "))
     }
+
+    private fun slight(vararg rows: String): Boolean {
+        val width = rows.maxOf { it.length }
+        val grid = BooleanArray(width * rows.size) { rows[it / width].getOrNull(it % width) == '#' }
+        return ArrowShape.slight(grid, width, rows.size)
+    }
+
+    @Test fun aSquareTurnIsNotSlight() = assertEquals(false, slight(
+        "         #  ",
+        "         ## ",
+        " ###########",
+        " ##      ## ",
+        " ##      #  ",
+        " ##         ",
+        " ##         ",
+        " ##         ",
+        " ##         ",
+        " ##         ",
+    ))
+
+    @Test fun aSlantedArrowIsSlight() = assertEquals(true, slight(
+        "     ######",
+        "        ###",
+        "       ## #",
+        "      ##  #",
+        "     ##    ",
+        "    ##     ",
+        "    ##     ",
+        "    ##     ",
+        "    ##     ",
+        "    ##     ",
+        "    ##     ",
+        "    ##     ",
+    ))
 }
