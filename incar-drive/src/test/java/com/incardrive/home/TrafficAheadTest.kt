@@ -50,14 +50,14 @@ class TrafficAheadTest {
     }
 
     @Test
-    fun aFreeRoadAskedOnceAMinuteShowsNothing() {
+    fun aFreeRoadAskedEveryMinuteAndAHalfShowsNothing() {
         answer = { 200 to json(58, 60) }
         drive()
         assertEquals(2, asked.size)
         assertEquals(Flow.FLUID, TrafficAhead.flow)
         assertNull(label())
-        // Every GPS fix in the next minute: no new question.
-        now += 30_000
+        // Every GPS fix in the next minute and a half: no new question.
+        now += 60_000
         drive()
         assertEquals(2, asked.size)
         now += 31_000
@@ -266,6 +266,33 @@ class TrafficAheadTest {
         assertEquals(Flow.JAM, TrafficAhead.shown?.flow)
         TrafficAhead.drive(null, 100)
         assertNull(TrafficAhead.shown)
+    }
+
+    @Test
+    fun theRoadAheadStretchByStretch() {
+        val points = listOf(33.5895 to -7.62 to 500, 33.594 to -7.62 to 1000, 33.603 to -7.62 to 2000, 33.612 to -7.62 to 3000)
+        // Free near the car, slow from 1 km, jammed from 2 km, nothing known at 3 km.
+        answer = { point ->
+            when (points.firstOrNull { it.first == point }?.second) {
+                1000 -> 200 to json(35, 60)
+                2000 -> 200 to json(10, 60)
+                3000 -> 400 to null
+                else -> 200 to json(95, 100)
+            }
+        }
+        TrafficAhead.follow("KEY", here, points)
+        assertEquals(5, asked.size)
+        assertEquals(listOf(0 to Flow.FLUID, 500 to Flow.FLUID, 1000 to Flow.SLOW, 2000 to Flow.JAM),
+            TrafficAhead.stretches.map { it.meters to it.flow })
+        assertEquals("Bouchon à 2 km · 10 km/h", label())
+        // Each stretch ends where the next point was asked; 3 km goes on to 3.5 km.
+        assertEquals(listOf(500, 1000, 2000, 3000, 3500), listOf(0, 500, 1000, 2000, 3000).map { TrafficAhead.end(it) })
+        // Crawling under the car: the first stretch turns red, the others stay.
+        repeat(70) { now += 1_000; TrafficAhead.drive(5, 100) }
+        assertEquals(listOf(Flow.JAM, Flow.FLUID, Flow.SLOW, Flow.JAM), TrafficAhead.stretches.map { it.flow })
+        // Three minutes without news: nothing left to draw.
+        now += 3 * 60_000
+        assertEquals(listOf(Flow.JAM), TrafficAhead.stretches.map { it.flow })
     }
 
     @Test

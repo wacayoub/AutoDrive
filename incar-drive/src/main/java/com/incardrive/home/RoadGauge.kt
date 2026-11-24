@@ -16,6 +16,7 @@ import android.view.animation.DecelerateInterpolator
 import androidx.core.graphics.ColorUtils
 import kotlin.math.min
 import kotlin.math.roundToInt
+import kotlin.math.sqrt
 
 /** What the speed card needs from its dial, whichever style the driver picked. */
 internal interface SpeedDial {
@@ -92,6 +93,14 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
 
     /** The traffic the car is in, which colours the road green, orange or red; null leaves it ice blue. */
     var flow: Flow? = null
+        set(value) { if (field != value) { field = value; invalidate() } }
+
+    /**
+     * The traffic along the road ahead, stretch by stretch: (metres from the car where it starts, its flow), nearest
+     * first; each holds until the next point asked ([TrafficAhead.end]), a point without answer left uncoloured. Drawn on the road's edges, in
+     * perspective, like the coloured route line of a navigation app.
+     */
+    var aheadFlow: List<Pair<Int, Flow>> = emptyList()
         set(value) { if (field != value) { field = value; invalidate() } }
 
     /** TomTom's traffic ahead in words (« Bouchon à 500 m · 18 km/h »), or null while the road is free. */
@@ -503,6 +512,15 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
                 arrowPaint.color = flow?.let { ColorUtils.setAlphaComponent(it.color, 0x66) } ?: ColorUtils.setAlphaComponent(ink, 0x33)
                 rect.set(from, y, to, y + thick)
                 canvas.drawRoundRect(rect, thick / 2, thick / 2, arrowPaint)
+                // The next kilometres as measured, stretch by stretch, at their place on the trip.
+                for ((start, stretchFlow) in aheadFlow) {
+                    val a = (fraction + start / routeMeters.toFloat()).coerceIn(fraction, 1f)
+                    val b = (fraction + TrafficAhead.end(start) / routeMeters.toFloat()).coerceIn(a, 1f)
+                    if (b <= a) continue
+                    arrowPaint.color = stretchFlow.color
+                    rect.set(from + (to - from) * a, y, from + (to - from) * b, y + thick)
+                    canvas.drawRect(rect, arrowPaint)
+                }
                 // Behind: each stretch in the colour Maps gave while the car drove it (blue where it gave none).
                 for (index in stretches.indices) {
                     val start = stretches[index].first.coerceIn(0f, fraction)
@@ -603,6 +621,7 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
         canvas.drawLine(cx - far * .86f, horizon, cx - near * .86f, h, edgePaint)
         canvas.drawLine(cx + far * .86f, horizon, cx + near * .86f, h, edgePaint)
         edgePaint.shader = null
+        drawFlowAhead(canvas, cx, h, horizon, ::half)
         var step = 0
         while (step < 16) {
             val z0 = 1f + step - (travel % 1f)
@@ -632,6 +651,40 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
                 markPaint.color = ColorUtils.setAlphaComponent(0xFFFFB020.toInt(), (60 + 190 * fade).roundToInt())
                 canvas.drawRect(x - wide * .5f, y0 - tall, x + wide * .5f, y0 - tall * .75f, markPaint)
             }
+        }
+    }
+
+    /**
+     * The traffic ahead along both edges of the straight road, each stretch in its colour, from the car (bottom) to
+     * 3.5 km (the horizon). Small marks name 1, 2 and 3 km.
+     */
+    private fun drawFlowAhead(canvas: Canvas, cx: Float, h: Float, horizon: Float, half: (Float) -> Float) {
+        val stretches = aheadFlow
+        if (stretches.isEmpty()) return
+        // Not true perspective, which would squeeze 1 to 3.5 km into a few pixels under the horizon: a gentler scale
+        // where 500 m is about a third of the way up, 1 km half and 2 km three quarters.
+        fun y(meters: Int) = h - (h - horizon) * sqrt(meters / TrafficAhead.FAR_METERS.toFloat()).coerceAtMost(1f)
+        edgePaint.shader = null
+        edgePaint.strokeCap = Paint.Cap.BUTT
+        for (index in stretches.indices) {
+            val (from, flow) = stretches[index]
+            val to = TrafficAhead.end(from)
+            val y0 = y(from)
+            val y1 = y(to)
+            val fade = ((y0 - horizon) / (h - horizon)).coerceIn(0f, 1f)
+            edgePaint.color = flow.color
+            edgePaint.strokeWidth = (2f + 5f * fade) * density
+            for (side in SIDES) canvas.drawLine(cx + side * half(y0), y0, cx + side * half(y1), y1, edgePaint)
+        }
+        edgePaint.strokeCap = Paint.Cap.ROUND
+        textPaint.typeface = Fonts.get(700)
+        textPaint.textSize = 9 * density
+        textPaint.textAlign = Paint.Align.LEFT
+        textPaint.color = ColorUtils.setAlphaComponent(ink, 0xB3)
+        for ((meters, name) in DISTANCE_MARKS) {
+            if (stretches.none { (from, _) -> meters in from..TrafficAhead.end(from) }) continue
+            val y = y(meters)
+            canvas.drawText(name, cx + half(y) + 6 * density, y + 3 * density, textPaint)
         }
     }
 
@@ -1271,5 +1324,6 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
         const val FAR_M = 500
         val LANES = floatArrayOf(-1f / 3f, 1f / 3f)
         val SIDES = floatArrayOf(-1f, 1f)
+        val DISTANCE_MARKS = listOf(1000 to "1 km", 2000 to "2 km", 3000 to "3 km")
     }
 }

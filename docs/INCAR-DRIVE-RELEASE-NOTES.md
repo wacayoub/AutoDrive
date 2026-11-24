@@ -3,6 +3,7 @@ Incar Drive 1.0.28 — écran d’accueil pour l’Incarlink (Android 11 à 13, 
 **Mettre à jour** : Réglages › Mises à jour, ou la proposition automatique.
 
 **Changements**
+- Où est le bouchon, morceau par morceau : sur la carte « Route », les bords de la route se colorent en vert, orange ou rouge selon le trafic sous la voiture, à 500 m, 1 km, 2 km et 3 km (repères « 1 km », « 2 km », « 3 km »), comme la ligne de Google Maps. La barre de A à B montre aussi ces kilomètres à leur place sur le trajet. Pendant un guidage, seulement jusqu’au prochain virage de Maps, car après, la route suivie n’est plus forcément l’itinéraire. TomTom est interrogé toutes les minutes et demie (environ 200 demandes par heure de conduite, dans les 2 500 gratuites par jour).
 - Bouchon vu par ta propre vitesse : TomTom fait la moyenne d’un long tronçon et réagit tard (« Ralenti · 55 km/h » quand tu roules à 6 km/h derrière un bus). Maintenant, si la voiture roule depuis plus d’une minute à moins de 40 % de la vitesse normale de la route, la carte « Route » passe au rouge « Bouchon · 6 km/h » (orange sous 75 %). Seulement sur les routes rapides (70 km/h et plus), pour qu’un feu rouge en ville ne compte pas ; marche aussi sans clé TomTom, avec la limitation de la route.
 - Vitesse lisible sur le ciel : le chiffre de la vitesse a un léger contour sombre (clair en journée), pour rester net devant les nuages clairs ou le ciel de nuit.
 

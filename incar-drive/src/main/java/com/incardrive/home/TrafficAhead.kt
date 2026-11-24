@@ -16,9 +16,16 @@ import java.util.concurrent.Executors
  * is what colours the « Route » card. Only the two points are sent, with the key; nothing without a key.
  */
 internal object TrafficAhead {
-    /** How far along the road ahead the traffic is asked, besides under the car. */
-    val AHEAD_METERS = listOf(500, 1500)
-    private const val EVERY_MS = 60_000L
+    /**
+     * How far along the road ahead the traffic is asked, besides under the car: five points every minute and a half,
+     * about 200 questions an hour of driving, within TomTom's 2 500 free a day.
+     */
+    val AHEAD_METERS = listOf(500, 1000, 2000, 3000)
+    const val FAR_METERS = 3500
+
+    /** Where the stretch measured at [meters] ends: at the next point asked, the last one at [FAR_METERS]. */
+    fun end(meters: Int): Int = AHEAD_METERS.firstOrNull { it > meters } ?: FAR_METERS
+    private const val EVERY_MS = 90_000L
     private const val FRESH_MS = 180_000L
     private const val OWN_WINDOW_MS = 90_000L
     private const val OWN_MIN_MS = 60_000L
@@ -45,6 +52,20 @@ internal object TrafficAhead {
     /** The worst traffic of the two points, null when unknown or older than three minutes. */
     val reading: Reading? get() = current?.takeIf { clock() - flowAt < FRESH_MS }
     private var current: Reading? = null
+    private var all: List<Reading> = emptyList()
+
+    /**
+     * The road ahead stretch by stretch, nearest first: each reading holds from its distance to the next point asked
+     * ([end]). Under the car, the car's own speed when it says worse. Empty when nothing is known.
+     */
+    val stretches: List<Reading>
+        get() {
+            val known = all.takeIf { clock() - flowAt < FRESH_MS }.orEmpty()
+            val mine = own ?: return known
+            val first = known.firstOrNull { it.meters == 0 }
+            return if (first == null) listOf(mine) + known
+                else known.map { if (it === first && mine.flow.ordinal > it.flow.ordinal) mine else it }
+        }
 
     val flow: Flow? get() = reading?.flow
 
@@ -101,7 +122,7 @@ internal object TrafficAhead {
     /** Told on the main thread when [reading] changes. */
     var changed: (() -> Unit)? = null
 
-    /** Called with each GPS fix: asks TomTom at most once a minute, and clears what is gone or too old. */
+    /** Called with each GPS fix: asks TomTom at most every minute and a half, and clears what is gone or too old. */
     fun follow(key: String?, here: Pair<Double, Double>, ahead: List<Pair<Pair<Double, Double>, Int>>) {
         val now = clock()
         val typed = key?.trim()?.takeIf { it.isNotEmpty() }
@@ -134,24 +155,27 @@ internal object TrafficAhead {
                 readings.firstOrNull { it?.meters == 0 }?.freeSpeed?.let { freeHere = it; freeAt = clock() }
                 val before = current
                 val worst = worstReading(readings)
+                val beforeAll = all
                 if (worst != null) {
                     flowAt = clock()
                     current = worst
-                } else if (clock() - flowAt >= FRESH_MS) current = null
-                if (current != before || refused != wasRefused) changed?.invoke()
+                    all = readings.filterNotNull().sortedBy { it.meters }
+                } else if (clock() - flowAt >= FRESH_MS) { current = null; all = emptyList() }
+                if (current != before || all != beforeAll || refused != wasRefused) changed?.invoke()
             })
         })
     }
 
     private fun clear() {
-        if (current == null) return
+        if (current == null && all.isEmpty()) return
         current = null
+        all = emptyList()
         changed?.invoke()
     }
 
     /** Back to the start, for the unit tests. */
     internal fun reset() {
-        asking = false; askedAt = 0L; blockedUntil = 0L; flowAt = 0L; lastKey = null; refused = false; current = null
+        asking = false; askedAt = 0L; blockedUntil = 0L; flowAt = 0L; lastKey = null; refused = false; current = null; all = emptyList()
         samples.clear(); freeHere = null; freeAt = 0L; own = null
     }
 

@@ -1850,7 +1850,9 @@ class HomeActivity : Activity() {
         if (roadGauge != null) {
             // Stopped in a jam the GPS gives no heading: the last one while moving still says which way is ahead.
             val heading = bearing ?: heldBearing.takeIf { now - heldBearingAt < 10 * 60_000L }
-            val ahead = TrafficAhead.AHEAD_METERS.mapNotNull { meters ->
+            // While Maps guides, only as far as its next turn: past it the road followed is not the route any more.
+            val turnAt = NavWatch.nav.value?.let { nav -> Maneuver.meters(nav.step) }
+            val ahead = TrafficAhead.AHEAD_METERS.filter { turnAt == null || it <= turnAt }.mapNotNull { meters ->
                 roadLimits.pointAhead(fix.latitude, fix.longitude, heading, meters.toDouble())?.let { it to meters }
             }
             TrafficAhead.follow(prefs.getString(OwnMap.TRAFFIC_KEY, null), fix.latitude to fix.longitude, ahead)
@@ -1873,6 +1875,7 @@ class HomeActivity : Activity() {
         val maps = lastNav?.flow
         val shown = TrafficAhead.shown
         roadGauge?.flow = TrafficAhead.worst(listOf(shown?.flow, maps))
+        roadGauge?.aheadFlow = TrafficAhead.stretches.map { it.meters to it.flow }
         roadGauge?.traffic = TrafficAhead.label(shown, TrafficAhead.refused)
             ?: "Trafic dense sur le trajet".takeIf { maps == Flow.JAM }
     }
