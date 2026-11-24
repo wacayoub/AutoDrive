@@ -16,7 +16,8 @@ import java.util.concurrent.Executors
  * is what colours the « Route » card. Only the two points are sent, with the key; nothing without a key.
  */
 internal object TrafficAhead {
-    const val AHEAD_METERS = 500.0
+    /** How far along the road ahead the traffic is asked, besides under the car. */
+    val AHEAD_METERS = listOf(500, 1500)
     private const val EVERY_MS = 60_000L
     private const val FRESH_MS = 180_000L
 
@@ -52,7 +53,7 @@ internal object TrafficAhead {
     var changed: (() -> Unit)? = null
 
     /** Called with each GPS fix: asks TomTom at most once a minute, and clears what is gone or too old. */
-    fun follow(key: String?, here: Pair<Double, Double>, ahead: Pair<Double, Double>?) {
+    fun follow(key: String?, here: Pair<Double, Double>, ahead: List<Pair<Pair<Double, Double>, Int>>) {
         val now = clock()
         val typed = key?.trim()?.takeIf { it.isNotEmpty() }
         // A new key (or none): a refusal or a spent allowance of the old one no longer holds.
@@ -69,7 +70,7 @@ internal object TrafficAhead {
         askedAt = now
         background(Runnable {
             var status = 0
-            val readings = listOfNotNull(here to 0, ahead?.let { it to AHEAD_METERS.toInt() }).map { (point, meters) ->
+            val readings = (listOf(here to 0) + ahead).map { (point, meters) ->
                 runCatching { ask(typed, point).also { status = it.first }.second?.copy(meters = meters) }.getOrNull()
             }
             onMain(Runnable {
@@ -135,6 +136,8 @@ internal object TrafficAhead {
         return Reading(flow, current.toInt(), free.toInt())
     }
 
+    fun worst(flows: List<Flow?>): Flow? = flows.filterNotNull().maxByOrNull { it.ordinal }
+
     /** The worst of the points; between two alike, the nearer one. */
     fun worstReading(readings: List<Reading?>): Reading? =
         readings.filterNotNull().sortedBy { it.meters }.maxByOrNull { it.flow.ordinal }
@@ -146,7 +149,11 @@ internal object TrafficAhead {
     fun label(reading: Reading?, refused: Boolean = false): String? {
         if (reading == null) return "Clé TomTom refusée".takeIf { refused }
         if (reading.flow == Flow.FLUID) return null
-        val where = if (reading.meters > 0) " à ${reading.meters} m" else ""
+        val where = when {
+            reading.meters >= 1000 -> " à " + String.format(Locale.FRANCE, "%.1f", reading.meters / 1000.0).removeSuffix(",0") + " km"
+            reading.meters > 0 -> " à ${reading.meters} m"
+            else -> ""
+        }
         if (reading.closed) return "Route fermée$where"
         val word = if (reading.flow == Flow.JAM) "Bouchon" else "Ralenti"
         return listOfNotNull(word + where, reading.speed?.let { "$it km/h" }).joinToString(" · ")

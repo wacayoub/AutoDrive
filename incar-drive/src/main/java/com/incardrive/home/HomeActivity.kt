@@ -1827,6 +1827,10 @@ class HomeActivity : Activity() {
     /** The limit the dial and the beep use now. */
     private fun activeLimit(): Int? = if (roadMode()) roadLimit else alertSetting().takeIf { it > 0 }
 
+    // The last heading while moving, for the traffic ahead once stopped.
+    private var heldBearing: Int? = null
+    private var heldBearingAt = 0L
+
     /** Matches each GPS fix to the road under the car; reads or fetches the map squares around it as it goes. */
     private fun followRoad(fix: android.location.Location, kmh: Int?) {
         val now = System.currentTimeMillis()
@@ -1834,6 +1838,7 @@ class HomeActivity : Activity() {
             if (!isDestroyed) ownMap.cameras(roadLimits.cameraList(), roadLimits.cameraZones())
         }
         val bearing = RoadWatch.bearing(fix, kmh)
+        if (bearing != null) { heldBearing = bearing; heldBearingAt = now }
         val road = roadLimits.limitAt(fix.latitude, fix.longitude, bearing)
         // The street under the car, shown on the navigation card when not guiding.
         if (road?.name != currentStreet) {
@@ -1842,8 +1847,14 @@ class HomeActivity : Activity() {
             if (NavWatch.nav.value == null) renderNav(null)
         }
         renderCamera(roadLimits.cameraAhead(fix.latitude, fix.longitude, bearing), kmh)
-        if (roadGauge != null) TrafficAhead.follow(prefs.getString(OwnMap.TRAFFIC_KEY, null), fix.latitude to fix.longitude,
-            roadLimits.pointAhead(fix.latitude, fix.longitude, bearing, TrafficAhead.AHEAD_METERS))
+        if (roadGauge != null) {
+            // Stopped in a jam the GPS gives no heading: the last one while moving still says which way is ahead.
+            val heading = bearing ?: heldBearing.takeIf { now - heldBearingAt < 10 * 60_000L }
+            val ahead = TrafficAhead.AHEAD_METERS.mapNotNull { meters ->
+                roadLimits.pointAhead(fix.latitude, fix.longitude, heading, meters.toDouble())?.let { it to meters }
+            }
+            TrafficAhead.follow(prefs.getString(OwnMap.TRAFFIC_KEY, null), fix.latitude to fix.longitude, ahead)
+        }
         val limit = road?.limit.takeIf { roadMode() }
         if (limit != roadLimit) {
             roadLimit = limit
@@ -1853,12 +1864,15 @@ class HomeActivity : Activity() {
     }
 
     /**
-     * The road's colour: TomTom's traffic on the road just ahead when the driver gave a key (Google Maps keeps the
-     * red of its route line to itself), else the colour Google Maps gives its time left for the whole trip.
+     * The road's colour, the worse of TomTom's traffic on the road ahead (with the driver's key; Google Maps keeps the
+     * red of its route line to itself) and the colour Google Maps gives its time left: red when Maps says the trip is
+     * slowed, even where the road under the car is clear.
      */
     private fun renderFlow() {
-        roadGauge?.flow = TrafficAhead.flow ?: lastNav?.flow
+        val maps = lastNav?.flow
+        roadGauge?.flow = TrafficAhead.worst(listOf(TrafficAhead.flow, maps))
         roadGauge?.traffic = TrafficAhead.label(TrafficAhead.reading, TrafficAhead.refused)
+            ?: "Trafic dense sur le trajet".takeIf { maps == Flow.JAM }
     }
 
     private var currentStreet: String? = null

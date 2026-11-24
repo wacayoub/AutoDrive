@@ -16,6 +16,7 @@ class TrafficAheadTest {
     private var told = 0
     private val here = 33.585 to -7.62
     private val ahead = 33.5895 to -7.62
+    private val far = 33.5985 to -7.62
 
     private fun json(current: Int, free: Int, closed: Boolean = false) =
         TrafficAhead.parse("""{"flowSegmentData":{"currentSpeed":$current,"freeFlowSpeed":$free,"roadClosure":$closed}}""")
@@ -36,7 +37,8 @@ class TrafficAheadTest {
         TrafficAhead.reset()
     }
 
-    private fun drive(key: String? = "KEY", ahead: Pair<Double, Double>? = this.ahead) = TrafficAhead.follow(key, here, ahead)
+    private fun drive(key: String? = "KEY", ahead: Pair<Double, Double>? = this.ahead) =
+        TrafficAhead.follow(key, here, listOfNotNull(ahead?.let { it to 500 }))
     private fun label() = TrafficAhead.label(TrafficAhead.reading, TrafficAhead.refused)
 
     @Test
@@ -204,6 +206,22 @@ class TrafficAheadTest {
         answer = { 200 to json(58, 60) }
         drive("  KEY \n")
         assertEquals("KEY", asked.first().first)
+    }
+
+    @Test
+    fun aJamFurtherAheadIsToldInKilometres() {
+        answer = { if (it == far) 200 to json(10, 60) else 200 to json(55, 60) }
+        TrafficAhead.follow("KEY", here, listOf(ahead to 500, far to 1500))
+        assertEquals(3, asked.size)
+        assertEquals("Bouchon à 1,5 km · 10 km/h", label())
+        assertEquals("Ralenti à 1 km · 40 km/h", TrafficAhead.label(TrafficAhead.Reading(Flow.SLOW, 40, 60, meters = 1000)))
+    }
+
+    @Test
+    fun theWorseOfTomTomAndMapsColoursTheRoad() {
+        assertEquals(Flow.JAM, TrafficAhead.worst(listOf(Flow.FLUID, Flow.JAM)))
+        assertEquals(Flow.SLOW, TrafficAhead.worst(listOf(null, Flow.SLOW)))
+        assertNull(TrafficAhead.worst(listOf(null, null)))
     }
 
     @Test

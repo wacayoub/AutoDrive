@@ -1,13 +1,18 @@
-Incar Drive 1.0.26 — écran d’accueil pour l’Incarlink (Android 11 à 13, conçu pour 800 × 480).
+Incar Drive 1.0.27 — écran d’accueil pour l’Incarlink (Android 11 à 13, conçu pour 800 × 480).
 
 **Mettre à jour** : Réglages › Mises à jour, ou la proposition automatique.
 
 **Changements**
+- La carte « Route » rouge comme Google Maps : quand Maps colore en rouge le temps restant (trajet ralenti), la route de la carte « Route » et la barre de A à B passent aussi au rouge, même si la route juste sous la voiture est dégagée ; avec la bulle « Trafic dense sur le trajet » quand TomTom ne voit pas de bouchon tout près. Avant, le vert de TomTom l’emportait.
+- Trafic vu plus loin : TomTom est interrogé sous la voiture, à 500 m et à 1,5 km sur la route suivie (« Bouchon à 1,5 km · 10 km/h »).
+- Arrêté dans un bouchon, le trafic devant est encore suivi : le GPS ne donne plus de direction à l’arrêt, la dernière direction en roulant (moins de 10 minutes) dit où est « devant ».
+
+Comprend aussi la 1.0.26 :
 - Trafic en clair sur la carte « Route » : avec ta clé TomTom, une petite bulle à la couleur du trafic dit ce qui t’attend, par exemple « Bouchon · 18 km/h », « Ralenti à 500 m · 42 km/h » ou « Route fermée à 500 m », avec la vitesse réellement roulée à cet endroit. Elle est sous la consigne de Maps pendant un guidage, sur la route sinon, et disparaît quand la route est fluide.
 - Clé TomTom refusée : si TomTom refuse ta clé (mal copiée, ou retirée), la carte « Route » l’écrit au lieu de rester muette, et Incar Drive réessaie toutes les 10 minutes. Une nouvelle clé tapée dans Réglages est essayée tout de suite.
 - Trafic jamais périmé : sans réseau ou quand le quota gratuit de TomTom est épuisé, le dernier trafic connu reste affiché 3 minutes au plus, puis disparaît ; retirer la clé l’efface aussitôt.
 
-Comprend aussi la 1.0.25 :
+Et la 1.0.25 :
 - Trafic devant la voiture sur la carte « Route » : avec ta clé TomTom gratuite (Réglages › Trafic), la route se colore en vert, orange ou rouge selon le trafic sous la voiture et 500 m plus loin sur la route suivie, mis à jour chaque minute. Google Maps garde pour lui le rouge de sa ligne d’itinéraire ; sans clé, la couleur reste celle que Maps donne à l’ensemble du trajet. Seules ces deux positions et la clé sont envoyées à TomTom, environ 60 demandes par heure de conduite.
 - Direction corrigée sur la carte « Route » : quand Google Maps indique de serrer à droite ou à gauche (sortie, bretelle, bifurcation, « légèrement à droite »), la route dessinée se sépare en biais avec la flèche dans la branche, au lieu d’un virage à angle droit. C’est lu dans les mots de Maps et, quand il n’y en a pas, dans la forme de sa flèche (une flèche en biais est plus haute que large).
 
