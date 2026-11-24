@@ -224,6 +224,50 @@ class TrafficAheadTest {
         assertNull(TrafficAhead.worst(listOf(null, null)))
     }
 
+    /** One GPS fix a second for [seconds] at [kmh]. */
+    private fun crawl(seconds: Int, kmh: Int, limit: Int? = 100) = repeat(seconds) { now += 1_000; TrafficAhead.drive(kmh, limit) }
+
+    @Test
+    fun crawlingBehindABusIsAJamEvenWhenTomTomSaysSlow() {
+        // TomTom: 55 against 100 free under the car (orange); the car itself does 6 km/h for over a minute.
+        answer = { 200 to json(55, 100) }
+        drive(ahead = null)
+        assertEquals("Ralenti · 55 km/h", TrafficAhead.label(TrafficAhead.shown))
+        crawl(30, 6)
+        // Half a minute: not yet.
+        assertEquals("Ralenti · 55 km/h", TrafficAhead.label(TrafficAhead.shown))
+        crawl(35, 6)
+        assertEquals("Bouchon · 6 km/h", TrafficAhead.label(TrafficAhead.shown))
+        // Moving freely again: within the minute and a half, back to TomTom's.
+        crawl(95, 95)
+        assertNull(TrafficAhead.ownReading)
+    }
+
+    @Test
+    fun withoutAKeyTheRoadLimitIsTheFreeSpeed() {
+        crawl(70, 50, limit = 100)
+        assertEquals("Ralenti · 50 km/h", TrafficAhead.label(TrafficAhead.shown))
+    }
+
+    @Test
+    fun aRedLightInTownIsNotAJam() {
+        // A 60 km/h street: stopping a minute at a light says nothing.
+        crawl(70, 0, limit = 60)
+        assertNull(TrafficAhead.shown)
+        // No known limit either: nothing.
+        TrafficAhead.reset()
+        crawl(70, 0, limit = null)
+        assertNull(TrafficAhead.shown)
+    }
+
+    @Test
+    fun noSpeedForgetsTheCrawl() {
+        crawl(70, 5)
+        assertEquals(Flow.JAM, TrafficAhead.shown?.flow)
+        TrafficAhead.drive(null, 100)
+        assertNull(TrafficAhead.shown)
+    }
+
     @Test
     fun oddAnswersAreIgnored() {
         assertNull(TrafficAhead.parse("""{"flowSegmentData":{"currentSpeed":30}}"""))

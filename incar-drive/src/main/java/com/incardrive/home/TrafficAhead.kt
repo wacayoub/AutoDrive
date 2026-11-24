@@ -20,6 +20,9 @@ internal object TrafficAhead {
     val AHEAD_METERS = listOf(500, 1500)
     private const val EVERY_MS = 60_000L
     private const val FRESH_MS = 180_000L
+    private const val OWN_WINDOW_MS = 90_000L
+    private const val OWN_MIN_MS = 60_000L
+    const val OWN_MIN_FREE = 70
 
     private val worker = Executors.newSingleThreadExecutor { Thread(it, "traffic-ahead").apply { isDaemon = true } }
     private val main by lazy { Handler(Looper.getMainLooper()) }
@@ -48,6 +51,52 @@ internal object TrafficAhead {
     /** True after TomTom refused the key (401 or 403), until a new key is typed or it is accepted again. */
     var refused = false
         private set
+
+    // The car's own speed over the last minute and a half, against the road's free speed: TomTom averages long stretches
+    // and is late, the car crawling behind a bus is not.
+    private val samples = ArrayDeque<Pair<Long, Int>>()
+    private var freeHere: Int? = null
+    private var freeAt = 0L
+    private var own: Reading? = null
+
+    /** What the car's own speed says, null when it says nothing (too short, a town street, or moving freely). */
+    val ownReading: Reading? get() = own
+
+    /** The worse of TomTom's and the car's own; between two alike, the nearer. */
+    val shown: Reading? get() = worstReading(listOf(reading, own))
+
+    /**
+     * Each GPS fix with the car's speed and the road's posted limit (the free speed when TomTom gave none). Only on
+     * roads free at [OWN_MIN_FREE] km/h or more, where a long crawl is a jam and not a red light.
+     */
+    fun drive(kmh: Int?, limit: Int?) {
+        val now = clock()
+        if (kmh == null) {
+            samples.clear()
+            setOwn(null)
+            return
+        }
+        samples.addLast(now to kmh)
+        while (samples.first().first < now - OWN_WINDOW_MS) samples.removeFirst()
+        val free = freeHere.takeIf { now - freeAt < 10 * 60_000L } ?: limit
+        val long = now - samples.first().first >= OWN_MIN_MS && samples.size >= 20
+        val next = if (free == null || free < OWN_MIN_FREE || !long) null else {
+            val average = samples.sumOf { it.second } / samples.size
+            val ratio = average.toDouble() / free
+            when {
+                ratio < .4 -> Reading(Flow.JAM, average, free)
+                ratio < .75 -> Reading(Flow.SLOW, average, free)
+                else -> null
+            }
+        }
+        setOwn(next)
+    }
+
+    private fun setOwn(next: Reading?) {
+        if (own == next) return
+        own = next
+        changed?.invoke()
+    }
 
     /** Told on the main thread when [reading] changes. */
     var changed: (() -> Unit)? = null
@@ -82,6 +131,7 @@ internal object TrafficAhead {
                     429 -> blockedUntil = clock() + 10 * 60_000
                     200 -> refused = false
                 }
+                readings.firstOrNull { it?.meters == 0 }?.freeSpeed?.let { freeHere = it; freeAt = clock() }
                 val before = current
                 val worst = worstReading(readings)
                 if (worst != null) {
@@ -102,6 +152,7 @@ internal object TrafficAhead {
     /** Back to the start, for the unit tests. */
     internal fun reset() {
         asking = false; askedAt = 0L; blockedUntil = 0L; flowAt = 0L; lastKey = null; refused = false; current = null
+        samples.clear(); freeHere = null; freeAt = 0L; own = null
     }
 
     private fun request(key: String, point: Pair<Double, Double>): Pair<Int, Reading?> {

@@ -321,6 +321,13 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
         typeface = Fonts.get(700)
         textAlign = Paint.Align.CENTER
     }
+    // A soft dark (or light) edge under the speed, so it stays readable over bright clouds or a dark night sky.
+    private val valueEdge = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        typeface = Fonts.get(700)
+        textAlign = Paint.Align.CENTER
+        style = Paint.Style.STROKE
+        strokeJoin = Paint.Join.ROUND
+    }
     private val unitPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         textAlign = Paint.Align.CENTER
         color = mutedColor
@@ -539,7 +546,12 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
         unitPaint.color = ColorUtils.setAlphaComponent(ink, 0xB3)
         valuePaint.setShadowLayer(10 * density, 0f, 0f, ColorUtils.setAlphaComponent(tone, 0x80))
         val speedX = if (guiding) w * .64f else cx
-        canvas.drawText(speed?.let { shown.roundToInt().toString() } ?: "—", speedX, baseline, valuePaint)
+        val figure = speed?.let { shown.roundToInt().toString() } ?: "—"
+        valueEdge.textSize = size
+        valueEdge.strokeWidth = size * .09f
+        valueEdge.color = if (dark || over) 0x8C0B1018.toInt() else 0x99FFFFFF.toInt()
+        canvas.drawText(figure, speedX, baseline, valueEdge)
+        canvas.drawText(figure, speedX, baseline, valuePaint)
         if (!guiding) {
             unitPaint.textSize = 10 * density
             canvas.drawText("KM/H", cx, baseline + 13 * density, unitPaint)

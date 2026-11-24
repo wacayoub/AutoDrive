@@ -1854,6 +1854,7 @@ class HomeActivity : Activity() {
                 roadLimits.pointAhead(fix.latitude, fix.longitude, heading, meters.toDouble())?.let { it to meters }
             }
             TrafficAhead.follow(prefs.getString(OwnMap.TRAFFIC_KEY, null), fix.latitude to fix.longitude, ahead)
+            TrafficAhead.drive(kmh, road?.limit)
         }
         val limit = road?.limit.takeIf { roadMode() }
         if (limit != roadLimit) {
@@ -1870,8 +1871,9 @@ class HomeActivity : Activity() {
      */
     private fun renderFlow() {
         val maps = lastNav?.flow
-        roadGauge?.flow = TrafficAhead.worst(listOf(TrafficAhead.flow, maps))
-        roadGauge?.traffic = TrafficAhead.label(TrafficAhead.reading, TrafficAhead.refused)
+        val shown = TrafficAhead.shown
+        roadGauge?.flow = TrafficAhead.worst(listOf(shown?.flow, maps))
+        roadGauge?.traffic = TrafficAhead.label(shown, TrafficAhead.refused)
             ?: "Trafic dense sur le trajet".takeIf { maps == Flow.JAM }
     }
 

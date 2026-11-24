@@ -1,13 +1,17 @@
-Incar Drive 1.0.27 — écran d’accueil pour l’Incarlink (Android 11 à 13, conçu pour 800 × 480).
+Incar Drive 1.0.28 — écran d’accueil pour l’Incarlink (Android 11 à 13, conçu pour 800 × 480).
 
 **Mettre à jour** : Réglages › Mises à jour, ou la proposition automatique.
 
 **Changements**
+- Bouchon vu par ta propre vitesse : TomTom fait la moyenne d’un long tronçon et réagit tard (« Ralenti · 55 km/h » quand tu roules à 6 km/h derrière un bus). Maintenant, si la voiture roule depuis plus d’une minute à moins de 40 % de la vitesse normale de la route, la carte « Route » passe au rouge « Bouchon · 6 km/h » (orange sous 75 %). Seulement sur les routes rapides (70 km/h et plus), pour qu’un feu rouge en ville ne compte pas ; marche aussi sans clé TomTom, avec la limitation de la route.
+- Vitesse lisible sur le ciel : le chiffre de la vitesse a un léger contour sombre (clair en journée), pour rester net devant les nuages clairs ou le ciel de nuit.
+
+Comprend aussi la 1.0.27 :
 - La carte « Route » rouge comme Google Maps : quand Maps colore en rouge le temps restant (trajet ralenti), la route de la carte « Route » et la barre de A à B passent aussi au rouge, même si la route juste sous la voiture est dégagée ; avec la bulle « Trafic dense sur le trajet » quand TomTom ne voit pas de bouchon tout près. Avant, le vert de TomTom l’emportait.
 - Trafic vu plus loin : TomTom est interrogé sous la voiture, à 500 m et à 1,5 km sur la route suivie (« Bouchon à 1,5 km · 10 km/h »).
 - Arrêté dans un bouchon, le trafic devant est encore suivi : le GPS ne donne plus de direction à l’arrêt, la dernière direction en roulant (moins de 10 minutes) dit où est « devant ».
 
-Comprend aussi la 1.0.26 :
+Et la 1.0.26 :
 - Trafic en clair sur la carte « Route » : avec ta clé TomTom, une petite bulle à la couleur du trafic dit ce qui t’attend, par exemple « Bouchon · 18 km/h », « Ralenti à 500 m · 42 km/h » ou « Route fermée à 500 m », avec la vitesse réellement roulée à cet endroit. Elle est sous la consigne de Maps pendant un guidage, sur la route sinon, et disparaît quand la route est fluide.
 - Clé TomTom refusée : si TomTom refuse ta clé (mal copiée, ou retirée), la carte « Route » l’écrit au lieu de rester muette, et Incar Drive réessaie toutes les 10 minutes. Une nouvelle clé tapée dans Réglages est essayée tout de suite.
 - Trafic jamais périmé : sans réseau ou quand le quota gratuit de TomTom est épuisé, le dernier trafic connu reste affiché 3 minutes au plus, puis disparaît ; retirer la clé l’efface aussitôt.
