@@ -94,6 +94,10 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
     var flow: Flow? = null
         set(value) { if (field != value) { field = value; invalidate() } }
 
+    /** TomTom's traffic ahead in words (« Bouchon à 500 m · 18 km/h »), or null while the road is free. */
+    var traffic: String? = null
+        set(value) { if (field != value) { field = value; invalidate() } }
+
     // The foot of the card, kept for the navigation's destinations and instruction: the car stops above it.
     private var footer = 0f
     private var footerColor = 0
@@ -540,6 +544,7 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
             unitPaint.textSize = 10 * density
             canvas.drawText("KM/H", cx, baseline + 13 * density, unitPaint)
         } else drawPill(canvas, turn, arriving)
+        traffic?.let { drawTraffic(canvas, it, w, if (guiding) 54 * density else horizon + 8 * density, !guiding) }
         if (footer > 0f) canvas.restore()
 
         when {
@@ -993,6 +998,34 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
         canvas.save()
         canvas.clipRect(rect)
         canvas.drawText(label, centre, bottom - 6.5f * density, textPaint)
+        canvas.restore()
+    }
+
+    /**
+     * The traffic ahead in a small pill in its colour: under the guidance pill while guiding, else centred on the road
+     * just under the horizon.
+     */
+    private fun drawTraffic(canvas: Canvas, label: String, w: Float, top: Float, centred: Boolean) {
+        val colour = flow?.color ?: Flow.SLOW.color
+        textPaint.textAlign = Paint.Align.LEFT
+        textPaint.typeface = Fonts.get(700)
+        textPaint.textSize = 11 * density
+        val dot = 3.5f * density
+        val wide = min(textPaint.measureText(label) + dot * 2 + 22 * density, w - 16 * density)
+        val left = if (centred) (w - wide) / 2 else 8 * density
+        rect.set(left, top, left + wide, top + 22 * density)
+        arrowPaint.shader = null
+        arrowPaint.color = 0xE60B1018.toInt()
+        canvas.drawRoundRect(rect, 11 * density, 11 * density, arrowPaint)
+        linePaint.color = colour
+        linePaint.strokeWidth = 1.4f * density
+        canvas.drawRoundRect(rect, 11 * density, 11 * density, linePaint)
+        arrowPaint.color = colour
+        canvas.drawCircle(left + 10 * density, top + 11 * density, dot, arrowPaint)
+        textPaint.color = Color.WHITE
+        canvas.save()
+        canvas.clipRect(rect)
+        canvas.drawText(label, left + 10 * density + dot + 6 * density, top + 15 * density, textPaint)
         canvas.restore()
     }
 

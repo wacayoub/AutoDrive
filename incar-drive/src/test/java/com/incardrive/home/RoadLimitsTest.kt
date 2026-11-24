@@ -188,11 +188,23 @@ class RoadLimitsTest {
     fun tomTomSpeedsGiveTheTrafficColour() {
         fun json(current: Int, free: Int, closed: Boolean = false) =
             """{"flowSegmentData":{"currentSpeed":$current,"freeFlowSpeed":$free,"roadClosure":$closed}}"""
-        assertEquals(Flow.FLUID, TrafficAhead.parse(json(55, 60)))
-        assertEquals(Flow.SLOW, TrafficAhead.parse(json(30, 60)))
-        assertEquals(Flow.JAM, TrafficAhead.parse(json(12, 60)))
-        assertEquals(Flow.JAM, TrafficAhead.parse(json(60, 60, closed = true)))
+        assertEquals(Flow.FLUID, TrafficAhead.parse(json(55, 60))?.flow)
+        assertEquals(Flow.SLOW, TrafficAhead.parse(json(30, 60))?.flow)
+        assertEquals(Flow.JAM, TrafficAhead.parse(json(12, 60))?.flow)
+        assertEquals(Flow.JAM, TrafficAhead.parse(json(60, 60, closed = true))?.flow)
         assertNull(TrafficAhead.parse("{}"))
-        assertEquals(Flow.JAM, TrafficAhead.worst(listOf(Flow.FLUID, null, Flow.JAM)))
+        val here = TrafficAhead.parse(json(30, 60))
+        val ahead = TrafficAhead.parse(json(12, 60))!!.copy(meters = 500)
+        assertEquals(ahead, TrafficAhead.worstReading(listOf(here, null, ahead)))
+        assertEquals(0, TrafficAhead.worstReading(listOf(here, here!!.copy(meters = 500)))!!.meters)
+    }
+
+    @Test
+    fun theTrafficAheadInWords() {
+        assertNull(TrafficAhead.label(TrafficAhead.Reading(Flow.FLUID, 58, 60)))
+        assertNull(TrafficAhead.label(null))
+        assertEquals("Bouchon · 18 km/h", TrafficAhead.label(TrafficAhead.Reading(Flow.JAM, 18, 60)))
+        assertEquals("Ralenti à 500 m · 42 km/h", TrafficAhead.label(TrafficAhead.Reading(Flow.SLOW, 42, 70, meters = 500)))
+        assertEquals("Route fermée à 500 m", TrafficAhead.label(TrafficAhead.Reading(Flow.JAM, null, 60, closed = true, meters = 500)))
     }
 }

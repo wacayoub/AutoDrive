@@ -26,10 +26,15 @@ internal object TrafficAhead {
     private var blockedUntil = 0L
     private var flowAt = 0L
 
+    /** What TomTom measured at one point: its colour, the speed driven there now and when free, how far ahead. */
+    data class Reading(val flow: Flow, val speed: Int?, val freeSpeed: Int?, val closed: Boolean = false, val meters: Int = 0)
+
     /** The worst traffic of the two points, null when unknown or older than three minutes. */
-    var flow: Flow? = null
+    var reading: Reading? = null
         get() = field?.takeIf { System.currentTimeMillis() - flowAt < FRESH_MS }
         private set
+
+    val flow: Flow? get() = reading?.flow
 
     /** Told on the main thread when [flow] changes. */
     var changed: (() -> Unit)? = null
@@ -41,24 +46,24 @@ internal object TrafficAhead {
         askedAt = now
         worker.execute {
             var status = 0
-            val flows = listOfNotNull(here, ahead).map { point ->
-                runCatching { ask(key, point).also { status = it.first }.second }.getOrNull()
+            val readings = listOfNotNull(here to 0, ahead?.let { it to AHEAD_METERS.toInt() }).map { (point, meters) ->
+                runCatching { ask(key, point).also { status = it.first }.second?.copy(meters = meters) }.getOrNull()
             }
             main.post {
                 asking = false
                 if (status == 401 || status == 403 || status == 429) blockedUntil = System.currentTimeMillis() + 10 * 60_000
-                val worst = worst(flows)
+                val worst = worstReading(readings)
                 if (worst != null) flowAt = System.currentTimeMillis()
                 if (worst != null || System.currentTimeMillis() - flowAt >= FRESH_MS) {
-                    val before = flow
-                    flow = worst
-                    if (before != flow) changed?.invoke()
+                    val before = reading
+                    reading = worst
+                    if (before != reading) changed?.invoke()
                 }
             }
         }
     }
 
-    private fun ask(key: String, point: Pair<Double, Double>): Pair<Int, Flow?> {
+    private fun ask(key: String, point: Pair<Double, Double>): Pair<Int, Reading?> {
         val at = String.format(Locale.ROOT, "%.5f,%.5f", point.first, point.second)
         val url = URL("https://api.tomtom.com/traffic/services/4/flowSegmentData/relative0/10/json?point=$at&unit=KMPH&key=$key")
         val connection = url.openConnection() as HttpURLConnection
@@ -74,19 +79,34 @@ internal object TrafficAhead {
     }
 
     /** Red when closed or under 40 % of the free speed, orange under 75 %, else green. */
-    fun parse(json: String): Flow? {
+    fun parse(json: String): Reading? {
         val data = JSONObject(json).optJSONObject("flowSegmentData") ?: return null
-        if (data.optBoolean("roadClosure")) return Flow.JAM
-        val current = data.optDouble("currentSpeed")
-        val free = data.optDouble("freeFlowSpeed")
-        if (current.isNaN() || free.isNaN() || free <= 0) return null
+        val current = data.optDouble("currentSpeed").takeIf { !it.isNaN() }
+        val free = data.optDouble("freeFlowSpeed").takeIf { !it.isNaN() && it > 0 }
+        if (data.optBoolean("roadClosure")) return Reading(Flow.JAM, null, free?.toInt(), closed = true)
+        if (current == null || free == null) return null
         val ratio = current / free
-        return when {
+        val flow = when {
             ratio < .4 -> Flow.JAM
             ratio < .75 -> Flow.SLOW
             else -> Flow.FLUID
         }
+        return Reading(flow, current.toInt(), free.toInt())
     }
 
-    fun worst(flows: List<Flow?>): Flow? = flows.filterNotNull().maxByOrNull { it.ordinal }
+    /** The worst of the points; between two alike, the nearer one. */
+    fun worstReading(readings: List<Reading?>): Reading? =
+        readings.filterNotNull().sortedBy { it.meters }.maxByOrNull { it.flow.ordinal }
+
+    /**
+     * In words for the « Route » card: « Bouchon · 18 km/h », « Ralenti à 500 m · 42 km/h », « Route fermée à 500 m »;
+     * nothing while the road is free.
+     */
+    fun label(reading: Reading?): String? {
+        if (reading == null || reading.flow == Flow.FLUID) return null
+        val where = if (reading.meters > 0) " à ${reading.meters} m" else ""
+        if (reading.closed) return "Route fermée$where"
+        val word = if (reading.flow == Flow.JAM) "Bouchon" else "Ralenti"
+        return listOfNotNull(word + where, reading.speed?.let { "$it km/h" }).joinToString(" · ")
+    }
 }
