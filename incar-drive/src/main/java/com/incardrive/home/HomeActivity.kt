@@ -1858,7 +1858,7 @@ class HomeActivity : Activity() {
      */
     private fun renderFlow() {
         roadGauge?.flow = TrafficAhead.flow ?: lastNav?.flow
-        roadGauge?.traffic = TrafficAhead.label(TrafficAhead.reading)
+        roadGauge?.traffic = TrafficAhead.label(TrafficAhead.reading, TrafficAhead.refused)
     }
 
     private var currentStreet: String? = null

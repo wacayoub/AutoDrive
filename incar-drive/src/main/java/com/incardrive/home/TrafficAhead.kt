@@ -5,6 +5,7 @@ import android.os.Looper
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
+import java.net.URLEncoder
 import java.util.Locale
 import java.util.concurrent.Executors
 
@@ -21,51 +22,91 @@ internal object TrafficAhead {
 
     private val worker = Executors.newSingleThreadExecutor { Thread(it, "traffic-ahead").apply { isDaemon = true } }
     private val main by lazy { Handler(Looper.getMainLooper()) }
+
+    // Replaced by the unit tests, which play TomTom's answers and the clock.
+    internal var clock: () -> Long = System::currentTimeMillis
+    internal var ask: (String, Pair<Double, Double>) -> Pair<Int, Reading?> = ::request
+    internal var background: (Runnable) -> Unit = { worker.execute(it) }
+    internal var onMain: (Runnable) -> Unit = { main.post(it) }
+
     @Volatile private var asking = false
     private var askedAt = 0L
     private var blockedUntil = 0L
     private var flowAt = 0L
+    private var lastKey: String? = null
 
     /** What TomTom measured at one point: its colour, the speed driven there now and when free, how far ahead. */
     data class Reading(val flow: Flow, val speed: Int?, val freeSpeed: Int?, val closed: Boolean = false, val meters: Int = 0)
 
     /** The worst traffic of the two points, null when unknown or older than three minutes. */
-    var reading: Reading? = null
-        get() = field?.takeIf { System.currentTimeMillis() - flowAt < FRESH_MS }
-        private set
+    val reading: Reading? get() = current?.takeIf { clock() - flowAt < FRESH_MS }
+    private var current: Reading? = null
 
     val flow: Flow? get() = reading?.flow
 
-    /** Told on the main thread when [flow] changes. */
+    /** True after TomTom refused the key (401 or 403), until a new key is typed or it is accepted again. */
+    var refused = false
+        private set
+
+    /** Told on the main thread when [reading] changes. */
     var changed: (() -> Unit)? = null
 
+    /** Called with each GPS fix: asks TomTom at most once a minute, and clears what is gone or too old. */
     fun follow(key: String?, here: Pair<Double, Double>, ahead: Pair<Double, Double>?) {
-        val now = System.currentTimeMillis()
-        if (key.isNullOrBlank() || asking || now - askedAt < EVERY_MS || now < blockedUntil) return
+        val now = clock()
+        val typed = key?.trim()?.takeIf { it.isNotEmpty() }
+        // A new key (or none): a refusal or a spent allowance of the old one no longer holds.
+        if (typed != lastKey) {
+            lastKey = typed
+            blockedUntil = 0L
+            askedAt = 0L
+            refused = false
+        }
+        // Too old, or the key removed: nothing shown rather than a stale jam.
+        if (typed == null || now - flowAt >= FRESH_MS) clear()
+        if (typed == null || asking || now - askedAt < EVERY_MS || now < blockedUntil) return
         asking = true
         askedAt = now
-        worker.execute {
+        background(Runnable {
             var status = 0
             val readings = listOfNotNull(here to 0, ahead?.let { it to AHEAD_METERS.toInt() }).map { (point, meters) ->
-                runCatching { ask(key, point).also { status = it.first }.second?.copy(meters = meters) }.getOrNull()
+                runCatching { ask(typed, point).also { status = it.first }.second?.copy(meters = meters) }.getOrNull()
             }
-            main.post {
+            onMain(Runnable {
                 asking = false
-                if (status == 401 || status == 403 || status == 429) blockedUntil = System.currentTimeMillis() + 10 * 60_000
-                val worst = worstReading(readings)
-                if (worst != null) flowAt = System.currentTimeMillis()
-                if (worst != null || System.currentTimeMillis() - flowAt >= FRESH_MS) {
-                    val before = reading
-                    reading = worst
-                    if (before != reading) changed?.invoke()
+                if (typed != lastKey) return@Runnable
+                val wasRefused = refused
+                when (status) {
+                    401, 403 -> { refused = true; blockedUntil = clock() + 10 * 60_000 }
+                    429 -> blockedUntil = clock() + 10 * 60_000
+                    200 -> refused = false
                 }
-            }
-        }
+                val before = current
+                val worst = worstReading(readings)
+                if (worst != null) {
+                    flowAt = clock()
+                    current = worst
+                } else if (clock() - flowAt >= FRESH_MS) current = null
+                if (current != before || refused != wasRefused) changed?.invoke()
+            })
+        })
     }
 
-    private fun ask(key: String, point: Pair<Double, Double>): Pair<Int, Reading?> {
+    private fun clear() {
+        if (current == null) return
+        current = null
+        changed?.invoke()
+    }
+
+    /** Back to the start, for the unit tests. */
+    internal fun reset() {
+        asking = false; askedAt = 0L; blockedUntil = 0L; flowAt = 0L; lastKey = null; refused = false; current = null
+    }
+
+    private fun request(key: String, point: Pair<Double, Double>): Pair<Int, Reading?> {
         val at = String.format(Locale.ROOT, "%.5f,%.5f", point.first, point.second)
-        val url = URL("https://api.tomtom.com/traffic/services/4/flowSegmentData/relative0/10/json?point=$at&unit=KMPH&key=$key")
+        val url = URL("https://api.tomtom.com/traffic/services/4/flowSegmentData/relative0/10/json?point=$at&unit=KMPH&key=" +
+            URLEncoder.encode(key, "UTF-8"))
         val connection = url.openConnection() as HttpURLConnection
         try {
             connection.connectTimeout = 8_000
@@ -100,10 +141,11 @@ internal object TrafficAhead {
 
     /**
      * In words for the « Route » card: « Bouchon · 18 km/h », « Ralenti à 500 m · 42 km/h », « Route fermée à 500 m »;
-     * nothing while the road is free.
+     * nothing while the road is free; « Clé TomTom refusée » when TomTom said no and nothing is known.
      */
-    fun label(reading: Reading?): String? {
-        if (reading == null || reading.flow == Flow.FLUID) return null
+    fun label(reading: Reading?, refused: Boolean = false): String? {
+        if (reading == null) return "Clé TomTom refusée".takeIf { refused }
+        if (reading.flow == Flow.FLUID) return null
         val where = if (reading.meters > 0) " à ${reading.meters} m" else ""
         if (reading.closed) return "Route fermée$where"
         val word = if (reading.flow == Flow.JAM) "Bouchon" else "Ralenti"
