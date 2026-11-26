@@ -322,6 +322,7 @@ class HomeActivity : Activity() {
         CallDiagnostic.changed = null
         HotspotReminder.changed = null
         TrafficAhead.changed = null
+        RouteTraffic.changed = null
         HotspotReminder.detach()
         if (::wazeMap.isInitialized) wazeMap.destroy()
         if (::googleWeb.isInitialized) googleWeb.destroy()
@@ -420,6 +421,7 @@ class HomeActivity : Activity() {
         // The hotspot only the head unit itself may switch on: a bubble opens its screen, once per start.
         HotspotReminder.changed = { runOnUiThread { showHotspotReminder() } }
         TrafficAhead.changed = { renderFlow() }
+        RouteTraffic.changed = { renderFlow() }
         HotspotReminder.driveStarted(this, mediaResume.bootKey())
         if (gps.permitted()) gps.start()
         // Cameras and limits go on while Maps or another app is in front.
@@ -1263,7 +1265,7 @@ class HomeActivity : Activity() {
         fun add(view: View) = placesStrip.addView(view, LinearLayout.LayoutParams(-2, -1).apply {
             if (placesStrip.childCount > 0) marginStart = dp(6)
         })
-        add(chip(R.drawable.ic_home_navigation, "Naviguer", Color.WHITE, { if (!navigation.open()) navMissing() }).apply {
+        add(chip(R.drawable.ic_home_navigation, "Naviguer", Color.WHITE, { askDestination() }).apply {
             background = pressable(GradientDrawable().apply { cornerRadius = dp(12).toFloat(); setColor(navColor) }, 12)
             (getChildAt(0) as ImageView).rotation = 45f
             // The icon alone, so Maison and Travail stay in view beside it.
@@ -1432,6 +1434,70 @@ class HomeActivity : Activity() {
                 addView(field, FrameLayout.LayoutParams(-1, -2))
             })
             .setPositiveButton("Enregistrer") { _, _ -> profiles.rename(index, field.text.toString()); recreate() }
+            .setNegativeButton("Annuler", null)
+            .show()
+    }
+
+    /**
+     * The driver's own Google key for the traffic along the trip (Google's Routes API): explained step by step, with
+     * the app's name and signature to keep the key to Incar Drive, and the daily cap that keeps it free.
+     */
+    private fun askGoogleKey() {
+        val field = android.widget.EditText(this).apply {
+            setText(prefs.getString(RouteTraffic.KEY, null).orEmpty())
+            hint = "Clé Google"
+            isSingleLine = true
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
+        }
+        val certificate = RouteTraffic.certificate(this) ?: "—"
+        AlertDialog.Builder(this)
+            .setTitle("Trafic Google sur l’itinéraire")
+            .setMessage("Les bouchons de Google Maps sur tout le trajet, sur la carte « Route », pour les destinations choisies dans " +
+                "Incar Drive (Naviguer › Aller à, Maison, Travail, tes lieux).\n\n" +
+                "1. Sur un PC : console.cloud.google.com, crée un projet et active la facturation (Google demande une carte ; " +
+                "l’usage reste dans le gratuit).\n" +
+                "2. Active « Routes API ».\n" +
+                "3. Identifiants › Créer une clé API › Restreindre : Applications Android, nom $packageName, " +
+                "empreinte SHA-1 :\n$certificate\nAPI : Routes API seulement.\n" +
+                "4. Quotas de Routes API : 160 requêtes par jour, pour rester gratuit.\n" +
+                "5. Tape la clé ici.\n\n" +
+                "Incar Drive ne fait jamais plus de ${RouteTraffic.DAILY_MAX} demandes par jour. Laisse vide pour retirer.")
+            .setView(FrameLayout(this).apply {
+                setPadding(dp(20), dp(4), dp(20), 0)
+                addView(field, FrameLayout.LayoutParams(-1, -2))
+            })
+            .setPositiveButton("Enregistrer") { _, _ ->
+                val key = field.text.toString().trim()
+                prefs.edit().apply { if (key.isEmpty()) remove(RouteTraffic.KEY) else putString(RouteTraffic.KEY, key) }.apply()
+                recreate()
+            }
+            .setNegativeButton("Annuler", null)
+            .show()
+    }
+
+    /** With a Google key: type where to go, so the trip's traffic can be asked of Google; else Maps' own search. */
+    private fun askDestination() {
+        if (prefs.getString(RouteTraffic.KEY, null).isNullOrBlank()) {
+            if (!navigation.open()) navMissing()
+            return
+        }
+        val field = EditText(this).apply {
+            hint = "Adresse, quartier ou lieu"
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_POSTAL_ADDRESS
+            setSingleLine()
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Aller à")
+            .setView(FrameLayout(this).apply {
+                setPadding(dp(20), dp(4), dp(20), 0)
+                addView(field, FrameLayout.LayoutParams(-1, -2))
+            })
+            .setPositiveButton("Y aller") { _, _ ->
+                val target = field.text.toString().trim()
+                if (target.isEmpty()) { if (!navigation.open()) navMissing() }
+                else if (!navigation.goTo(target)) navMissing()
+            }
+            .setNeutralButton("Chercher dans ${navigation.app().label}") { _, _ -> if (!navigation.open()) navMissing() }
             .setNegativeButton("Annuler", null)
             .show()
     }
@@ -1855,7 +1921,14 @@ class HomeActivity : Activity() {
             val ahead = TrafficAhead.AHEAD_METERS.filter { turnAt == null || it <= turnAt }.mapNotNull { meters ->
                 roadLimits.pointAhead(fix.latitude, fix.longitude, heading, meters.toDouble())?.let { it to meters }
             }
-            TrafficAhead.follow(prefs.getString(OwnMap.TRAFFIC_KEY, null), fix.latitude to fix.longitude, ahead)
+            val mapsLeft = Maneuver.meters(NavWatch.nav.value?.distance)
+            val googleKey = prefs.getString(RouteTraffic.KEY, null)?.trim()?.takeIf { it.isNotEmpty() }
+            RouteTraffic.follow(prefs, { body -> googleKey?.let { RouteTraffic.request(this, it, body) } },
+                fix.latitude, fix.longitude, heading, mapsLeft)
+            // TomTom only when Google gives nothing for this trip, to spare its free allowance.
+            if (RouteTraffic.ahead(mapsLeft) == null) {
+                TrafficAhead.follow(prefs.getString(OwnMap.TRAFFIC_KEY, null), fix.latitude to fix.longitude, ahead)
+            }
             TrafficAhead.drive(kmh, road?.limit)
         }
         val limit = road?.limit.takeIf { roadMode() }
@@ -1873,10 +1946,21 @@ class HomeActivity : Activity() {
      */
     private fun renderFlow() {
         val maps = lastNav?.flow
+        val left = Maneuver.meters(lastNav?.distance)
+        val own = TrafficAhead.ownReading
+        // Google's own traffic along the whole trip, when the destination was picked in Incar Drive with a Google key.
+        val google = RouteTraffic.ahead(left)
+        if (google != null) {
+            roadGauge?.flow = TrafficAhead.worst(google.filter { it.from < 500 }.map { it.flow } + own?.flow)
+            roadGauge?.aheadFlow = google
+            roadGauge?.traffic = TrafficAhead.label(own) ?: RouteTraffic.label(google, RouteTraffic.delayMinutes(left))
+            return
+        }
         val shown = TrafficAhead.shown
         roadGauge?.flow = TrafficAhead.worst(listOf(shown?.flow, maps))
-        roadGauge?.aheadFlow = TrafficAhead.stretches.map { it.meters to it.flow }
+        roadGauge?.aheadFlow = TrafficAhead.flowStretches
         roadGauge?.traffic = TrafficAhead.label(shown, TrafficAhead.refused)
+            ?: "Clé Google refusée".takeIf { RouteTraffic.refused && RouteTraffic.destination(prefs) != null }
             ?: "Trafic dense sur le trajet".takeIf { maps == Flow.JAM }
     }
 
@@ -2528,6 +2612,12 @@ class HomeActivity : Activity() {
                 14, if (hasTraffic) text else accent, 700).apply {
                 setPadding(0, dp(10), 0, dp(6))
                 setOnClickListener { askTrafficKey() }
+            })
+            val hasGoogle = !prefs.getString(RouteTraffic.KEY, null).isNullOrBlank()
+            addView(label(if (hasGoogle) "Trafic Google sur l’itinéraire : activé  ›" else "Ajouter le trafic Google sur l’itinéraire  ›",
+                14, if (hasGoogle) text else accent, 700).apply {
+                setPadding(0, dp(4), 0, dp(6))
+                setOnClickListener { askGoogleKey() }
             })
             // Google Maps' own small window (picture-in-picture) during guidance: it is Maps' feature, allowed per app
             // in Android's settings; this row opens Maps' app page there and explains the two steps.

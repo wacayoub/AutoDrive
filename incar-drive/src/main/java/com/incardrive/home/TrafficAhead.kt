@@ -58,6 +58,8 @@ internal object TrafficAhead {
      * The road ahead stretch by stretch, nearest first: each reading holds from its distance to the next point asked
      * ([end]). Under the car, the car's own speed when it says worse. Empty when nothing is known.
      */
+    val flowStretches: List<FlowStretch> get() = stretches.map { FlowStretch(it.meters, end(it.meters), it.flow) }
+
     val stretches: List<Reading>
         get() {
             val known = all.takeIf { clock() - flowAt < FRESH_MS }.orEmpty()

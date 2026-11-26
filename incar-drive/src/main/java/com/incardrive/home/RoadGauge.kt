@@ -96,11 +96,11 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
         set(value) { if (field != value) { field = value; invalidate() } }
 
     /**
-     * The traffic along the road ahead, stretch by stretch: (metres from the car where it starts, its flow), nearest
-     * first; each holds until the next point asked ([TrafficAhead.end]), a point without answer left uncoloured. Drawn on the road's edges, in
-     * perspective, like the coloured route line of a navigation app.
+     * The traffic along the road ahead, stretch by stretch (metres from the car), nearest first: Google's along the
+     * whole trip, or TomTom's over the next kilometres. Drawn on the road's edges like the coloured route line of a
+     * navigation app, and on the A to B bar at its place on the trip.
      */
-    var aheadFlow: List<Pair<Int, Flow>> = emptyList()
+    var aheadFlow: List<FlowStretch> = emptyList()
         set(value) { if (field != value) { field = value; invalidate() } }
 
     /** TomTom's traffic ahead in words (« Bouchon à 500 m · 18 km/h »), or null while the road is free. */
@@ -512,10 +512,10 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
                 arrowPaint.color = flow?.let { ColorUtils.setAlphaComponent(it.color, 0x66) } ?: ColorUtils.setAlphaComponent(ink, 0x33)
                 rect.set(from, y, to, y + thick)
                 canvas.drawRoundRect(rect, thick / 2, thick / 2, arrowPaint)
-                // The next kilometres as measured, stretch by stretch, at their place on the trip.
-                for ((start, stretchFlow) in aheadFlow) {
+                // The traffic ahead as measured, stretch by stretch, at its place on the trip.
+                for ((start, end, stretchFlow) in aheadFlow) {
                     val a = (fraction + start / routeMeters.toFloat()).coerceIn(fraction, 1f)
-                    val b = (fraction + TrafficAhead.end(start) / routeMeters.toFloat()).coerceIn(a, 1f)
+                    val b = (fraction + end / routeMeters.toFloat()).coerceIn(a, 1f)
                     if (b <= a) continue
                     arrowPaint.color = stretchFlow.color
                     rect.set(from + (to - from) * a, y, from + (to - from) * b, y + thick)
@@ -666,9 +666,10 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
         fun y(meters: Int) = h - (h - horizon) * sqrt(meters / TrafficAhead.FAR_METERS.toFloat()).coerceAtMost(1f)
         edgePaint.shader = null
         edgePaint.strokeCap = Paint.Cap.BUTT
-        for (index in stretches.indices) {
-            val (from, flow) = stretches[index]
-            val to = TrafficAhead.end(from)
+        for ((from, end, flow) in stretches) {
+            if (from >= TrafficAhead.FAR_METERS) break
+            val to = end.coerceAtMost(TrafficAhead.FAR_METERS)
+            if (to <= from) continue
             val y0 = y(from)
             val y1 = y(to)
             val fade = ((y0 - horizon) / (h - horizon)).coerceIn(0f, 1f)
@@ -682,7 +683,7 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
         textPaint.textAlign = Paint.Align.LEFT
         textPaint.color = ColorUtils.setAlphaComponent(ink, 0xB3)
         for ((meters, name) in DISTANCE_MARKS) {
-            if (stretches.none { (from, _) -> meters in from..TrafficAhead.end(from) }) continue
+            if (stretches.none { meters in it.from..it.to }) continue
             val y = y(meters)
             canvas.drawText(name, cx + half(y) + 6 * density, y + 3 * density, textPaint)
         }

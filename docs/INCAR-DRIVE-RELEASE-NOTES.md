@@ -1,13 +1,18 @@
-Incar Drive 1.0.28 — écran d’accueil pour l’Incarlink (Android 11 à 13, conçu pour 800 × 480).
+Incar Drive 1.0.29 — écran d’accueil pour l’Incarlink (Android 11 à 13, conçu pour 800 × 480).
 
 **Mettre à jour** : Réglages › Mises à jour, ou la proposition automatique.
 
 **Changements**
+- Le trafic de Google sur tout le trajet : avec ta propre clé Google (Réglages › « Ajouter le trafic Google sur l’itinéraire »), quand tu choisis la destination dans Incar Drive (Naviguer › Aller à, Maison, Travail ou tes lieux), Incar Drive lance Google Maps et demande en même temps à Google le même trajet avec son trafic, toutes les 2 minutes. La route de la carte « Route » et la barre de A à B prennent les couleurs de Google morceau par morceau, sur tout le trajet, avec le retard : « Bouchon à 2,3 km · sur 1,1 km · +13 min ». Les mêmes données que la ligne colorée de Google Maps.
+- Si Google choisit une autre route que Maps (longueur trop différente), ses couleurs ne sont pas affichées et le trafic TomTom reprend. Une destination tapée directement dans Maps, ou la Maison et le Travail de ton compte Maps, restent sur TomTom : Incar Drive ne connaît pas leur adresse.
+- Gratuit : jamais plus de 150 demandes Google par jour (5 000 gratuites par mois chez Google) ; mets aussi le quota de 160 par jour dans Google Cloud, comme expliqué dans Réglages. Les données de Google ne sont pas affichées sur la carte OpenStreetMap, comme ses conditions l’exigent.
+
+Comprend aussi la 1.0.28 :
 - Où est le bouchon, morceau par morceau : sur la carte « Route », les bords de la route se colorent en vert, orange ou rouge selon le trafic sous la voiture, à 500 m, 1 km, 2 km et 3 km (repères « 1 km », « 2 km », « 3 km »), comme la ligne de Google Maps. La barre de A à B montre aussi ces kilomètres à leur place sur le trajet. Pendant un guidage, seulement jusqu’au prochain virage de Maps, car après, la route suivie n’est plus forcément l’itinéraire. TomTom est interrogé toutes les minutes et demie (environ 200 demandes par heure de conduite, dans les 2 500 gratuites par jour).
 - Bouchon vu par ta propre vitesse : TomTom fait la moyenne d’un long tronçon et réagit tard (« Ralenti · 55 km/h » quand tu roules à 6 km/h derrière un bus). Maintenant, si la voiture roule depuis plus d’une minute à moins de 40 % de la vitesse normale de la route, la carte « Route » passe au rouge « Bouchon · 6 km/h » (orange sous 75 %). Seulement sur les routes rapides (70 km/h et plus), pour qu’un feu rouge en ville ne compte pas ; marche aussi sans clé TomTom, avec la limitation de la route.
 - Vitesse lisible sur le ciel : le chiffre de la vitesse a un léger contour sombre (clair en journée), pour rester net devant les nuages clairs ou le ciel de nuit.
 
-Comprend aussi la 1.0.27 :
+Et la 1.0.27 :
 - La carte « Route » rouge comme Google Maps : quand Maps colore en rouge le temps restant (trajet ralenti), la route de la carte « Route » et la barre de A à B passent aussi au rouge, même si la route juste sous la voiture est dégagée ; avec la bulle « Trafic dense sur le trajet » quand TomTom ne voit pas de bouchon tout près. Avant, le vert de TomTom l’emportait.
 - Trafic vu plus loin : TomTom est interrogé sous la voiture, à 500 m et à 1,5 km sur la route suivie (« Bouchon à 1,5 km · 10 km/h »).
 - Arrêté dans un bouchon, le trafic devant est encore suivi : le GPS ne donne plus de direction à l’arrêt, la dernière direction en roulant (moins de 10 minutes) dit où est « devant ».

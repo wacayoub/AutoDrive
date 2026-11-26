@@ -65,13 +65,21 @@ internal class Navigation(private val activity: Activity, private val prefs: Sha
     fun goTo(destination: String): Boolean = when (app()) {
         NavApp.MAPS -> AppLinks(activity).navigate(destination)
         NavApp.WAZE -> start(view(wazeLink(destination), NavApp.WAZE))
-    }.also { if (it) HomeVisibility.destinationPickedAt = android.os.SystemClock.elapsedRealtime() }
+    }.also {
+        if (it) HomeVisibility.destinationPickedAt = android.os.SystemClock.elapsedRealtime()
+        // The same trip is then asked of Google for its traffic, when the driver gave a Google key.
+        if (it) RouteTraffic.start(prefs, destination)
+    }
 
     /** Guidance home or to work, saved in the navigation app's own account. */
     fun goToSaved(work: Boolean): Boolean = when (app()) {
         NavApp.MAPS -> AppLinks(activity).navigate(mapsLabel(work))
         NavApp.WAZE -> start(view("https://waze.com/ul?favorite=${if (work) "work" else "home"}&navigate=yes", NavApp.WAZE))
-    }.also { if (it) HomeVisibility.destinationPickedAt = android.os.SystemClock.elapsedRealtime() }
+    }.also {
+        if (it) HomeVisibility.destinationPickedAt = android.os.SystemClock.elapsedRealtime()
+        // A place saved in the driver's Maps account: its address is not known here, so no Google traffic for it.
+        if (it) RouteTraffic.stop(prefs)
+    }
 
     /** Places matching [query] around the car. */
     fun search(query: String): Boolean = when (app()) {
