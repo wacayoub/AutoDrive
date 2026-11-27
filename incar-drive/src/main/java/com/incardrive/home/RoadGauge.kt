@@ -139,13 +139,20 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
     // Dark outside (the sun well below the horizon): night road, headlights and light figures, whatever the theme.
     private var dark = night
 
+    /**
+     * The « Studio » look: no sky, the road drawn lightly on the card itself, light or dark with the theme and not
+     * with the hour outside.
+     */
+    var flat = false
+        set(value) { field = value; if (value) dark = night; invalidate() }
+
     /** The sky of this hour and this weather: [elevation] is the sun's height in degrees, negative below the horizon. */
     fun outside(sky: Sky, elevation: Float, weather: com.autodrive.radiomaroc.WeatherCondition?) {
         if (sky == outside && weather == this.weather && kotlin.math.abs(elevation - this.elevation) < .3f) return
         outside = sky
         this.elevation = elevation
         this.weather = weather
-        dark = elevation < -4f
+        dark = if (flat) night else elevation < -4f
         invalidate()
     }
 
@@ -430,7 +437,8 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
         // The sky outside above the horizon (this hour's sun, today's weather), then a soft glow where the road
         // meets it. Until the first sky is known: the theme's own.
         val real = outside
-        if (real != null) drawOutside(canvas, real, w, h, horizon)
+        if (flat) Unit
+        else if (real != null) drawOutside(canvas, real, w, h, horizon)
         else if (night) {
             roadPaint.shader = linear(0f, 0f, 0f, horizon, ColorUtils.setAlphaComponent(skyTop, 0xB0),
                 ColorUtils.setAlphaComponent(skyBottom, 0xB0))
@@ -442,7 +450,7 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
             roadPaint.shader = linear(0f, horizon, 0f, h, 0xFFDFE9F1.toInt(), 0xFFB4C6D6.toInt())
             canvas.drawRect(0f, horizon, w, h, roadPaint)
         }
-        glowPaint.shader = radial(cx, horizon, w * .55f, ColorUtils.setAlphaComponent(tone, 0x26),
+        glowPaint.shader = radial(cx, horizon, w * .55f, ColorUtils.setAlphaComponent(tone, if (flat) 0x14 else 0x26),
             ColorUtils.setAlphaComponent(tone, 0))
         canvas.drawRect(0f, 0f, w, h, glowPaint)
 
@@ -491,8 +499,10 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
         // A dark band at the bottom keeps the trip line readable over the road.
         // A short shade at the road's foot, under the car.
         val band = 12 * density
-        roadPaint.shader = linear(0f, h - band, 0f, h, 0x000B1018, 0xD90B1018.toInt())
-        canvas.drawRect(0f, h - band, w, h, roadPaint)
+        if (!flat) {
+            roadPaint.shader = linear(0f, h - band, 0f, h, 0x000B1018, 0xD90B1018.toInt())
+            canvas.drawRect(0f, h - band, w, h, roadPaint)
+        }
         // The line where the road meets the card's foot. Idle: plain, in the road's colour. While guiding: the route
         // from A (where the guidance started) to B (the destination), filled as far as the car has come, its colour
         // running from A's blue to B's green, with a dot at each end and one for the car.
@@ -600,8 +610,13 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
         path.lineTo(cx - near, h)
         path.close()
         // Asphalt: fading into the dark at night, solid under the daylight.
-        roadPaint.shader = if (dark) linear(0f, horizon, 0f, h, 0x001A2230, 0xF01A2230.toInt())
-            else linear(0f, horizon, 0f, h, 0xFF5A6676.toInt(), 0xFF2C343F.toInt())
+        roadPaint.shader = when {
+            // Studio: a pale road fading in from the horizon on the card's own white (or graphite).
+            flat && dark -> linear(0f, horizon, 0f, h, 0x002A313C, 0xFF2A313C.toInt())
+            flat -> linear(0f, horizon, 0f, h, 0x00C3CCD8, 0xFFCDD5E0.toInt())
+            dark -> linear(0f, horizon, 0f, h, 0x001A2230, 0xF01A2230.toInt())
+            else -> linear(0f, horizon, 0f, h, 0xFF5A6676.toInt(), 0xFF2C343F.toInt())
+        }
         canvas.drawPath(path, roadPaint)
         roadPaint.shader = linear(0f, horizon, 0f, h, ColorUtils.setAlphaComponent(tone, 0),
             ColorUtils.setAlphaComponent(tone, 0x2E))
