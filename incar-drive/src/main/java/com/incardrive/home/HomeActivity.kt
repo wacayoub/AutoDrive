@@ -151,8 +151,6 @@ class HomeActivity : Activity() {
      */
     internal val studio by lazy { prefs.getString(LOOK, null) == STUDIO }
     private val studioCard get() = if (night) 0xFF1B2029.toInt() else Color.WHITE
-    // With the Studio look the favourites sit in the media card, three by two, when the map is on the home screen.
-    private val favoritesInMedia get() = studio && mapOnHome()
 
     private lateinit var greeting: TextView
     private lateinit var clock: TextView
@@ -648,7 +646,7 @@ class HomeActivity : Activity() {
     private fun screen(): View {
         val backdrop = skyBackdrop()
         val content = column().apply {
-            addView(topBar(), LinearLayout.LayoutParams(-1, dp(54)))
+            addView(topBar(), LinearLayout.LayoutParams(-1, dp(if (studio) 30 else 54)))
             pager = SwipePager(context) { page -> markDots(page); placeMapsFrame(); renderTurnIsland() }.apply {
                 clipChildren = true
                 addPage(row().apply {
@@ -668,7 +666,7 @@ class HomeActivity : Activity() {
                         val lift = dp(3).toFloat()
                         addView(speedCard().apply { elevation = lift }, LinearLayout.LayoutParams(0, -1, 1.12f))
                         addView(map().apply { elevation = lift },
-                            LinearLayout.LayoutParams(0, -1, 1.12f).apply { marginStart = dp(12); marginEnd = dp(12) })
+                            LinearLayout.LayoutParams(0, -1, 1.03f).apply { marginStart = dp(12); marginEnd = dp(12) })
                         addView(mediaCard().apply { elevation = lift }, LinearLayout.LayoutParams(0, -1, 1f))
                     } else {
                         addView(mediaCard(), LinearLayout.LayoutParams(0, -1, 1.4f))
@@ -681,9 +679,8 @@ class HomeActivity : Activity() {
                 addPage(row().apply {
                     gravity = Gravity.FILL
                     addView(phone.view(), LinearLayout.LayoutParams(0, -1, 1f))
-                    val favoritesHere = mapOnHome() && !favoritesInMedia
-                    if (favoritesHere) addView(favoritesCard(), LinearLayout.LayoutParams(0, -1, 1f).apply { marginStart = dp(10) })
-                    addView(widgets.view(), LinearLayout.LayoutParams(0, -1, if (favoritesHere) 1.45f else 2.45f)
+                    if (mapOnHome()) addView(favoritesCard(), LinearLayout.LayoutParams(0, -1, 1f).apply { marginStart = dp(10) })
+                    addView(widgets.view(), LinearLayout.LayoutParams(0, -1, if (mapOnHome()) 1.45f else 2.45f)
                         .apply { marginStart = dp(10) })
                 })
             }
@@ -883,7 +880,60 @@ class HomeActivity : Activity() {
         recreate()
     }
 
-    private fun topBar() = row().apply {
+    /** The middle of the top bar, where the live island appears. */
+    private fun islandHolder() = row().apply {
+        gravity = Gravity.CENTER
+        island = row().apply {
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(12), dp(6), dp(14), dp(6))
+            islandDot = View(context)
+            addView(islandDot, LinearLayout.LayoutParams(dp(8), dp(8)))
+            islandText = label("", 13, Color.WHITE, 700).apply { maxLines = 2 }
+            addView(islandText, LinearLayout.LayoutParams(-2, -2).apply { marginStart = dp(8) })
+            visibility = View.GONE
+        }
+        addView(island, wrap())
+    }
+
+    private fun homeBadgeView() = label("Définir par défaut", 13, onAccent, 700).apply {
+        homeBadge = this
+        gravity = Gravity.CENTER
+        setPadding(dp(14), 0, dp(14), 0)
+        background = pressable(GradientDrawable().apply {
+            cornerRadius = dp(14).toFloat()
+            setColor(accent)
+        }, 14)
+        contentDescription = "Faire d’Incar Drive l’écran d’accueil par défaut"
+        setOnClickListener { askDefaultHome() }
+        visibility = View.GONE
+    }
+
+    /**
+     * The Studio top bar: one thin line, the greeting on the left, the island in the middle, the phone's icons, the
+     * quick settings and the time on the right. Weather and prayer move to the dock.
+     */
+    private fun studioTopBar() = row().apply {
+        greeting = caps("", muted).apply { setOnClickListener { askDriver() } }
+        addView(greeting, wrap().apply { marginStart = dp(6) })
+        addView(islandHolder(), LinearLayout.LayoutParams(0, -1, 1f).apply { marginStart = dp(8); marginEnd = dp(8) })
+        addView(homeBadgeView().apply { textSize = 11f }, LinearLayout.LayoutParams(-2, dp(26)).apply { marginEnd = dp(10) })
+        addView(status.view(), wrap())
+        addView(ImageButton(context).apply {
+            setImageResource(R.drawable.ic_home_tune)
+            imageTintList = ColorStateList.valueOf(text)
+            background = pressable(null, 10)
+            scaleType = ImageView.ScaleType.FIT_CENTER
+            setPadding(dp(5), dp(5), dp(5), dp(5))
+            contentDescription = "Réglages rapides"
+            setOnClickListener { quick.show() }
+        }, LinearLayout.LayoutParams(dp(28), dp(28)).apply { marginStart = dp(10) })
+        clock = label("--:--", 15, text, 700)
+        addView(clock, wrap().apply { marginStart = dp(10); marginEnd = dp(6) })
+        date = label("", 12, muted).apply { visibility = View.GONE }
+        addView(date)
+    }
+
+    private fun topBar() = if (studio) studioTopBar() else row().apply {
         addView(column().apply {
             greeting = caps("").apply { setOnClickListener { askDriver() } }
             addView(row().apply {
@@ -900,36 +950,13 @@ class HomeActivity : Activity() {
         }, LinearLayout.LayoutParams(-2, -2))
         // The middle of the bar belongs to the notifications (the island): alerts, the next turn, the prayer. The
         // car's logo no longer sits here; it stays on the car of the « Route » card and in the welcome scene.
-        addView(row().apply {
-            gravity = Gravity.CENTER
-            island = row().apply {
-                gravity = Gravity.CENTER_VERTICAL
-                setPadding(dp(12), dp(6), dp(14), dp(6))
-                islandDot = View(context)
-                addView(islandDot, LinearLayout.LayoutParams(dp(8), dp(8)))
-                islandText = label("", 13, Color.WHITE, 700).apply { maxLines = 2 }
-                addView(islandText, LinearLayout.LayoutParams(-2, -2).apply { marginStart = dp(8) })
-                visibility = View.GONE
-            }
-            addView(island, wrap())
-        }, LinearLayout.LayoutParams(0, -1, 1f).apply { marginStart = dp(8); marginEnd = dp(8) })
+        addView(islandHolder(), LinearLayout.LayoutParams(0, -1, 1f).apply { marginStart = dp(8); marginEnd = dp(8) })
         fun chip(content: LinearLayout.() -> Unit) = row().apply {
             background = glass(14)
             setPadding(dp(14), 0, dp(16), 0)
             content()
         }
-        homeBadge = label("Définir par défaut", 13, onAccent, 700).apply {
-            gravity = Gravity.CENTER
-            setPadding(dp(14), 0, dp(14), 0)
-            background = pressable(GradientDrawable().apply {
-                cornerRadius = dp(14).toFloat()
-                setColor(accent)
-            }, 14)
-            contentDescription = "Faire d’Incar Drive l’écran d’accueil par défaut"
-            setOnClickListener { askDefaultHome() }
-            visibility = View.GONE
-        }
-        addView(homeBadge, LinearLayout.LayoutParams(-2, dp(44)).apply { marginEnd = dp(8) })
+        addView(homeBadgeView(), LinearLayout.LayoutParams(-2, dp(44)).apply { marginEnd = dp(8) })
         addView(ImageButton(context).apply {
             setImageResource(R.drawable.ic_home_tune)
             imageTintList = ColorStateList.valueOf(text)
@@ -970,11 +997,11 @@ class HomeActivity : Activity() {
         mediaBody = column()
         return FrameLayout(this).apply {
             background = pressable(LayerDrawable(arrayOf(glass(), mediaWash)))
-            setPadding(dp(16), dp(16), dp(16), dp(14))
+            if (studio) setPadding(dp(12), dp(12), dp(12), dp(8)) else setPadding(dp(16), dp(16), dp(16), dp(14))
             setOnClickListener { openMediaSource() }
             addView(mediaBody, FrameLayout.LayoutParams(-1, -1))
             addView(radioBody, FrameLayout.LayoutParams(-1, -1))
-        }.also { buildMediaBody() }
+        }.also { if (studio) studioMediaBody() else buildMediaBody() }
     }
 
     private lateinit var radioCard: RadioCard
@@ -995,8 +1022,7 @@ class HomeActivity : Activity() {
                     mediaArt = ImageView(context).apply { scaleType = ImageView.ScaleType.FIT_CENTER }
                     addView(mediaArt, FrameLayout.LayoutParams(-1, -1))
                 }
-                val artSize = dp(if (studio) 86 else 112)
-                addView(art, LinearLayout.LayoutParams(artSize, artSize))
+                addView(art, LinearLayout.LayoutParams(dp(112), dp(112)))
                 addView(column().apply {
                     addView(row().apply {
                         mediaApp = caps("Média")
@@ -1004,16 +1030,15 @@ class HomeActivity : Activity() {
                         mediaBars = EqualizerBars(context, accent)
                         addView(mediaBars, LinearLayout.LayoutParams(dp(16), dp(12)))
                     })
-                    mediaTitle = label("Rien en lecture", if (studio) 19 else 23, text, 700, condensed = true).apply { maxLines = 2 }
+                    mediaTitle = label("Rien en lecture", 23, text, 700, condensed = true).apply { maxLines = 2 }
                     mediaSubtitle = label("", 13, muted).apply { maxLines = 2 }
                     addView(mediaTitle, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
                     addView(mediaSubtitle, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(6) })
                 }, LinearLayout.LayoutParams(0, -2, 1f).apply { marginStart = dp(14); topMargin = dp(4) })
             })
-            val grid = favoritesInMedia
-            if (!grid) addView(View(context), LinearLayout.LayoutParams(-1, 0, 1f))
-            val small = dp(if (studio) 44 else 50)
-            val big = dp(if (studio) 56 else 66)
+            addView(View(context), LinearLayout.LayoutParams(-1, 0, 1f))
+            val small = dp(50)
+            val big = dp(66)
             mediaControls = row().apply {
                 gravity = Gravity.CENTER
                 addView(round(R.drawable.ic_home_previous, "Précédent") { media.command(PlaybackState.ACTION_SKIP_TO_PREVIOUS) },
@@ -1025,8 +1050,8 @@ class HomeActivity : Activity() {
                 addView(round(R.drawable.ic_home_next, "Suivant") { media.command(PlaybackState.ACTION_SKIP_TO_NEXT) },
                     LinearLayout.LayoutParams(small, small))
             }
-            addView(mediaControls, LinearLayout.LayoutParams(-1, -2).apply { if (grid) topMargin = dp(10) })
-            mediaAction = label("", if (studio) 13 else 15, onAccent, 700).apply {
+            addView(mediaControls, LinearLayout.LayoutParams(-1, -2))
+            mediaAction = label("", 15, onAccent, 700).apply {
                 gravity = Gravity.CENTER
                 background = pressable(GradientDrawable().apply {
                     cornerRadius = dp(14).toFloat()
@@ -1034,12 +1059,131 @@ class HomeActivity : Activity() {
                 }, 14)
                 visibility = View.GONE
             }
-            addView(mediaAction, LinearLayout.LayoutParams(-1, dp(if (studio) 46 else 52)).apply { if (grid) topMargin = dp(10) })
-            if (grid) {
-                // Studio: the favourite apps under the player, like covers on a shelf.
-                favoritesGrid = column()
-                addView(favoritesGrid, LinearLayout.LayoutParams(-1, 0, 1f).apply { topMargin = dp(12) })
+            addView(mediaAction, LinearLayout.LayoutParams(-1, dp(52)))
+        }
+    }
+
+    private val recent by lazy { RecentMedia(this) }
+    private lateinit var recentGrid: LinearLayout
+
+    /**
+     * The Studio media card: two tiles on the left (the radio, and the main action: listen again, or open the app
+     * playing), a tall tile on the right for what plays now over its artwork, the last six covers played, and the
+     * transport buttons at the foot.
+     */
+    private fun studioMediaBody() {
+        mediaBody.apply {
+            addView(row().apply {
+                mediaApp = caps("Média", text)
+                addView(mediaApp, LinearLayout.LayoutParams(0, -2, 1f).apply { marginStart = dp(2) })
+                mediaBars = EqualizerBars(context, accent)
+                addView(mediaBars, LinearLayout.LayoutParams(dp(16), dp(12)))
+            })
+            addView(row().apply {
+                gravity = Gravity.FILL
+                addView(column().apply {
+                    addView(label("Radio\n& Coran", 12, Color.WHITE, 700).apply {
+                        maxLines = 2
+                        gravity = Gravity.BOTTOM or Gravity.START
+                        setPadding(dp(10), 0, dp(8), dp(8))
+                        background = pressable(GradientDrawable(GradientDrawable.Orientation.TL_BR,
+                            intArrayOf(0xFF6D8BFF.toInt(), 0xFFB07BF5.toInt())).apply { cornerRadius = dp(14).toFloat() }, 14)
+                        contentDescription = "Écouter Radio Maroc & Coran"
+                        setOnClickListener {
+                            if (!mediaResume.play(RADIO_PACKAGE, media.live()))
+                                packageManager.getLaunchIntentForPackage(RADIO_PACKAGE)?.let(::startSafely) ?: showApps(editing = false)
+                        }
+                        RadioMotion.pressScale(this, .96f)
+                    }, LinearLayout.LayoutParams(-1, 0, 1f))
+                    mediaAction = label("", 12, Color.WHITE, 700).apply {
+                        gravity = Gravity.BOTTOM or Gravity.START
+                        maxLines = 2
+                        setPadding(dp(10), 0, dp(8), dp(7))
+                        background = pressable(GradientDrawable(GradientDrawable.Orientation.TL_BR,
+                            intArrayOf(0xFF34C77B.toInt(), 0xFF9BDC4A.toInt())).apply { cornerRadius = dp(14).toFloat() }, 14)
+                        RadioMotion.pressScale(this, .96f)
+                    }
+                    addView(mediaAction, LinearLayout.LayoutParams(-1, 0, 1f).apply { topMargin = dp(8) })
+                }, LinearLayout.LayoutParams(0, -1, 1f))
+                addView(FrameLayout(context).apply {
+                    roundedClip(this, 14)
+                    background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+                        intArrayOf(0xFF3E5FA8.toInt(), 0xFF22345E.toInt()))
+                    mediaInitial = label("♪", 30, 0x66FFFFFF, 700).apply { gravity = Gravity.CENTER }
+                    addView(mediaInitial, FrameLayout.LayoutParams(-1, -1))
+                    mediaArt = ImageView(context).apply { scaleType = ImageView.ScaleType.CENTER_CROP }
+                    addView(mediaArt, FrameLayout.LayoutParams(-1, -1))
+                    addView(View(context).apply {
+                        background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(0x00000000, 0xB3000000.toInt()))
+                    }, FrameLayout.LayoutParams(-1, -1))
+                    addView(column().apply {
+                        mediaTitle = label("Rien en lecture", 12, Color.WHITE, 700).apply { maxLines = 2 }
+                        mediaSubtitle = label("", 10, 0xCCFFFFFF.toInt())
+                        addView(mediaTitle, LinearLayout.LayoutParams(-1, -2))
+                        addView(mediaSubtitle, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(2) })
+                    }, FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM).apply { setMargins(dp(8), 0, dp(8), dp(7)) })
+                    contentDescription = "En lecture"
+                    setOnClickListener { openMediaSource() }
+                }, LinearLayout.LayoutParams(0, -1, 1.1f).apply { marginStart = dp(8) })
+            }, LinearLayout.LayoutParams(-1, dp(92)).apply { topMargin = dp(8) })
+            addView(caps("Récents", muted), wrap().apply { topMargin = dp(10); marginStart = dp(2) })
+            recentGrid = column()
+            addView(recentGrid, LinearLayout.LayoutParams(-1, 0, 1f).apply { topMargin = dp(6) })
+            mediaControls = row().apply {
+                gravity = Gravity.END or Gravity.CENTER_VERTICAL
+                fun button(icon: Int, description: String, action: () -> Unit) = ImageButton(context).apply {
+                    setImageResource(icon)
+                    imageTintList = ColorStateList.valueOf(text)
+                    background = pressable(null, 12)
+                    scaleType = ImageView.ScaleType.FIT_CENTER
+                    setPadding(dp(7), dp(7), dp(7), dp(7))
+                    contentDescription = description
+                    setOnClickListener { action() }
+                }
+                addView(button(R.drawable.ic_home_previous, "Précédent") { media.command(PlaybackState.ACTION_SKIP_TO_PREVIOUS) },
+                    LinearLayout.LayoutParams(dp(32), dp(32)))
+                playButton = button(R.drawable.ic_home_play, "Lecture") {
+                    media.command(PlaybackState.ACTION_PLAY_PAUSE).takeIf { it } ?: media.command(PlaybackState.ACTION_PLAY)
+                }
+                addView(playButton, LinearLayout.LayoutParams(dp(32), dp(32)).apply { marginStart = dp(8); marginEnd = dp(8) })
+                addView(button(R.drawable.ic_home_next, "Suivant") { media.command(PlaybackState.ACTION_SKIP_TO_NEXT) },
+                    LinearLayout.LayoutParams(dp(32), dp(32)))
             }
+            addView(mediaControls, LinearLayout.LayoutParams(-1, dp(32)).apply { topMargin = dp(4) })
+        }
+        renderRecent()
+    }
+
+    /** The last six covers, three by two; a tap plays that app again, or opens it. Empty places stay soft squares. */
+    private fun renderRecent() {
+        if (!::recentGrid.isInitialized) return
+        recentGrid.removeAllViews()
+        val items = recent.items
+        (0 until RecentMedia.MAX).chunked(3).forEachIndexed { line, indexes ->
+            recentGrid.addView(row().apply {
+                gravity = Gravity.FILL
+                indexes.forEachIndexed { column, index ->
+                    val item = items.getOrNull(index)
+                    addView(FrameLayout(context).apply {
+                        roundedClip(this, 12)
+                        background = shelf()
+                        val cover = item?.let(recent::cover)
+                        if (cover != null) addView(ImageView(context).apply {
+                            scaleType = ImageView.ScaleType.CENTER_CROP
+                            setImageBitmap(cover)
+                        }, FrameLayout.LayoutParams(-1, -1))
+                        else addView(label("♪", 18, tint(muted, 0x99), 700).apply { gravity = Gravity.CENTER }, FrameLayout.LayoutParams(-1, -1))
+                        if (item != null) {
+                            contentDescription = "${item.title}, ${appLabel(item.source)}"
+                            setOnClickListener {
+                                if (!mediaResume.play(item.source, media.live()))
+                                    packageManager.getLaunchIntentForPackage(item.source)?.let(::startSafely)
+                            }
+                            RadioMotion.pressScale(this, .94f)
+                        }
+                    }, LinearLayout.LayoutParams(0, -1, 1f).apply { if (column < 2) marginEnd = dp(8) })
+                }
+            }, LinearLayout.LayoutParams(-1, 0, 1f).apply { if (line > 0) topMargin = dp(8) })
         }
     }
 
@@ -1086,8 +1230,9 @@ class HomeActivity : Activity() {
         val road = dial is RoadGauge
         if (road) clipToOutline = true
         // The foot of the card belongs to the navigation: the road stops above it, a dial sits above it.
-        (dial as? RoadGauge)?.footer(dp(DRIVE_FOOTER).toFloat(),
-            if (studio) studioCard else if (night) 0xF00B1018.toInt() else 0xF5F2F5F8.toInt())
+        // Studio: no foot, the card is the route line and the car alone; a tap still opens the trip.
+        (dial as? RoadGauge)?.footer(if (studio) 0f else dp(DRIVE_FOOTER).toFloat(),
+            if (night) 0xF00B1018.toInt() else 0xF5F2F5F8.toInt())
         addView(dial, FrameLayout.LayoutParams(-1, -1).apply {
             if (!road) setMargins(dp(4), dp(4), dp(4), dp(DRIVE_FOOTER + 4))
         })
@@ -1095,6 +1240,7 @@ class HomeActivity : Activity() {
         addView(column().apply {
             altitudeText = label("", 11, muted, 600)
             addView(altitudeText, LinearLayout.LayoutParams(-1, -2))
+            if (studio) visibility = View.GONE
         }, FrameLayout.LayoutParams(dp(90), -2, Gravity.TOP or Gravity.START).apply { setMargins(dp(12), dp(10), 0, 0) })
         limitSign = LimitSign(context).apply { limit = activeLimit() }
         addView(limitSign,
@@ -1114,8 +1260,8 @@ class HomeActivity : Activity() {
         // Over the road's dark band the trip line is light in both themes.
         // The trip summary is the first line of the card's foot, under the road's line.
         speedStatus = label("", 12, text, 700).apply { gravity = Gravity.CENTER; visibility = View.INVISIBLE }
-        addView(speedStatus, FrameLayout.LayoutParams(-1, dp(24), Gravity.BOTTOM).apply { bottomMargin = dp(DRIVE_FOOTER - 31) })
-        addView(mapsCard(), FrameLayout.LayoutParams(-1, dp(DRIVE_FOOTER), Gravity.BOTTOM))
+        addView(speedStatus, FrameLayout.LayoutParams(-1, dp(24), Gravity.BOTTOM).apply { bottomMargin = dp(if (studio) 4 else DRIVE_FOOTER - 31) })
+        addView(mapsCard().apply { if (studio) visibility = View.GONE }, FrameLayout.LayoutParams(-1, dp(DRIVE_FOOTER), Gravity.BOTTOM))
         contentDescription = "Vitesse et trajet"
         setOnClickListener {
             if (!gps.permitted()) requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION,
@@ -1739,75 +1885,102 @@ class HomeActivity : Activity() {
      */
     private fun studioDock() = row().apply {
         dockBar = this
-        background = GradientDrawable().apply {
-            cornerRadius = dp(20).toFloat()
-            setColor(tint(studioCard, if (night) 0xE6 else 0xCC))
-            if (night) setStroke(dp(1), 0x14FFFFFF)
-        }
-        elevation = dp(2).toFloat()
         gravity = Gravity.CENTER_VERTICAL
-        setPadding(dp(6), dp(4), dp(6), dp(4))
-        fun item(page: Page, icon: Int, title: String, color: Int, action: () -> Unit) = FrameLayout(context).apply {
-            tag = color
+        setPadding(dp(2), 0, dp(2), 0)
+        // The home key alone on the left, as an icon.
+        addView(FrameLayout(context).apply {
+            tag = accent
             addView(ImageView(context).apply {
-                setImageResource(icon)
-                imageTintList = ColorStateList.valueOf(color)
+                setImageResource(R.drawable.ic_home_home)
+                imageTintList = ColorStateList.valueOf(accent)
                 tag = "icon"
             }, FrameLayout.LayoutParams(dp(22), dp(22), Gravity.CENTER))
+            contentDescription = "Accueil"
+            setOnClickListener { closePanel(); pager.show(0) }
+            RadioMotion.pressScale(this, .9f)
+            dockItems[Page.HOME] = this
+        }, LinearLayout.LayoutParams(dp(42), dp(40)))
+        // The weather outside, where the photo's car shows the cabin temperature.
+        addView(row().apply {
+            gravity = Gravity.CENTER_VERTICAL
+            weatherIcon = WeatherIcon(context, weatherColor)
+            addView(weatherIcon, LinearLayout.LayoutParams(dp(22), dp(22)))
+            weatherText = label("—", 16, text, 700)
+            addView(weatherText, wrap().apply { marginStart = dp(5) })
+            weatherDetail = label("", 11, muted).apply { visibility = View.GONE }
+            addView(weatherDetail)
+            contentDescription = "Météo"
+        }, wrap().apply { marginStart = dp(6) })
+        addView(View(context), LinearLayout.LayoutParams(0, 1, 1f))
+        // In the middle, soft coloured keys: the phone, the apps, the settings, then the driver's apps.
+        fun key(page: Page, icon: Int, title: String, color: Int, action: () -> Unit) = FrameLayout(context).apply {
+            tag = color
+            addView(FrameLayout(context).apply {
+                background = GradientDrawable().apply { cornerRadius = dp(11).toFloat(); setColor(tint(color, if (night) 0x33 else 0x24)) }
+                addView(ImageView(context).apply {
+                    setImageResource(icon)
+                    imageTintList = ColorStateList.valueOf(color)
+                    tag = "icon"
+                }, FrameLayout.LayoutParams(dp(19), dp(19), Gravity.CENTER))
+            }, FrameLayout.LayoutParams(dp(34), dp(34), Gravity.CENTER))
             contentDescription = title
             setOnClickListener { action() }
             RadioMotion.pressScale(this, .9f)
             dockItems[page] = this
         }
-        listOf(item(Page.HOME, R.drawable.ic_home_home, "Accueil", accent) { closePanel(); pager.show(0) },
-            item(Page.DIALER, R.drawable.ic_home_phone, "Téléphone", phoneColor) { dialer.show() },
-            item(Page.APPS, R.drawable.ic_home_apps, "Applis", appsColor) { showApps(editing = false) },
-            item(Page.SETTINGS, R.drawable.ic_home_settings, "Réglages", muted) { showSettings() }).forEach {
-            addView(it, LinearLayout.LayoutParams(dp(50), -1).apply { marginEnd = dp(2) })
+        listOf(key(Page.DIALER, R.drawable.ic_home_phone, "Téléphone", phoneColor) { dialer.show() },
+            key(Page.APPS, R.drawable.ic_home_apps, "Applis", appsColor) { showApps(editing = false) },
+            key(Page.SETTINGS, R.drawable.ic_home_settings, "Réglages", muted) { showSettings() }).forEach {
+            addView(it, LinearLayout.LayoutParams(dp(40), dp(40)))
         }
-        addView(View(context), LinearLayout.LayoutParams(0, 1, 1f))
         dockDivider = View(context).apply { setBackgroundColor(tint(text, 0x1F)) }
-        addView(dockDivider, LinearLayout.LayoutParams(dp(1), dp(22)).apply { marginEnd = dp(6) })
+        addView(dockDivider, LinearLayout.LayoutParams(dp(1), dp(20)).apply { marginStart = dp(4); marginEnd = dp(2) })
         dockApps = row().apply { gravity = Gravity.CENTER_VERTICAL }
         addView(dockApps, LinearLayout.LayoutParams(-2, -1))
         renderDockApps()
         addView(View(context), LinearLayout.LayoutParams(0, 1, 1f))
+        // The small player: artwork, title, play and next.
         addView(row().apply {
             gravity = Gravity.CENTER_VERTICAL
-            background = pressable(GradientDrawable().apply {
-                cornerRadius = dp(14).toFloat()
-                setColor(if (night) 0xFF242A34.toInt() else 0xFFF0F3F8.toInt())
-            }, 14)
-            setPadding(dp(4), dp(3), dp(2), dp(3))
+            background = pressable(null, 12)
             dockArt = ImageView(context).apply {
                 scaleType = ImageView.ScaleType.CENTER_CROP
-                roundedClip(this, 9)
+                roundedClip(this, 8)
                 setImageResource(R.drawable.ic_home_play)
                 imageTintList = ColorStateList.valueOf(muted)
                 setPadding(dp(8), dp(8), dp(8), dp(8))
-                background = GradientDrawable().apply { setColor(getColor(R.color.home_chip)) }
+                background = shelf()
             }
-            addView(dockArt, LinearLayout.LayoutParams(dp(34), dp(34)))
+            addView(dockArt, LinearLayout.LayoutParams(dp(32), dp(32)))
             dockTitle = label("Rien en lecture", 12, text, 700)
-            addView(dockTitle, LinearLayout.LayoutParams(0, -2, 1f).apply { marginStart = dp(8) })
+            addView(dockTitle, LinearLayout.LayoutParams(0, -2, 1f).apply { marginStart = dp(7) })
             fun button(icon: Int, description: String, action: () -> Unit) = ImageButton(context).apply {
                 setImageResource(icon)
                 imageTintList = ColorStateList.valueOf(text)
                 background = pressable(null, 12)
                 scaleType = ImageView.ScaleType.FIT_CENTER
-                setPadding(dp(8), dp(8), dp(8), dp(8))
+                setPadding(dp(7), dp(7), dp(7), dp(7))
                 contentDescription = description
                 setOnClickListener { action() }
             }
             dockPlay = button(R.drawable.ic_home_play, "Lecture") {
                 media.command(PlaybackState.ACTION_PLAY_PAUSE).takeIf { it } ?: media.command(PlaybackState.ACTION_PLAY)
             }
-            addView(dockPlay, LinearLayout.LayoutParams(dp(34), dp(34)))
+            addView(dockPlay, LinearLayout.LayoutParams(dp(30), dp(30)))
             addView(button(R.drawable.ic_home_next, "Suivant") { media.command(PlaybackState.ACTION_SKIP_TO_NEXT) },
-                LinearLayout.LayoutParams(dp(34), dp(34)))
+                LinearLayout.LayoutParams(dp(30), dp(30)))
             contentDescription = "Lecteur"
             setOnClickListener { openMediaSource() }
-        }, LinearLayout.LayoutParams(dp(196), -1))
+        }, LinearLayout.LayoutParams(dp(168), -1))
+        // The next prayer on the right, where the photo's car shows the passenger's temperature.
+        addView(column().apply {
+            gravity = Gravity.END
+            prayerText = label("Salat", 13, text, 700)
+            prayerDetail = label("", 10, prayerColor, 700)
+            addView(prayerText, wrap())
+            addView(prayerDetail, wrap())
+            contentDescription = "Prochaine prière"
+        }, wrap().apply { marginStart = dp(8); marginEnd = dp(6) })
         post { markDock(Page.HOME) }
     }
 
@@ -2357,7 +2530,7 @@ class HomeActivity : Activity() {
         mediaSource = state.source
         val hasMedia = state.source != null && (state.title != null || state.playing)
         // Radio Maroc & Coran gets its own player look; every other app the common card.
-        val radio = hasMedia && state.source == RADIO_PACKAGE
+        val radio = hasMedia && state.source == RADIO_PACKAGE && !studio
         radioBody.visibility = if (radio) View.VISIBLE else View.GONE
         mediaBody.visibility = if (radio) View.GONE else View.VISIBLE
         if (radio) radioCard.bind(state)
@@ -2390,6 +2563,19 @@ class HomeActivity : Activity() {
                 mediaTitle.text = state.title ?: appLabel(state.source)
                 mediaSubtitle.text = state.subtitle.orEmpty()
             }
+        }
+        if (studio) {
+            // Studio: the controls stay at the card's foot, the green tile always says what one tap does.
+            mediaControls.visibility = View.VISIBLE
+            mediaAction.visibility = View.VISIBLE
+            if (hasMedia && media.hasAccess()) {
+                mediaAction.text = "Ouvrir ${appLabel(state.source)}"
+                mediaAction.setOnClickListener { openMediaSource() }
+            }
+            val source = state.source
+            val title = state.title
+            val artwork = state.artwork
+            if (hasMedia && source != null && title != null && artwork != null && recent.add(source, title, artwork)) renderRecent()
         }
         val art = state.artwork.takeIf { hasMedia }
         mediaArt.setImageBitmap(art)
@@ -2515,20 +2701,10 @@ class HomeActivity : Activity() {
         RadioMotion.pressScale(this, .94f)
     }
 
-    /** The Studio shelf behind a favourite: a soft rounded square. */
+    /** The Studio shelf behind a tile: a soft rounded square. */
     private fun shelf() = GradientDrawable().apply {
         cornerRadius = dp(14).toFloat()
         setColor(if (night) 0xFF242A34.toInt() else 0xFFF0F3F8.toInt())
-    }
-
-    /** A favourite in the Studio media card: its logo alone on the shelf, named for TalkBack. */
-    private fun shelfTile(app: Launchable, onLong: (View) -> Unit) = FrameLayout(this).apply {
-        background = pressable(shelf(), 14)
-        addView(ImageView(context).apply { setImageDrawable(links.icon(app)) }, FrameLayout.LayoutParams(dp(38), dp(38), Gravity.CENTER))
-        contentDescription = app.label
-        setOnClickListener { links.open(app) }
-        setOnLongClickListener { onLong(it); true }
-        RadioMotion.pressScale(this, .94f)
     }
 
     private fun addTile() = column().apply {
@@ -2548,25 +2724,19 @@ class HomeActivity : Activity() {
         if (!::favoritesGrid.isInitialized) return
         favoritesGrid.removeAllViews()
         val list = favorites()
-        // Always three rows of two (two rows of three in the Studio media card): the favourites, then « + » tiles.
+        // Always three rows of two: the favourites, then « + » tiles for the free places.
         val slots = list.map<Launchable, Launchable?> { it } + List(6 - list.size) { null }
-        val perRow = if (favoritesInMedia) 3 else 2
-        slots.chunked(perRow).forEachIndexed { index, pair ->
+        slots.chunked(2).forEachIndexed { index, pair ->
             favoritesGrid.addView(row().apply {
                 gravity = Gravity.FILL
                 pair.forEachIndexed { column, app ->
-                    val remove = { anchor: View ->
+                    val tile = if (app == null) addTile() else appTile(app, compact = true, plain = true) { anchor ->
                         PopupMenu(this@HomeActivity, anchor).apply {
                             menu.add("Retirer des favoris")
-                            setOnMenuItemClickListener { toggleFavorite(app!!); true }
+                            setOnMenuItemClickListener { toggleFavorite(app); true }
                         }.show()
                     }
-                    val tile = when {
-                        app == null -> addTile().apply { if (favoritesInMedia) background = pressable(shelf(), 14) }
-                        favoritesInMedia -> shelfTile(app, remove)
-                        else -> appTile(app, compact = true, plain = true, onLong = remove)
-                    }
-                    addView(tile, LinearLayout.LayoutParams(0, -1, 1f).apply { if (column < perRow - 1) marginEnd = dp(8) })
+                    addView(tile, LinearLayout.LayoutParams(0, -1, 1f).apply { if (column == 0) marginEnd = dp(8) })
                 }
             }, LinearLayout.LayoutParams(-1, 0, 1f).apply { if (index > 0) topMargin = dp(8) })
         }

@@ -273,8 +273,21 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
     // The time between two frames, smoothed: how well this head unit keeps up with the animation.
     private var frameMs = 16f
 
+    // Where the car is drawn, worked out each frame: the Studio route line starts just above it.
+    private var carWidth = 0f
+    private var carBottom = 0f
+
     private fun drawScene(canvas: Canvas, scene: Scene, w: Float, h: Float, horizon: Float, road: Float, tone: Int) {
         val cx = w / 2f
+        if (flat) {
+            val bend = when (scene.shape) {
+                Turn.LEFT -> if (scene.slight) -.5f else -1f
+                Turn.RIGHT -> if (scene.slight) .5f else 1f
+                else -> 0f
+            }
+            drawRibbon(canvas, w, horizon, tone, bend)
+            return
+        }
         when (scene.shape) {
             Turn.LEFT, Turn.RIGHT -> if (scene.slight) drawFork(canvas, w, horizon, road, tone, left = scene.shape == Turn.LEFT)
                 else drawBend(canvas, w, horizon, road, tone, left = scene.shape == Turn.LEFT)
@@ -291,6 +304,66 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
         }
         // The street to take, on a road sign over the far end of the turn.
         if (scene.street != null) drawStreetSign(canvas, w, horizon, road, scene.street, left = scene.shape == Turn.LEFT)
+    }
+
+    /**
+     * Studio: the route ahead as one line from the car to the horizon, thick near the car and fine far away, bending
+     * towards a close turn ([bend] -1 left to 1 right), in the traffic colour, each known stretch in its own colour.
+     */
+    private fun drawRibbon(canvas: Canvas, w: Float, horizon: Float, tone: Int, bend: Float) {
+        val x0 = w / 2f
+        val y0 = carBottom - carWidth * .56f - 6 * density
+        if (y0 <= horizon) return
+        val x3 = x0 + bend * w * .34f
+        val y1 = y0 - (y0 - horizon) * .5f
+        val x2 = x0 + bend * w * .05f
+        val y2 = horizon + (y0 - horizon) * .25f
+        fun at(t: Float, a: Float, b: Float, c: Float, d: Float): Float {
+            val u = 1 - t
+            return u * u * u * a + 3 * u * u * t * b + 3 * u * t * t * c + t * t * t * d
+        }
+        fun band(from: Float, to: Float, color: Int, extra: Float) {
+            if (to <= from) return
+            val steps = 20
+            val xs = FloatArray(steps + 1)
+            val ys = FloatArray(steps + 1)
+            for (i in 0..steps) {
+                val t = from + (to - from) * i / steps
+                xs[i] = at(t, x0, x0, x2, x3)
+                ys[i] = at(t, y0, y1, y2, horizon)
+            }
+            path.reset()
+            val left = FloatArray((steps + 1) * 2)
+            val right = FloatArray((steps + 1) * 2)
+            for (i in 0..steps) {
+                val t = from + (to - from) * i / steps
+                val a = maxOf(i - 1, 0)
+                val b = minOf(i + 1, steps)
+                var dx = xs[b] - xs[a]
+                var dy = ys[b] - ys[a]
+                val length = kotlin.math.hypot(dx, dy).coerceAtLeast(.001f)
+                dx /= length; dy /= length
+                val half = (3.2f * (1 - t) + .9f * t) * density + extra
+                left[i * 2] = xs[i] + dy * half; left[i * 2 + 1] = ys[i] - dx * half
+                right[i * 2] = xs[i] - dy * half; right[i * 2 + 1] = ys[i] + dx * half
+            }
+            path.moveTo(left[0], left[1])
+            for (i in 1..steps) path.lineTo(left[i * 2], left[i * 2 + 1])
+            for (i in steps downTo 0) path.lineTo(right[i * 2], right[i * 2 + 1])
+            path.close()
+            roadPaint.shader = null
+            roadPaint.color = color
+            canvas.drawPath(path, roadPaint)
+        }
+        val base = flow?.color ?: tone
+        band(0f, 1f, ColorUtils.setAlphaComponent(base, 0x26), 3 * density)
+        roadPaint.shader = null
+        band(0f, 1f, base, 0f)
+        for ((start, end, stretchFlow) in aheadFlow) {
+            val a = sqrt(start / TrafficAhead.FAR_METERS.toFloat()).coerceIn(0f, 1f)
+            val b = sqrt(end / TrafficAhead.FAR_METERS.toFloat()).coerceIn(0f, 1f)
+            band(a, b, stretchFlow.color, 0f)
+        }
     }
 
     /** An arrow filled with light: a soft halo, a body that brightens towards its head, a thin bright rim. */
@@ -430,9 +503,24 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
         val cx = w / 2f
         // The figure on top, then the horizon just under it; while guiding the figure is smaller and to the right,
         // leaving the left for the instruction and more of the card for the road.
-        val size = if (guiding) min(h * .2f, w * .22f) else min(h * .27f, w * .3f)
-        val baseline = if (guiding) size + 8 * density else maxOf(size * .95f + 6 * density, h * .35f)
-        val horizon = if (guiding) maxOf(h * .36f, baseline + 16 * density) else baseline + 20 * density
+        val size = when {
+            // Studio: a modest figure at the top, the card left open for the route line and the car.
+            flat -> min(h * .1f, w * .13f)
+            guiding -> min(h * .2f, w * .22f)
+            else -> min(h * .27f, w * .3f)
+        }
+        val baseline = when {
+            flat -> size + 18 * density
+            guiding -> size + 8 * density
+            else -> maxOf(size * .95f + 6 * density, h * .35f)
+        }
+        val horizon = when {
+            flat -> maxOf(h * .3f, baseline + 22 * density)
+            guiding -> maxOf(h * .36f, baseline + 16 * density)
+            else -> baseline + 20 * density
+        }
+        carWidth = if (flat) min(w * .22f, 62 * density) else min(w * .26f, 76 * density)
+        carBottom = if (flat) h - 18 * density else h - 12 * density + 3 * density
         val road = h - horizon
         // The sky outside above the horizon (this hour's sun, today's weather), then a soft glow where the road
         // meets it. Until the first sky is known: the theme's own.
@@ -450,9 +538,11 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
             roadPaint.shader = linear(0f, horizon, 0f, h, 0xFFDFE9F1.toInt(), 0xFFB4C6D6.toInt())
             canvas.drawRect(0f, horizon, w, h, roadPaint)
         }
-        glowPaint.shader = radial(cx, horizon, w * .55f, ColorUtils.setAlphaComponent(tone, if (flat) 0x14 else 0x26),
-            ColorUtils.setAlphaComponent(tone, 0))
-        canvas.drawRect(0f, 0f, w, h, glowPaint)
+        if (!flat) {
+            glowPaint.shader = radial(cx, horizon, w * .55f, ColorUtils.setAlphaComponent(tone, 0x26),
+                ColorUtils.setAlphaComponent(tone, 0))
+            canvas.drawRect(0f, 0f, w, h, glowPaint)
+        }
 
         val now = System.nanoTime()
         if (lastFrame != 0L) {
@@ -554,7 +644,7 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
                 canvas.drawCircle(head, middle, dot * .95f, arrowPaint)
                 arrowPaint.color = flow?.color ?: guideColor
                 canvas.drawCircle(head, middle, dot * .5f, arrowPaint)
-            } else {
+            } else if (!flat) {
                 val left = 10 * density
                 rect.set(left, y, w - left, y + thick)
                 arrowPaint.color = Color.WHITE
@@ -566,21 +656,22 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
         // Indicator on the side of a close turn, blinking.
         val blinkSide = if (bend && (liveMeters ?: 0) <= 300) (if (turn!!.turn == Turn.LEFT) -1 else 1) else 0
         val blinkOn = blinkSide != 0 && (System.nanoTime() / 450_000_000L) % 2L == 0L
-        drawCar(canvas, cx, h - band + 3 * density, min(w * .26f, 76 * density), if (blinkOn) blinkSide else 0)
+        drawCar(canvas, cx, carBottom, carWidth, if (blinkOn) blinkSide else 0)
 
         // The speed.
         valuePaint.textSize = size
         valuePaint.color = if (over) alert else ink
         unitPaint.color = ColorUtils.setAlphaComponent(ink, 0xB3)
-        valuePaint.setShadowLayer(10 * density, 0f, 0f, ColorUtils.setAlphaComponent(tone, 0x80))
+        if (flat) valuePaint.clearShadowLayer()
+        else valuePaint.setShadowLayer(10 * density, 0f, 0f, ColorUtils.setAlphaComponent(tone, 0x80))
         val speedX = if (guiding) w * .64f else cx
         val figure = speed?.let { shown.roundToInt().toString() } ?: "—"
         valueEdge.textSize = size
         valueEdge.strokeWidth = size * .09f
         valueEdge.color = if (dark || over) 0x8C0B1018.toInt() else 0x99FFFFFF.toInt()
-        canvas.drawText(figure, speedX, baseline, valueEdge)
+        if (!flat) canvas.drawText(figure, speedX, baseline, valueEdge)
         canvas.drawText(figure, speedX, baseline, valuePaint)
-        if (!guiding) {
+        if (flat) { if (guiding) drawPill(canvas, turn, arriving) } else if (!guiding) {
             unitPaint.textSize = 10 * density
             canvas.drawText("KM/H", cx, baseline + 13 * density, unitPaint)
         } else drawPill(canvas, turn, arriving)
