@@ -516,15 +516,51 @@ class HomeActivity : Activity() {
         // Back from an Android settings screen: show the new Wi-Fi, Bluetooth and brightness states.
         if (shownPage == Page.QUICK) quick.show()
         phone.render()
+        startTurnSensor()
     }
 
     override fun onPause() {
+        stopTurnSensor()
         homeInFront = false
         tellRadio(visible = false)
         super.onPause()
     }
 
     private var homeInFront = false
+
+    // Cabine: the head unit's gyroscope, when it has one, turns the road view as the car turns, between GPS fixes.
+    private val gravity = FloatArray(3)
+    private var turnListener: android.hardware.SensorEventListener? = null
+
+    private fun startTurnSensor() {
+        if (!cabin || turnListener != null) return
+        val sensors = getSystemService(android.hardware.SensorManager::class.java) ?: return
+        val gyro = sensors.getDefaultSensor(android.hardware.Sensor.TYPE_GYROSCOPE) ?: return
+        val down = sensors.getDefaultSensor(android.hardware.Sensor.TYPE_GRAVITY)
+            ?: sensors.getDefaultSensor(android.hardware.Sensor.TYPE_ACCELEROMETER) ?: return
+        turnListener = object : android.hardware.SensorEventListener {
+            override fun onSensorChanged(event: android.hardware.SensorEvent) {
+                if (event.sensor.type == android.hardware.Sensor.TYPE_GYROSCOPE) {
+                    val norm = kotlin.math.sqrt(gravity[0] * gravity[0] + gravity[1] * gravity[1] + gravity[2] * gravity[2])
+                    if (norm < 5f) return
+                    // The turning about the vertical, whatever way the screen is mounted: the rotation along « up »
+                    // (the gravity sensor points up), counter-clockwise positive; the heading turns clockwise.
+                    val up = (event.values[0] * gravity[0] + event.values[1] * gravity[1] + event.values[2] * gravity[2]) / norm
+                    roadGauge?.turnRate(-Math.toDegrees(up.toDouble()).toFloat())
+                } else for (i in 0..2) gravity[i] += (event.values[i] - gravity[i]) * .1f
+            }
+            override fun onAccuracyChanged(sensor: android.hardware.Sensor?, accuracy: Int) = Unit
+        }.also {
+            sensors.registerListener(it, down, android.hardware.SensorManager.SENSOR_DELAY_UI)
+            sensors.registerListener(it, gyro, android.hardware.SensorManager.SENSOR_DELAY_GAME)
+        }
+    }
+
+    private fun stopTurnSensor() {
+        val listener = turnListener ?: return
+        getSystemService(android.hardware.SensorManager::class.java)?.unregisterListener(listener)
+        turnListener = null
+    }
 
     private fun tellRadio(visible: Boolean) {
         sendBroadcast(Intent(RADIO_HOME_VISIBLE).setPackage(RADIO_PACKAGE).putExtra("visible", visible))
@@ -614,7 +650,8 @@ class HomeActivity : Activity() {
         if (studio) {
             // Studio: opaque, rounder, no edge by day; the shadow comes from the card's elevation.
             cornerRadius = dp(if (radius >= 16) (if (cabin) radius + 2 else radius + 8) else radius + 2).toFloat()
-            setColor(studioCard)
+            // Cabine: a little of the backdrop shows through, like frosted glass.
+            setColor(if (cabin) (if (night) 0xD91B2029.toInt() else 0xE0FFFFFF.toInt()) else studioCard)
             if (night) setStroke(dp(1), 0x14FFFFFF)
             return@apply
         }
@@ -2463,6 +2500,13 @@ class HomeActivity : Activity() {
             if (NavWatch.nav.value == null) renderNav(null)
         }
         renderCamera(roadLimits.cameraAhead(fix.latitude, fix.longitude, bearing), kmh)
+        // Cabine: the real roads around the car, for the road view of the left card.
+        if (cabin) roadGauge?.let { view ->
+            val near = roadLimits.nearby(fix.latitude, fix.longitude, 350.0)
+            val local = CabinRoads.localize(near.map { it.points }, fix.latitude, fix.longitude)
+            val own = road?.let { CabinRoads.localize(listOf(it.points), fix.latitude, fix.longitude).firstOrNull() }
+            view.surroundings(local, own, bearing ?: heldBearing.takeIf { now - heldBearingAt < 10 * 60_000L }, kmh)
+        }
         if (roadGauge != null) {
             // Stopped in a jam the GPS gives no heading: the last one while moving still says which way is ahead.
             val heading = bearing ?: heldBearing.takeIf { now - heldBearingAt < 10 * 60_000L }

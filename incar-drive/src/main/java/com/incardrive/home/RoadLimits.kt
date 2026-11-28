@@ -130,6 +130,14 @@ internal class RoadLimits(private val folder: File? = null) {
     fun pointAhead(latitude: Double, longitude: Double, bearing: Int?, meters: Double): Pair<Double, Double>? =
         pointAhead(roads, lastRoad, latitude, longitude, bearing, meters)
 
+    /** The roads passing within [meters] of the car, for the Cabine's road view. */
+    fun nearby(latitude: Double, longitude: Double, meters: Double): List<Road> = roads.filter { road ->
+        road.points.any { TripMeter.distanceMeters(latitude, longitude, it.first, it.second) < meters }
+    }
+
+    /** The road the car was last matched to, or null. */
+    fun matched(): Road? = lastRoad
+
     /** The speed cameras found around the car, for the map. */
     fun cameraList(): List<Camera> = cameras
 

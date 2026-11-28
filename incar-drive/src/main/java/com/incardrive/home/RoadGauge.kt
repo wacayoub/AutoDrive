@@ -161,6 +161,76 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
     private var steer = 0f
     private var rolled = 0f
 
+    // Cabine with the real roads: the OpenStreetMap roads around the car (metres east, north of the last fix), the one
+    // the car is on from the car onwards, when that fix came and how fast the car went, and the heading shown, which
+    // turns smoothly between fixes (with the gyroscope when the head unit has one).
+    private var nearRoads = Path()
+    private var hasRoads = false
+    private var ownLine: FloatArray? = null
+    private var ownRoad = Path()
+    private var fixAt = 0L
+    private var fixSpeed = 0f
+    private var gpsHeading: Float? = null
+    private var gpsRate = 0f
+    private var headingShown = 0f
+    private var headingKnown = false
+    private var gyroRate: Float? = null
+    private var gyroAt = 0L
+    private val world = android.graphics.Matrix()
+    private val mapPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND; strokeJoin = Paint.Join.ROUND
+    }
+    private val point = FloatArray(2)
+    // When the car stopped (0 while it moves): after a few seconds the road fades and « À l'arrêt » shows.
+    private var stoppedSince = 0L
+    // Where the car is drawn across the card this frame.
+    private var carX = 0f
+
+    /**
+     * Cabine: the roads around the car at each fix, in metres east and north of it ([roads]), the road it is on
+     * ([own], null when unknown), its heading and speed. With no roads (no map kept yet, or offline) the drawn road
+     * that bends with the car's turning stays.
+     */
+    fun surroundings(roads: List<FloatArray>, own: FloatArray?, heading: Int?, kmh: Int?) {
+        fixAt = android.os.SystemClock.elapsedRealtime()
+        fixSpeed = (kmh ?: 0) / 3.6f
+        heading?.let { gpsHeading = it.toFloat() }
+        nearRoads = Path().also { path -> roads.forEach { addLine(path, it) } }
+        hasRoads = roads.isNotEmpty()
+        val bearing = gpsHeading
+        ownLine = if (own != null && bearing != null) CabinRoads.ahead(own, bearing) else null
+        ownRoad = Path().also { path -> own?.let { addLine(path, it) } }
+        invalidate()
+    }
+
+    /** The head unit's own turning, in degrees a second clockwise seen from above, from its gyroscope. */
+    fun turnRate(degreesPerSecond: Float) {
+        gyroRate = degreesPerSecond
+        gyroAt = android.os.SystemClock.elapsedRealtime()
+    }
+
+    /**
+     * The heading shown moves towards the GPS heading, carried on between fixes by the gyroscope's turning, or by the
+     * turning seen between the last two GPS headings, so a corner shows as it is driven and not a second later.
+     */
+    private fun updateHeading(seconds: Float) {
+        val gps = gpsHeading ?: return
+        val now = android.os.SystemClock.elapsedRealtime()
+        if (!headingKnown) { headingShown = gps; headingKnown = true; return }
+        val gyro = gyroRate?.takeIf { now - gyroAt < 500 }
+        val age = ((now - bearingAt) / 1000f).coerceIn(0f, 1.5f)
+        val target = if (gyro != null) gps else gps + gpsRate * age
+        if (gyro != null) headingShown += gyro * seconds
+        headingShown += CabinRoads.angle(target - headingShown) * min(1f, seconds * if (gyro != null) .8f else 3f)
+        headingShown = (headingShown + 360f) % 360f
+    }
+
+    private fun addLine(path: Path, line: FloatArray) {
+        if (line.size < 4) return
+        path.moveTo(line[0], line[1])
+        for (i in 1 until line.size / 2) path.lineTo(line[i * 2], line[i * 2 + 1])
+    }
+
     /** Each GPS heading while moving (null when stopped or unsure): the road under the car bends as the car turns. */
     fun heading(bearing: Int?) {
         val now = android.os.SystemClock.elapsedRealtime()
@@ -169,6 +239,7 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
         if (before != null && now > bearingAt) {
             val delta = ((bearing - before + 540) % 360) - 180
             val rate = delta * 1000f / (now - bearingAt)
+            gpsRate = rate.coerceIn(-40f, 40f)
             // About 15 degrees a second, a town corner, is a full bend.
             steerTarget = (rate / 15f).coerceIn(-1f, 1f)
         }
@@ -316,7 +387,7 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
                 Turn.RIGHT -> if (scene.slight) .5f else 1f
                 else -> 0f
             }
-            if (vehicle) drawVehicleRoad(canvas, w, h, bend) else drawRibbon(canvas, w, horizon, tone, bend)
+            if (vehicle) { if (realRoads) drawRealRoads(canvas, w, h) else drawVehicleRoad(canvas, w, h, bend); drawVehicleExtras(canvas, w, h) } else drawRibbon(canvas, w, horizon, tone, bend)
             return
         }
         when (scene.shape) {
@@ -586,11 +657,13 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
             if (seconds < 1.5f) flowPhase = (flowPhase + seconds * (.55f + shown / 110f)) % 1f
             // Only over short gaps: after a pause in drawing (another app in front) the app's own value is kept.
             if (seconds < 1.5f) travelled += shown / 3.6f * seconds
+            if (shown < 1f) { if (stoppedSince == 0L) stoppedSince = android.os.SystemClock.elapsedRealtime() } else stoppedSince = 0L
             if (seconds < 1.5f) {
                 rolled = (rolled + shown / 3.6f * seconds) % 1000f
                 // A heading not renewed for three seconds: the road straightens again.
                 val target = if (android.os.SystemClock.elapsedRealtime() - bearingAt > 3000) 0f else steerTarget
                 steer += (target - steer) * min(1f, seconds * 1.6f)
+                updateHeading(seconds)
             }
         }
         lastFrame = now
@@ -697,9 +770,9 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
         if (flat && vehicle) {
             // Cabine: the car in the right-hand lane, turned a little with the road.
             val length = carWidth * 2.05f
-            val x = cx + carWidth * .72f
+            val x = carX
             canvas.save()
-            canvas.rotate(roadCurve * 9f, x, carBottom - length / 2f)
+            if (!realRoads) canvas.rotate(roadCurve * 9f, x, carBottom - length / 2f)
             drawCarAbove(canvas, x, carBottom, carWidth, if (blinkOn) blinkSide else 0)
             canvas.restore()
         } else if (flat) drawCarAbove(canvas, cx, carBottom, carWidth, if (blinkOn) blinkSide else 0)
@@ -730,6 +803,7 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
             unitPaint.textAlign = unitAlign
             valuePaint.textAlign = align
         } else canvas.drawText(figure, speedX, baseline, valuePaint)
+        if (flat && vehicle && !guiding) drawStopped(canvas, baseline)
         if (flat) { if (guiding) drawPill(canvas, turn, arriving) } else if (!guiding) {
             unitPaint.textSize = 10 * density
             canvas.drawText("KM/H", cx, baseline + 13 * density, unitPaint)
@@ -743,6 +817,12 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
             (shown > .5f || guiding || previousScene != null) && isShown && windowVisibility == VISIBLE ->
                 if (frameMs < 24f) postInvalidateOnAnimation() else postInvalidateDelayed(33)
             blinkSide != 0 && isShown && windowVisibility == VISIBLE -> { lastFrame = 0L; postInvalidateDelayed(225) }
+            // Cabine: the road fading out once stopped, then the minutes stopped.
+            vehicle && flat && stoppedSince != 0L && isShown && windowVisibility == VISIBLE ->
+                postInvalidateDelayed(if (stoppedFade < 1f) 33 else 20_000)
+            // Cabine: the heading still settling after a turn.
+            vehicle && flat && realRoads && isShown && windowVisibility == VISIBLE &&
+                gpsHeading?.let { kotlin.math.abs(CabinRoads.angle(it - headingShown)) > .5f } == true -> postInvalidateOnAnimation()
             else -> lastFrame = 0L
         }
     }
@@ -1335,17 +1415,205 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
 
     /** Cabine: the card's own soft wash, pale blue by day, deep blue-grey by night. */
     private fun drawVehicleWash(canvas: Canvas, w: Float, h: Float) {
-        roadPaint.shader = if (dark) linear(0f, 0f, 0f, h, 0xFF1E2636.toInt(), 0xFF12161F.toInt())
-            else linear(0f, 0f, 0f, h, 0xFFF6F8FC.toInt(), 0xFFDCE5F1.toInt())
+        // A little translucent, like the Cabine's other cards over its backdrop.
+        roadPaint.shader = if (dark) linear(0f, 0f, 0f, h, 0xD91E2636.toInt(), 0xD912161F.toInt())
+            else linear(0f, 0f, 0f, h, 0xE0F6F8FC.toInt(), 0xE0DCE5F1.toInt())
         canvas.drawRect(0f, 0f, w, h, roadPaint)
         // A faint floor ellipse where the car stands.
         val length = carWidth * 2.05f
         val middle = carBottom - length / 2f
-        val x = w / 2f + carWidth * .72f
+        carX = w / 2f + if (realRoads) carWidth * .36f else carWidth * .72f
+        val x = carX
         rect.set(x - carWidth * 1.3f, middle - length * .62f, x + carWidth * 1.3f, middle + length * .62f)
         roadPaint.shader = radial(x, middle, carWidth * 1.4f, if (dark) 0x22FFFFFF else 0x66FFFFFF, 0)
         canvas.drawOval(rect, roadPaint)
         roadPaint.shader = null
+    }
+
+    /** Cabine: the real roads are drawn while a fix with roads around it is fresh and the heading known. */
+    private val realRoads get() = vehicle && hasRoads && headingKnown &&
+        android.os.SystemClock.elapsedRealtime() - fixAt < 30_000
+
+    /** How far ahead the real-road view reaches above the car, in metres. */
+    private val viewMeters = 240f
+
+    private val stoppedFade: Float get() = if (stoppedSince == 0L) 0f
+        else ((android.os.SystemClock.elapsedRealtime() - stoppedSince - 5_000) / 800f).coerceIn(0f, 1f)
+
+    /**
+     * Cabine: the real roads around the car, seen from above with the car's heading up: every road as a pale band,
+     * the car's own road wider with its centre marks, and the traffic ahead along it in its colours. Between two GPS
+     * fixes the car's place is carried on at its speed, so the roads glide instead of jumping once a second.
+     */
+    private fun drawRealRoads(canvas: Canvas, w: Float, h: Float) {
+        val length = carWidth * 2.05f
+        val carY = carBottom - length / 2f
+        val scale = carY / viewMeters
+        val age = ((android.os.SystemClock.elapsedRealtime() - fixAt) / 1000f).coerceIn(0f, 2f)
+        val (east, north) = CabinRoads.moved(headingShown, if (shown > 1f) fixSpeed else 0f, age)
+        world.reset()
+        world.postTranslate(-east, -north)
+        world.postScale(scale, -scale)
+        world.postRotate(-headingShown)
+        world.postTranslate(w / 2f, carY)
+        canvas.save()
+        canvas.concat(world)
+        val roadPx = carWidth * 1.3f
+        val sidePx = carWidth * .42f
+        val edge = if (dark) 0x59FFFFFF else 0xFFFFFFFF.toInt()
+        val asphalt = if (dark) 0xFF2C3444.toInt() else 0xFFC9D3E0.toInt()
+        // Edges first, then the asphalt over them, so crossings merge into one surface.
+        mapPaint.pathEffect = null
+        mapPaint.color = edge
+        mapPaint.strokeWidth = (sidePx + 3 * density) / scale
+        canvas.drawPath(nearRoads, mapPaint)
+        mapPaint.strokeWidth = (roadPx + 3 * density) / scale
+        canvas.drawPath(ownRoad, mapPaint)
+        mapPaint.color = asphalt
+        mapPaint.strokeWidth = sidePx / scale
+        canvas.drawPath(nearRoads, mapPaint)
+        mapPaint.strokeWidth = roadPx / scale
+        canvas.drawPath(ownRoad, mapPaint)
+        // The centre marks of the car's road, in metres: 6 painted, 8 empty.
+        mapPaint.color = if (dark) 0x99FFFFFF.toInt() else 0xE6FFFFFF.toInt()
+        mapPaint.strokeWidth = 2.2f * density / scale
+        mapPaint.strokeCap = Paint.Cap.BUTT
+        mapPaint.pathEffect = android.graphics.DashPathEffect(floatArrayOf(6f, 8f), 0f)
+        canvas.drawPath(ownRoad, mapPaint)
+        mapPaint.pathEffect = null
+        // The traffic ahead along the car's road, as a soft line in the middle of its lane.
+        val line = ownLine
+        if (line != null) {
+            val stretches = aheadFlow.ifEmpty { flow?.let { listOf(FlowStretch(0, 400, it)) } ?: emptyList() }
+            mapPaint.strokeCap = Paint.Cap.ROUND
+            mapPaint.strokeWidth = roadPx * .22f / scale
+            for ((from, to, stretchFlow) in stretches) {
+                val part = CabinRoads.part(line, from.toFloat(), to.toFloat())
+                if (part.size < 4) continue
+                mapPaint.color = ColorUtils.setAlphaComponent(stretchFlow.color, 0xB3)
+                path.reset()
+                addLine(path, part)
+                canvas.drawPath(path, mapPaint)
+            }
+        }
+        mapPaint.strokeCap = Paint.Cap.ROUND
+        canvas.restore()
+        // Distance marks along the car's road: 50 and 100 metres.
+        if (line != null) {
+            textPaint.typeface = Fonts.get(700)
+            textPaint.textSize = 9 * density
+            textPaint.textAlign = Paint.Align.LEFT
+            textPaint.color = ColorUtils.setAlphaComponent(ink, 0x99)
+            for (meters in intArrayOf(50, 100)) {
+                val at = CabinRoads.along(line, meters.toFloat()) ?: continue
+                point[0] = at.first; point[1] = at.second
+                world.mapPoints(point)
+                if (point[1] < 14 * density) continue
+                markPaint.color = ColorUtils.setAlphaComponent(ink, 0x66)
+                canvas.drawCircle(point[0] + roadPx / 2f + 4 * density, point[1], 1.6f * density, markPaint)
+                canvas.drawText("$meters m", point[0] + roadPx / 2f + 8 * density, point[1] + 3 * density, textPaint)
+            }
+            // The speed camera ahead, at its place on the road.
+            val metres = cameraMeters
+            if (metres != null) CabinRoads.along(line, metres.toFloat())?.let { at ->
+                point[0] = at.first; point[1] = at.second
+                world.mapPoints(point)
+                drawCameraMark(canvas, point[0] + roadPx / 2f + 10 * density, point[1].coerceAtLeast(18 * density), metres)
+            }
+        } else cameraMeters?.let { drawCameraMark(canvas, w / 2f + roadPx / 2f + 10 * density, 22 * density, it) }
+        // The roads come from OpenStreetMap, whose licence asks for its name.
+        textPaint.typeface = Fonts.get(500)
+        textPaint.textSize = 8 * density
+        textPaint.textAlign = Paint.Align.LEFT
+        textPaint.color = ColorUtils.setAlphaComponent(ink, 0x80)
+        canvas.drawText("© OpenStreetMap", 8 * density, h - 6 * density, textPaint)
+    }
+
+    /** Cabine, on either road: the guidance arrow painted ahead of the car, the limit on the road, the stopped veil. */
+    private fun drawVehicleExtras(canvas: Canvas, w: Float, h: Float) {
+        val length = carWidth * 2.05f
+        val top = carBottom - length
+        // While stopped a few seconds, the road fades back into the card.
+        val fade = stoppedFade
+        if (fade > 0f) {
+            roadPaint.shader = null
+            roadPaint.color = ColorUtils.setAlphaComponent(if (dark) 0xFF161B25.toInt() else 0xFFEEF2F8.toInt(), (fade * 150).toInt())
+            canvas.drawRect(0f, 0f, w, h, roadPaint)
+        }
+        // The limit painted on the lane ahead, like a marking.
+        limit?.let { value ->
+            if (fade >= 1f) return@let
+            textPaint.typeface = Fonts.get(800)
+            textPaint.textSize = carWidth * .42f
+            textPaint.textAlign = Paint.Align.CENTER
+            textPaint.color = if (dark) 0x55FFFFFF else 0xB3FFFFFF.toInt()
+            canvas.drawText(value.toString(), carX, top - length * 1.15f, textPaint)
+        }
+        // The next turn of the guidance, painted on the lane: a stem from the car bending to its side, and the distance.
+        val turn = maneuver ?: return
+        val meters = liveMeters ?: return
+        if (meters > 400 || fade >= 1f) return
+        val side = when (turn.turn) { Turn.LEFT -> -1f; Turn.RIGHT -> 1f; else -> 0f }
+        val x = carX
+        val bottom = top - 8 * density
+        val stemTop = bottom - length * .55f
+        linePaint.color = if (dark) 0xE6FFFFFF.toInt() else Color.WHITE
+        linePaint.strokeWidth = carWidth * .16f
+        path.reset()
+        path.moveTo(x, bottom)
+        path.lineTo(x, stemTop)
+        val headX: Float
+        val headY: Float
+        if (side == 0f) { headX = x; headY = stemTop - carWidth * .3f; path.lineTo(headX, headY) }
+        else {
+            headX = x + side * carWidth * .55f; headY = stemTop - carWidth * .35f
+            path.quadTo(x, headY, headX, headY)
+        }
+        canvas.drawPath(path, linePaint)
+        // The arrow head.
+        arrowPaint.shader = null
+        arrowPaint.color = linePaint.color
+        val size = carWidth * .28f
+        path.reset()
+        if (side == 0f) {
+            path.moveTo(headX, headY - size); path.lineTo(headX - size, headY + size * .2f); path.lineTo(headX + size, headY + size * .2f)
+        } else {
+            path.moveTo(headX + side * size, headY); path.lineTo(headX - side * size * .2f, headY - size); path.lineTo(headX - side * size * .2f, headY + size)
+        }
+        path.close()
+        canvas.drawPath(path, arrowPaint)
+        textPaint.typeface = Fonts.get(800)
+        textPaint.textSize = 12 * density
+        textPaint.textAlign = Paint.Align.CENTER
+        textPaint.color = guideColor
+        canvas.drawText(if (meters < 15) "ici" else "${(meters / 10) * 10} m", x - side * carWidth * .2f, bottom - length * .25f, textPaint)
+    }
+
+    /** A speed camera beside the road: a red disc with its distance. */
+    private fun drawCameraMark(canvas: Canvas, x: Float, y: Float, metres: Int) {
+        arrowPaint.shader = null
+        arrowPaint.color = 0xFFE5262E.toInt()
+        canvas.drawCircle(x, y, 7 * density, arrowPaint)
+        arrowPaint.color = Color.WHITE
+        rect.set(x - 3.5f * density, y - 2.5f * density, x + 3.5f * density, y + 2.5f * density)
+        canvas.drawRoundRect(rect, density, density, arrowPaint)
+        textPaint.typeface = Fonts.get(700)
+        textPaint.textSize = 9 * density
+        textPaint.textAlign = Paint.Align.LEFT
+        textPaint.color = 0xFFE5262E.toInt()
+        canvas.drawText("${(metres / 10) * 10} m", x + 10 * density, y + 3 * density, textPaint)
+    }
+
+    /** Cabine: « À l'arrêt » under the speed once stopped a few seconds, with the minutes after the first. */
+    private fun drawStopped(canvas: Canvas, baseline: Float) {
+        val fade = stoppedFade
+        if (fade <= 0f) return
+        val minutes = ((android.os.SystemClock.elapsedRealtime() - stoppedSince) / 60_000L).toInt()
+        textPaint.typeface = Fonts.get(600)
+        textPaint.textSize = 11 * density
+        textPaint.textAlign = Paint.Align.LEFT
+        textPaint.color = ColorUtils.setAlphaComponent(ink, (0x99 * fade).toInt())
+        canvas.drawText(if (minutes >= 1) "À l’arrêt · $minutes min" else "À l’arrêt", 16 * density, baseline + 16 * density, textPaint)
     }
 
     // The bend drawn this frame, -1 left to 1 right: a close turn of the guidance, else the car's own turning.
@@ -1501,12 +1769,32 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
             rect.set(cx + side * half * .96f - half * .18f, y(.33f), cx + side * half * .96f + half * .18f, y(.38f))
             canvas.drawOval(rect, carPaint)
         }
+        // At night in the Cabine, the headlights' beams on the road ahead.
+        if (vehicle && dark) {
+            carPaint.shader = linear(0f, y(0f) - length * .9f, 0f, y(0f), 0x00FFF4D6, 0x40FFF4D6)
+            path.reset()
+            path.moveTo(cx - half * .7f, y(.02f))
+            path.lineTo(cx - half * 1.5f, y(0f) - length * .9f)
+            path.lineTo(cx + half * 1.5f, y(0f) - length * .9f)
+            path.lineTo(cx + half * .7f, y(.02f))
+            path.close()
+            canvas.drawPath(path, carPaint)
+            carPaint.shader = null
+        }
+        // Braking: a red glow behind the tail.
+        if (vehicle && braking && shown > 3f) {
+            carPaint.shader = radial(cx, y(1f), half * 1.4f, 0x88FF2020.toInt(), 0x00FF2020)
+            rect.set(cx - half * 1.4f, y(1f) - half * .6f, cx + half * 1.4f, y(1f) + half * .9f)
+            canvas.drawOval(rect, carPaint)
+            carPaint.shader = null
+        }
         // Thin light bars: white at the nose, red at the tail.
         carPaint.color = if (dark) 0xFFFFFFFF.toInt() else 0xE6FFFFFF.toInt()
         rect.set(cx - half * .7f, y(.035f), cx + half * .7f, y(.035f) + 1.6f * density)
         canvas.drawRoundRect(rect, density, density, carPaint)
-        carPaint.color = 0xFFFF3B3B.toInt()
-        rect.set(cx - half * .78f, y(.965f) - 1.6f * density, cx + half * .78f, y(.965f))
+        carPaint.color = if (vehicle && braking && shown > 3f) 0xFFFF1A1A.toInt() else 0xFFFF3B3B.toInt()
+        val tail = if (vehicle && braking && shown > 3f) 3f * density else 1.6f * density
+        rect.set(cx - half * .78f, y(.965f) - tail, cx + half * .78f, y(.965f))
         canvas.drawRoundRect(rect, density, density, carPaint)
     }
 
