@@ -146,6 +146,13 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
     var flat = false
         set(value) { field = value; if (value) dark = night; invalidate() }
 
+    /**
+     * The « Cabine » look, on top of [flat]: a vehicle card. The car seen from above, large in the middle on a soft
+     * wash, the speed small in the upper left, the traffic as a glow under the car instead of a route line.
+     */
+    var vehicle = false
+        set(value) { field = value; invalidate() }
+
     /** The sky of this hour and this weather: [elevation] is the sun's height in degrees, negative below the horizon. */
     fun outside(sky: Sky, elevation: Float, weather: com.autodrive.radiomaroc.WeatherCondition?) {
         if (sky == outside && weather == this.weather && kotlin.math.abs(elevation - this.elevation) < .3f) return
@@ -285,7 +292,7 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
                 Turn.RIGHT -> if (scene.slight) .5f else 1f
                 else -> 0f
             }
-            drawRibbon(canvas, w, horizon, tone, bend)
+            if (vehicle) drawTrafficGlow(canvas, w) else drawRibbon(canvas, w, horizon, tone, bend)
             return
         }
         when (scene.shape) {
@@ -505,6 +512,7 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
         // leaving the left for the instruction and more of the card for the road.
         val size = when {
             // Studio: a modest figure at the top, the card left open for the route line and the car.
+            flat && vehicle -> min(h * .12f, w * .16f)
             flat -> min(h * .1f, w * .13f)
             guiding -> min(h * .2f, w * .22f)
             else -> min(h * .27f, w * .3f)
@@ -519,13 +527,13 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
             guiding -> maxOf(h * .36f, baseline + 16 * density)
             else -> baseline + 20 * density
         }
-        carWidth = if (flat) minOf(w * .2f, h * .14f, 52 * density) else min(w * .26f, 76 * density)
-        carBottom = if (flat) h - 22 * density else h - 12 * density + 3 * density
+        carWidth = if (flat && vehicle) minOf(w * .3f, h * .2f, 80 * density) else if (flat) minOf(w * .2f, h * .14f, 52 * density) else min(w * .26f, 76 * density)
+        carBottom = if (flat && vehicle) h * .57f + carWidth * 1.025f else if (flat) h - 22 * density else h - 12 * density + 3 * density
         val road = h - horizon
         // The sky outside above the horizon (this hour's sun, today's weather), then a soft glow where the road
         // meets it. Until the first sky is known: the theme's own.
         val real = outside
-        if (flat) Unit
+        if (flat) { if (vehicle) drawVehicleWash(canvas, w, h) }
         else if (real != null) drawOutside(canvas, real, w, h, horizon)
         else if (night) {
             roadPaint.shader = linear(0f, 0f, 0f, horizon, ColorUtils.setAlphaComponent(skyTop, 0xB0),
@@ -671,7 +679,19 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
         valueEdge.strokeWidth = size * .09f
         valueEdge.color = if (dark || over) 0x8C0B1018.toInt() else 0x99FFFFFF.toInt()
         if (!flat) canvas.drawText(figure, speedX, baseline, valueEdge)
-        canvas.drawText(figure, speedX, baseline, valuePaint)
+        if (vehicle && flat && !guiding) {
+            // Cabine: the figure in the upper left with its unit beside it.
+            val align = valuePaint.textAlign
+            val left = 16 * density
+            valuePaint.textAlign = Paint.Align.LEFT
+            canvas.drawText(figure, left, baseline, valuePaint)
+            val unitAlign = unitPaint.textAlign
+            unitPaint.textAlign = Paint.Align.LEFT
+            unitPaint.textSize = 11 * density
+            canvas.drawText("km/h", left + valuePaint.measureText(figure) + 5 * density, baseline, unitPaint)
+            unitPaint.textAlign = unitAlign
+            valuePaint.textAlign = align
+        } else canvas.drawText(figure, speedX, baseline, valuePaint)
         if (flat) { if (guiding) drawPill(canvas, turn, arriving) } else if (!guiding) {
             unitPaint.textSize = 10 * density
             canvas.drawText("KM/H", cx, baseline + 13 * density, unitPaint)
@@ -1273,6 +1293,32 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
         textPaint.color = 0xE6FFFFFF.toInt()
         canvas.drawText(detail, tx, top + 32 * density, textPaint)
         canvas.restore()
+    }
+
+    /** Cabine: the card's own soft wash, pale blue by day, deep blue-grey by night. */
+    private fun drawVehicleWash(canvas: Canvas, w: Float, h: Float) {
+        roadPaint.shader = if (dark) linear(0f, 0f, 0f, h, 0xFF1E2636.toInt(), 0xFF12161F.toInt())
+            else linear(0f, 0f, 0f, h, 0xFFF6F8FC.toInt(), 0xFFDCE5F1.toInt())
+        canvas.drawRect(0f, 0f, w, h, roadPaint)
+        // A faint floor ellipse where the car stands.
+        val length = carWidth * 2.05f
+        val middle = carBottom - length / 2f
+        rect.set(w / 2f - carWidth * 1.3f, middle - length * .62f, w / 2f + carWidth * 1.3f, middle + length * .62f)
+        roadPaint.shader = radial(w / 2f, middle, carWidth * 1.4f, if (dark) 0x22FFFFFF else 0x66FFFFFF, 0)
+        canvas.drawOval(rect, roadPaint)
+        roadPaint.shader = null
+    }
+
+    /** Cabine: the traffic around the car, as a soft glow in its colour (nothing while it is unknown). */
+    private fun drawTrafficGlow(canvas: Canvas, w: Float) {
+        val color = flow?.color ?: aheadFlow.maxByOrNull { it.flow.ordinal }?.flow?.color ?: return
+        val length = carWidth * 2.05f
+        val middle = carBottom - length / 2f
+        roadPaint.shader = radial(w / 2f, middle, length * .85f, ColorUtils.setAlphaComponent(color, 0x55),
+            ColorUtils.setAlphaComponent(color, 0))
+        rect.set(w / 2f - length * .85f, middle - length * .85f, w / 2f + length * .85f, middle + length * .85f)
+        canvas.drawOval(rect, roadPaint)
+        roadPaint.shader = null
     }
 
     /**
