@@ -150,6 +150,8 @@ class HomeActivity : Activity() {
      * of icons with a small player. Dark grey cards with the « Nuit » theme.
      */
     internal val studio by lazy { prefs.getString(LOOK, null) == STUDIO }
+    /** The Studio's one accent, a clear blue like the reference cabin's. */
+    private val studioBlue = 0xFF2F7BF6.toInt()
     private val studioCard get() = if (night) 0xFF1B2029.toInt() else Color.WHITE
 
     private lateinit var greeting: TextView
@@ -601,7 +603,7 @@ class HomeActivity : Activity() {
     internal fun glass(radius: Int = 16): GradientDrawable = GradientDrawable().apply {
         if (studio) {
             // Studio: opaque, rounder, no edge by day; the shadow comes from the card's elevation.
-            cornerRadius = dp(if (radius >= 16) radius + 6 else radius + 2).toFloat()
+            cornerRadius = dp(if (radius >= 16) radius + 8 else radius + 2).toFloat()
             setColor(studioCard)
             if (night) setStroke(dp(1), 0x14FFFFFF)
             return@apply
@@ -664,9 +666,9 @@ class HomeActivity : Activity() {
                     if (studio) {
                         // Studio: the road on the left, the map in the middle, the media on the right, each card lifted.
                         val lift = dp(3).toFloat()
-                        addView(speedCard().apply { elevation = lift }, LinearLayout.LayoutParams(0, -1, 1.12f))
+                        addView(speedCard().apply { elevation = lift }, LinearLayout.LayoutParams(0, -1, 1f))
                         addView(map().apply { elevation = lift },
-                            LinearLayout.LayoutParams(0, -1, 1.03f).apply { marginStart = dp(12); marginEnd = dp(12) })
+                            LinearLayout.LayoutParams(0, -1, 1.04f).apply { marginStart = dp(7); marginEnd = dp(7) })
                         addView(mediaCard().apply { elevation = lift }, LinearLayout.LayoutParams(0, -1, 1f))
                     } else {
                         addView(mediaCard(), LinearLayout.LayoutParams(0, -1, 1.4f))
@@ -684,7 +686,7 @@ class HomeActivity : Activity() {
                         .apply { marginStart = dp(10) })
                 })
             }
-            addView(pager, LinearLayout.LayoutParams(-1, 0, 1f).apply { topMargin = dp(6) })
+            addView(pager, LinearLayout.LayoutParams(-1, 0, 1f).apply { topMargin = dp(if (studio) 4 else 6) })
             addView(row().apply {
                 gravity = Gravity.CENTER
                 dots = List(2) { index ->
@@ -694,8 +696,8 @@ class HomeActivity : Activity() {
                     }
                 }
                 markDots(0)
-            }, LinearLayout.LayoutParams(-1, dp(14)))
-            addView(dock(), LinearLayout.LayoutParams(-1, dp(if (studio) 50 else 46)))
+            }, LinearLayout.LayoutParams(-1, dp(if (studio) 10 else 14)))
+            addView(dock(), LinearLayout.LayoutParams(-1, dp(if (studio) 44 else 46)))
         }
         panelHost = FrameLayout(this).apply { visibility = View.GONE }
         callBanner = FrameLayout(this).apply { visibility = View.GONE }
@@ -708,7 +710,8 @@ class HomeActivity : Activity() {
             addView(callBanner, FrameLayout.LayoutParams(-1, -1))
             setOnApplyWindowInsetsListener { _, insets ->
                 val bars = insets.getInsets(WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout())
-                content.setPadding(bars.left + dp(14), bars.top + dp(8), bars.right + dp(14), bars.bottom + dp(10))
+                val side = dp(if (studio) 8 else 14)
+                content.setPadding(bars.left + side, bars.top + dp(if (studio) 4 else 8), bars.right + side, bars.bottom + dp(if (studio) 4 else 10))
                 panelHost.setPadding(bars.left + dp(14), bars.top + dp(8), bars.right + dp(14), bars.bottom + dp(62))
                 callBanner.setPadding(bars.left + dp(14), bars.top + dp(8), bars.right + dp(14), bars.bottom + dp(10))
                 insets
@@ -997,7 +1000,7 @@ class HomeActivity : Activity() {
         mediaBody = column()
         return FrameLayout(this).apply {
             background = pressable(LayerDrawable(arrayOf(glass(), mediaWash)))
-            if (studio) setPadding(dp(12), dp(12), dp(12), dp(8)) else setPadding(dp(16), dp(16), dp(16), dp(14))
+            if (studio) setPadding(dp(14), dp(14), dp(14), dp(8)) else setPadding(dp(16), dp(16), dp(16), dp(14))
             setOnClickListener { openMediaSource() }
             addView(mediaBody, FrameLayout.LayoutParams(-1, -1))
             addView(radioBody, FrameLayout.LayoutParams(-1, -1))
@@ -1067,99 +1070,103 @@ class HomeActivity : Activity() {
     private lateinit var recentGrid: LinearLayout
 
     /**
-     * The Studio media card: two tiles on the left (the radio, and the main action: listen again, or open the app
-     * playing), a tall tile on the right for what plays now over its artwork, the last six covers played, and the
-     * transport buttons at the foot.
+     * The Studio media card, laid out like the reference cabin's player: the cover small at the top with the app and
+     * the radio key, what plays in large letters, one line for the useful action, the last covers played in one row,
+     * and the transport at the foot around a round play key.
      */
     private fun studioMediaBody() {
         mediaBody.apply {
             addView(row().apply {
-                mediaApp = caps("Média", text)
-                addView(mediaApp, LinearLayout.LayoutParams(0, -2, 1f).apply { marginStart = dp(2) })
-                mediaBars = EqualizerBars(context, accent)
-                addView(mediaBars, LinearLayout.LayoutParams(dp(16), dp(12)))
-            })
-            addView(row().apply {
-                gravity = Gravity.FILL
-                addView(column().apply {
-                    addView(label("Radio\n& Coran", 12, Color.WHITE, 700).apply {
-                        maxLines = 2
-                        gravity = Gravity.BOTTOM or Gravity.START
-                        setPadding(dp(10), 0, dp(8), dp(8))
-                        background = pressable(GradientDrawable(GradientDrawable.Orientation.TL_BR,
-                            intArrayOf(0xFF6D8BFF.toInt(), 0xFFB07BF5.toInt())).apply { cornerRadius = dp(14).toFloat() }, 14)
-                        contentDescription = "Écouter Radio Maroc & Coran"
-                        setOnClickListener {
-                            if (!mediaResume.play(RADIO_PACKAGE, media.live()))
-                                packageManager.getLaunchIntentForPackage(RADIO_PACKAGE)?.let(::startSafely) ?: showApps(editing = false)
-                        }
-                        RadioMotion.pressScale(this, .96f)
-                    }, LinearLayout.LayoutParams(-1, 0, 1f))
-                    mediaAction = label("", 12, Color.WHITE, 700).apply {
-                        gravity = Gravity.BOTTOM or Gravity.START
-                        maxLines = 2
-                        setPadding(dp(10), 0, dp(8), dp(7))
-                        background = pressable(GradientDrawable(GradientDrawable.Orientation.TL_BR,
-                            intArrayOf(0xFF34C77B.toInt(), 0xFF9BDC4A.toInt())).apply { cornerRadius = dp(14).toFloat() }, 14)
-                        RadioMotion.pressScale(this, .96f)
-                    }
-                    addView(mediaAction, LinearLayout.LayoutParams(-1, 0, 1f).apply { topMargin = dp(8) })
-                }, LinearLayout.LayoutParams(0, -1, 1f))
                 addView(FrameLayout(context).apply {
-                    roundedClip(this, 14)
+                    roundedClip(this, 10)
                     background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
                         intArrayOf(0xFF3E5FA8.toInt(), 0xFF22345E.toInt()))
-                    mediaInitial = label("♪", 30, 0x66FFFFFF, 700).apply { gravity = Gravity.CENTER }
+                    mediaInitial = label("♪", 18, 0x99FFFFFF.toInt(), 700).apply { gravity = Gravity.CENTER }
                     addView(mediaInitial, FrameLayout.LayoutParams(-1, -1))
                     mediaArt = ImageView(context).apply { scaleType = ImageView.ScaleType.CENTER_CROP }
                     addView(mediaArt, FrameLayout.LayoutParams(-1, -1))
-                    addView(View(context).apply {
-                        background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(0x00000000, 0xB3000000.toInt()))
-                    }, FrameLayout.LayoutParams(-1, -1))
-                    addView(column().apply {
-                        mediaTitle = label("Rien en lecture", 12, Color.WHITE, 700).apply { maxLines = 2 }
-                        mediaSubtitle = label("", 10, 0xCCFFFFFF.toInt())
-                        addView(mediaTitle, LinearLayout.LayoutParams(-1, -2))
-                        addView(mediaSubtitle, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(2) })
-                    }, FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM).apply { setMargins(dp(8), 0, dp(8), dp(7)) })
                     contentDescription = "En lecture"
                     setOnClickListener { openMediaSource() }
-                }, LinearLayout.LayoutParams(0, -1, 1.1f).apply { marginStart = dp(8) })
-            }, LinearLayout.LayoutParams(-1, dp(92)).apply { topMargin = dp(8) })
-            addView(caps("Récents", muted), wrap().apply { topMargin = dp(10); marginStart = dp(2) })
+                }, LinearLayout.LayoutParams(dp(42), dp(42)))
+                addView(column().apply {
+                    addView(row().apply {
+                        mediaApp = caps("Média", muted)
+                        addView(mediaApp, LinearLayout.LayoutParams(0, -2, 1f))
+                        mediaBars = EqualizerBars(context, studioBlue)
+                        addView(mediaBars, LinearLayout.LayoutParams(dp(14), dp(10)))
+                    })
+                    mediaSubtitle = label("", 12, muted)
+                    addView(mediaSubtitle, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(2) })
+                }, LinearLayout.LayoutParams(0, -2, 1f).apply { marginStart = dp(9) })
+                // The radio, one tap away, as a small round key.
+                addView(label("Radio", 11, studioBlue, 700).apply {
+                    gravity = Gravity.CENTER
+                    setPadding(dp(9), 0, dp(9), 0)
+                    background = pressable(GradientDrawable().apply {
+                        cornerRadius = dp(14).toFloat(); setColor(tint(studioBlue, if (night) 0x33 else 0x1F))
+                    }, 14)
+                    contentDescription = "Écouter Radio Maroc & Coran"
+                    setOnClickListener {
+                        if (!mediaResume.play(RADIO_PACKAGE, media.live()))
+                            packageManager.getLaunchIntentForPackage(RADIO_PACKAGE)?.let(::startSafely) ?: showApps(editing = false)
+                    }
+                    RadioMotion.pressScale(this, .94f)
+                }, LinearLayout.LayoutParams(-2, dp(26)).apply { marginStart = dp(6) })
+            })
+            // What plays, large, where the reference shows the lyrics.
+            mediaTitle = label("Rien en lecture", 20, text, 700).apply {
+                maxLines = 3
+                ellipsize = android.text.TextUtils.TruncateAt.END
+                setLineSpacing(0f, 1.05f)
+            }
+            addView(mediaTitle, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12) })
+            mediaAction = label("", 12, studioBlue, 700).apply {
+                maxLines = 1
+                ellipsize = android.text.TextUtils.TruncateAt.END
+                setPadding(0, dp(4), 0, dp(4))
+                background = pressable(null, 8)
+            }
+            addView(mediaAction, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(4) })
+            addView(View(context), LinearLayout.LayoutParams(-1, 0, 1f))
+            addView(caps("Récents", muted), wrap().apply { marginStart = dp(1) })
             recentGrid = column()
-            addView(recentGrid, LinearLayout.LayoutParams(-1, 0, 1f).apply { topMargin = dp(6) })
+            addView(recentGrid, LinearLayout.LayoutParams(-1, dp(52)).apply { topMargin = dp(6) })
             mediaControls = row().apply {
-                gravity = Gravity.END or Gravity.CENTER_VERTICAL
+                gravity = Gravity.CENTER
                 fun button(icon: Int, description: String, action: () -> Unit) = ImageButton(context).apply {
                     setImageResource(icon)
                     imageTintList = ColorStateList.valueOf(text)
-                    background = pressable(null, 12)
+                    background = pressable(null, 18)
                     scaleType = ImageView.ScaleType.FIT_CENTER
-                    setPadding(dp(7), dp(7), dp(7), dp(7))
+                    setPadding(dp(8), dp(8), dp(8), dp(8))
                     contentDescription = description
                     setOnClickListener { action() }
                 }
                 addView(button(R.drawable.ic_home_previous, "Précédent") { media.command(PlaybackState.ACTION_SKIP_TO_PREVIOUS) },
-                    LinearLayout.LayoutParams(dp(32), dp(32)))
+                    LinearLayout.LayoutParams(dp(36), dp(36)))
                 playButton = button(R.drawable.ic_home_play, "Lecture") {
                     media.command(PlaybackState.ACTION_PLAY_PAUSE).takeIf { it } ?: media.command(PlaybackState.ACTION_PLAY)
+                }.apply {
+                    imageTintList = ColorStateList.valueOf(Color.WHITE)
+                    setPadding(dp(11), dp(11), dp(11), dp(11))
+                    background = pressable(GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(studioBlue) }, 22)
+                    elevation = dp(3).toFloat()
                 }
-                addView(playButton, LinearLayout.LayoutParams(dp(32), dp(32)).apply { marginStart = dp(8); marginEnd = dp(8) })
+                addView(playButton, LinearLayout.LayoutParams(dp(42), dp(42)).apply { marginStart = dp(22); marginEnd = dp(22) })
                 addView(button(R.drawable.ic_home_next, "Suivant") { media.command(PlaybackState.ACTION_SKIP_TO_NEXT) },
-                    LinearLayout.LayoutParams(dp(32), dp(32)))
+                    LinearLayout.LayoutParams(dp(36), dp(36)))
             }
-            addView(mediaControls, LinearLayout.LayoutParams(-1, dp(32)).apply { topMargin = dp(4) })
+            addView(mediaControls, LinearLayout.LayoutParams(-1, dp(46)).apply { topMargin = dp(8) })
         }
         renderRecent()
     }
 
-    /** The last six covers, three by two; a tap plays that app again, or opens it. Empty places stay soft squares. */
+    /** The last four covers in one row; a tap plays that app again, or opens it. Empty places stay soft squares. */
     private fun renderRecent() {
         if (!::recentGrid.isInitialized) return
         recentGrid.removeAllViews()
         val items = recent.items
-        (0 until RecentMedia.MAX).chunked(3).forEachIndexed { line, indexes ->
+        (0 until 4).chunked(4).forEachIndexed { line, indexes ->
             recentGrid.addView(row().apply {
                 gravity = Gravity.FILL
                 indexes.forEachIndexed { column, index ->
@@ -1181,7 +1188,7 @@ class HomeActivity : Activity() {
                             }
                             RadioMotion.pressScale(this, .94f)
                         }
-                    }, LinearLayout.LayoutParams(0, -1, 1f).apply { if (column < 2) marginEnd = dp(8) })
+                    }, LinearLayout.LayoutParams(0, -1, 1f).apply { if (column < 3) marginEnd = dp(8) })
                 }
             }, LinearLayout.LayoutParams(-1, 0, 1f).apply { if (line > 0) topMargin = dp(8) })
         }

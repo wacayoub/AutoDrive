@@ -312,7 +312,7 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
      */
     private fun drawRibbon(canvas: Canvas, w: Float, horizon: Float, tone: Int, bend: Float) {
         val x0 = w / 2f
-        val y0 = carBottom - carWidth * .56f - 6 * density
+        val y0 = carBottom - carWidth * 2.05f - 5 * density
         if (y0 <= horizon) return
         val x3 = x0 + bend * w * .34f
         val y1 = y0 - (y0 - horizon) * .5f
@@ -519,8 +519,8 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
             guiding -> maxOf(h * .36f, baseline + 16 * density)
             else -> baseline + 20 * density
         }
-        carWidth = if (flat) min(w * .22f, 62 * density) else min(w * .26f, 76 * density)
-        carBottom = if (flat) h - 18 * density else h - 12 * density + 3 * density
+        carWidth = if (flat) minOf(w * .2f, h * .14f, 52 * density) else min(w * .26f, 76 * density)
+        carBottom = if (flat) h - 22 * density else h - 12 * density + 3 * density
         val road = h - horizon
         // The sky outside above the horizon (this hour's sun, today's weather), then a soft glow where the road
         // meets it. Until the first sky is known: the theme's own.
@@ -656,7 +656,8 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
         // Indicator on the side of a close turn, blinking.
         val blinkSide = if (bend && (liveMeters ?: 0) <= 300) (if (turn!!.turn == Turn.LEFT) -1 else 1) else 0
         val blinkOn = blinkSide != 0 && (System.nanoTime() / 450_000_000L) % 2L == 0L
-        drawCar(canvas, cx, carBottom, carWidth, if (blinkOn) blinkSide else 0)
+        if (flat) drawCarAbove(canvas, cx, carBottom, carWidth, if (blinkOn) blinkSide else 0)
+        else drawCar(canvas, cx, carBottom, carWidth, if (blinkOn) blinkSide else 0)
 
         // The speed.
         valuePaint.textSize = size
@@ -1272,6 +1273,77 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
         textPaint.color = 0xE6FFFFFF.toInt()
         canvas.drawText(detail, tx, top + 32 * density, textPaint)
         canvas.restore()
+    }
+
+    /**
+     * Studio: the car seen from above, nose up towards the route line: a blue body narrowing to the nose, the
+     * windscreen, one long glass roof and the rear window, the mirrors, thin light bars front and back. The mirror on
+     * the side of a close turn blinks amber.
+     */
+    private fun drawCarAbove(canvas: Canvas, cx: Float, bottom: Float, carW: Float, blink: Int = 0) {
+        val half = carW / 2f
+        val length = carW * 2.05f
+        val top = bottom - length
+        fun y(f: Float) = top + length * f
+        // A soft shadow under the car.
+        rect.set(cx - half * 1.25f, top + length * .02f, cx + half * 1.25f, bottom + length * .05f)
+        carPaint.shader = radial(cx, top + length * .55f, length * .62f, if (dark) 0x66000000 else 0x30203A60, 0)
+        canvas.drawOval(rect, carPaint)
+        // The body: wider at the shoulders, the nose and the tail rounded.
+        path.reset()
+        path.moveTo(cx, y(0f))
+        path.cubicTo(cx + half * .8f, y(0f), cx + half * .96f, y(.05f), cx + half * .97f, y(.16f))
+        path.cubicTo(cx + half * 1.02f, y(.4f), cx + half * 1.02f, y(.7f), cx + half * .96f, y(.9f))
+        path.cubicTo(cx + half * .92f, y(.99f), cx + half * .6f, y(1f), cx, y(1f))
+        path.cubicTo(cx - half * .6f, y(1f), cx - half * .92f, y(.99f), cx - half * .96f, y(.9f))
+        path.cubicTo(cx - half * 1.02f, y(.7f), cx - half * 1.02f, y(.4f), cx - half * .97f, y(.16f))
+        path.cubicTo(cx - half * .96f, y(.05f), cx - half * .8f, y(0f), cx, y(0f))
+        path.close()
+        carPaint.shader = linear(cx - half, 0f, cx + half, 0f, 0xFF1F5FD6.toInt(), 0xFF1A49B0.toInt())
+        canvas.drawPath(path, carPaint)
+        // Light on the bonnet and along the spine.
+        carPaint.shader = radial(cx - half * .2f, y(.2f), length * .35f, 0x55FFFFFF, 0x00FFFFFF)
+        canvas.drawPath(path, carPaint)
+        carPaint.shader = null
+        // The glass: windscreen, the long roof, the rear window, dark and slightly blue.
+        val glass = 0xFF0E1A2E.toInt()
+        carPaint.color = glass
+        path.reset()
+        path.moveTo(cx - half * .74f, y(.34f))
+        path.quadTo(cx, y(.25f), cx + half * .74f, y(.34f))
+        path.lineTo(cx + half * .68f, y(.44f))
+        path.quadTo(cx, y(.40f), cx - half * .68f, y(.44f))
+        path.close()
+        canvas.drawPath(path, carPaint)
+        carPaint.color = 0xFF16294A.toInt()
+        rect.set(cx - half * .64f, y(.46f), cx + half * .64f, y(.74f))
+        canvas.drawRoundRect(rect, half * .3f, half * .3f, carPaint)
+        carPaint.color = glass
+        path.reset()
+        path.moveTo(cx - half * .64f, y(.77f))
+        path.quadTo(cx, y(.75f), cx + half * .64f, y(.77f))
+        path.lineTo(cx + half * .7f, y(.85f))
+        path.quadTo(cx, y(.88f), cx - half * .7f, y(.85f))
+        path.close()
+        canvas.drawPath(path, carPaint)
+        // A sheen across the glass roof.
+        carPaint.shader = linear(0f, y(.46f), 0f, y(.74f), 0x40FFFFFF, 0x00FFFFFF)
+        rect.set(cx - half * .64f, y(.46f), cx + half * .64f, y(.74f))
+        canvas.drawRoundRect(rect, half * .3f, half * .3f, carPaint)
+        carPaint.shader = null
+        // The mirrors, the one on the side of the turn blinking.
+        for (side in intArrayOf(-1, 1)) {
+            carPaint.color = if (blink == side) 0xFFFFB020.toInt() else 0xFF1A49B0.toInt()
+            rect.set(cx + side * half * .96f - half * .18f, y(.33f), cx + side * half * .96f + half * .18f, y(.38f))
+            canvas.drawOval(rect, carPaint)
+        }
+        // Thin light bars: white at the nose, red at the tail.
+        carPaint.color = if (dark) 0xFFFFFFFF.toInt() else 0xE6FFFFFF.toInt()
+        rect.set(cx - half * .7f, y(.035f), cx + half * .7f, y(.035f) + 1.6f * density)
+        canvas.drawRoundRect(rect, density, density, carPaint)
+        carPaint.color = 0xFFFF3B3B.toInt()
+        rect.set(cx - half * .78f, y(.965f) - 1.6f * density, cx + half * .78f, y(.965f))
+        canvas.drawRoundRect(rect, density, density, carPaint)
     }
 
     /**
