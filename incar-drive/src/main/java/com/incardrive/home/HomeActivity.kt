@@ -296,6 +296,11 @@ class HomeActivity : Activity() {
         }
         info = LocalInfoFeed(RadioCity.restore(prefs.getString(CITY, null)))
         window.setDecorFitsSystemWindows(false)
+        if (cabin) {
+            // Cabine: the cards float over the driver's own Android wallpaper, as a launcher may show it.
+            window.addFlags(android.view.WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
+            window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(Color.TRANSPARENT))
+        }
         window.statusBarColor = Color.TRANSPARENT
         window.navigationBarColor = Color.TRANSPARENT
         setContentView(screen())
@@ -2304,8 +2309,13 @@ class HomeActivity : Activity() {
     private fun studioBackdrop() = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
         if (night) intArrayOf(0xFF0B0E13.toInt(), 0xFF151A22.toInt()) else intArrayOf(0xFFE6EDF6.toInt(), 0xFFF3F5F9.toInt()))
 
-    /** Cabine: one even grey behind the cards by day, near black by night. */
-    private fun cabinBackdrop() = android.graphics.drawable.ColorDrawable(if (night) 0xFF050608.toInt() else 0xFFE8EBF0.toInt())
+    /**
+     * Cabine: the wallpaper shows through; only a light veil over it, paler by day and darker by night, so the top bar
+     * and the dock stay readable on any picture.
+     */
+    private fun cabinBackdrop() = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+        if (night) intArrayOf(0x8C000000.toInt(), 0x40000000, 0x8C000000.toInt())
+        else intArrayOf(0x99FFFFFF.toInt(), 0x33FFFFFF, 0x99FFFFFF.toInt()))
 
     /**
      * Cabine: the map with a search bar floating at its top, like the reference cabin. A tap asks for a destination
