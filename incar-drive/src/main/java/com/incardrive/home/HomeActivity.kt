@@ -2396,6 +2396,7 @@ class HomeActivity : Activity() {
         }
         val state = gps.snapshot()
         gauge.setSpeed(state.speed.kmh)
+        roadGauge?.heading(state.bearing)
         altitudeText.text = state.altitude?.let { "≈ $it m" }.orEmpty()
         val message = when (state.status) {
             "Precise location off" -> "Localisation précise désactivée"

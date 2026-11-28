@@ -153,6 +153,30 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
     var vehicle = false
         set(value) { field = value; invalidate() }
 
+    // Cabine: how the road bends under the car, from how fast the GPS heading turns (-1 left to 1 right), and how far
+    // the car has rolled, for the lane marks.
+    private var lastBearing: Int? = null
+    private var bearingAt = 0L
+    private var steerTarget = 0f
+    private var steer = 0f
+    private var rolled = 0f
+
+    /** Each GPS heading while moving (null when stopped or unsure): the road under the car bends as the car turns. */
+    fun heading(bearing: Int?) {
+        val now = android.os.SystemClock.elapsedRealtime()
+        val before = lastBearing
+        if (bearing == null) { lastBearing = null; steerTarget = 0f; return }
+        if (before != null && now > bearingAt) {
+            val delta = ((bearing - before + 540) % 360) - 180
+            val rate = delta * 1000f / (now - bearingAt)
+            // About 15 degrees a second, a town corner, is a full bend.
+            steerTarget = (rate / 15f).coerceIn(-1f, 1f)
+        }
+        lastBearing = bearing
+        bearingAt = now
+        invalidate()
+    }
+
     /** The sky of this hour and this weather: [elevation] is the sun's height in degrees, negative below the horizon. */
     fun outside(sky: Sky, elevation: Float, weather: com.autodrive.radiomaroc.WeatherCondition?) {
         if (sky == outside && weather == this.weather && kotlin.math.abs(elevation - this.elevation) < .3f) return
@@ -292,7 +316,7 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
                 Turn.RIGHT -> if (scene.slight) .5f else 1f
                 else -> 0f
             }
-            if (vehicle) drawTrafficGlow(canvas, w) else drawRibbon(canvas, w, horizon, tone, bend)
+            if (vehicle) drawVehicleRoad(canvas, w, h, bend) else drawRibbon(canvas, w, horizon, tone, bend)
             return
         }
         when (scene.shape) {
@@ -527,7 +551,7 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
             guiding -> maxOf(h * .36f, baseline + 16 * density)
             else -> baseline + 20 * density
         }
-        carWidth = if (flat && vehicle) minOf(w * .3f, h * .2f, 80 * density) else if (flat) minOf(w * .2f, h * .14f, 52 * density) else min(w * .26f, 76 * density)
+        carWidth = if (flat && vehicle) minOf(w * .2f, h * .14f, 56 * density) else if (flat) minOf(w * .2f, h * .14f, 52 * density) else min(w * .26f, 76 * density)
         carBottom = if (flat && vehicle) h * .57f + carWidth * 1.025f else if (flat) h - 22 * density else h - 12 * density + 3 * density
         val road = h - horizon
         // The sky outside above the horizon (this hour's sun, today's weather), then a soft glow where the road
@@ -562,6 +586,12 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
             if (seconds < 1.5f) flowPhase = (flowPhase + seconds * (.55f + shown / 110f)) % 1f
             // Only over short gaps: after a pause in drawing (another app in front) the app's own value is kept.
             if (seconds < 1.5f) travelled += shown / 3.6f * seconds
+            if (seconds < 1.5f) {
+                rolled = (rolled + shown / 3.6f * seconds) % 1000f
+                // A heading not renewed for three seconds: the road straightens again.
+                val target = if (android.os.SystemClock.elapsedRealtime() - bearingAt > 3000) 0f else steerTarget
+                steer += (target - steer) * min(1f, seconds * 1.6f)
+            }
         }
         lastFrame = now
         val bend = turn != null && close && (turn.turn == Turn.LEFT || turn.turn == Turn.RIGHT)
@@ -664,7 +694,15 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
         // Indicator on the side of a close turn, blinking.
         val blinkSide = if (bend && (liveMeters ?: 0) <= 300) (if (turn!!.turn == Turn.LEFT) -1 else 1) else 0
         val blinkOn = blinkSide != 0 && (System.nanoTime() / 450_000_000L) % 2L == 0L
-        if (flat) drawCarAbove(canvas, cx, carBottom, carWidth, if (blinkOn) blinkSide else 0)
+        if (flat && vehicle) {
+            // Cabine: the car in the right-hand lane, turned a little with the road.
+            val length = carWidth * 2.05f
+            val x = cx + carWidth * .72f
+            canvas.save()
+            canvas.rotate(roadCurve * 9f, x, carBottom - length / 2f)
+            drawCarAbove(canvas, x, carBottom, carWidth, if (blinkOn) blinkSide else 0)
+            canvas.restore()
+        } else if (flat) drawCarAbove(canvas, cx, carBottom, carWidth, if (blinkOn) blinkSide else 0)
         else drawCar(canvas, cx, carBottom, carWidth, if (blinkOn) blinkSide else 0)
 
         // The speed.
@@ -1303,22 +1341,102 @@ internal class RoadGauge(context: Context, private val accent: Int, private val 
         // A faint floor ellipse where the car stands.
         val length = carWidth * 2.05f
         val middle = carBottom - length / 2f
-        rect.set(w / 2f - carWidth * 1.3f, middle - length * .62f, w / 2f + carWidth * 1.3f, middle + length * .62f)
-        roadPaint.shader = radial(w / 2f, middle, carWidth * 1.4f, if (dark) 0x22FFFFFF else 0x66FFFFFF, 0)
+        val x = w / 2f + carWidth * .72f
+        rect.set(x - carWidth * 1.3f, middle - length * .62f, x + carWidth * 1.3f, middle + length * .62f)
+        roadPaint.shader = radial(x, middle, carWidth * 1.4f, if (dark) 0x22FFFFFF else 0x66FFFFFF, 0)
         canvas.drawOval(rect, roadPaint)
         roadPaint.shader = null
     }
 
-    /** Cabine: the traffic around the car, as a soft glow in its colour (nothing while it is unknown). */
-    private fun drawTrafficGlow(canvas: Canvas, w: Float) {
-        val color = flow?.color ?: aheadFlow.maxByOrNull { it.flow.ordinal }?.flow?.color ?: return
+    // The bend drawn this frame, -1 left to 1 right: a close turn of the guidance, else the car's own turning.
+    private var roadCurve = 0f
+
+    /**
+     * Cabine: the road seen from above, under the car and ahead of it: two lanes, the car in the right one, the centre
+     * marks running down with the car's real speed, the road bending with the car's turning (or towards a close turn
+     * of the guidance), and its edges ahead in the traffic's colours.
+     */
+    private fun drawVehicleRoad(canvas: Canvas, w: Float, h: Float, bend: Float) {
+        roadCurve = if (bend != 0f) bend * .8f else steer
+        val cx = w / 2f
         val length = carWidth * 2.05f
-        val middle = carBottom - length / 2f
-        roadPaint.shader = radial(w / 2f, middle, length * .85f, ColorUtils.setAlphaComponent(color, 0x55),
-            ColorUtils.setAlphaComponent(color, 0))
-        rect.set(w / 2f - length * .85f, middle - length * .85f, w / 2f + length * .85f, middle + length * .85f)
-        canvas.drawOval(rect, roadPaint)
+        val carY = carBottom - length / 2f
+        val lane = carWidth * 1.35f
+        val reach = w * .42f * roadCurve
+        // The road's middle at height y: straight behind the car, bending more and more ahead of it.
+        fun mid(y: Float): Float {
+            if (y >= carY) return cx
+            val t = (carY - y) / carY
+            return cx + reach * t * t
+        }
+        val steps = 28
+        path.reset()
+        for (i in 0..steps) {
+            val y = h - h * i / steps
+            val x = mid(y) - lane
+            if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
+        }
+        for (i in steps downTo 0) {
+            val y = h - h * i / steps
+            path.lineTo(mid(y) + lane, y)
+        }
+        path.close()
+        roadPaint.shader = if (dark) linear(0f, 0f, 0f, h, 0x332C3444, 0xFF2C3444.toInt())
+            else linear(0f, 0f, 0f, h, 0x40BCC7D6, 0xFFC3CEDC.toInt())
+        canvas.drawPath(path, roadPaint)
         roadPaint.shader = null
+        // The edge lines, fading towards the top.
+        edgePaint.shader = null
+        edgePaint.strokeCap = Paint.Cap.ROUND
+        edgePaint.strokeWidth = 2f * density
+        for (side in SIDES) {
+            for (i in 0 until steps) {
+                val y0 = h - h * i / steps
+                val y1 = h - h * (i + 1) / steps
+                edgePaint.color = ColorUtils.setAlphaComponent(Color.WHITE, (255 * (y0 / h)).toInt().coerceIn(30, if (dark) 140 else 230))
+                canvas.drawLine(mid(y0) + side * lane, y0, mid(y1) + side * lane, y1, edgePaint)
+            }
+        }
+        // The traffic ahead on both edges, from the car up to the top (3.5 km), each stretch in its colour.
+        fun up(meters: Int) = carY - carY * sqrt(meters / TrafficAhead.FAR_METERS.toFloat()).coerceAtMost(1f)
+        val stretches = aheadFlow.ifEmpty { flow?.let { listOf(FlowStretch(0, 500, it)) } ?: emptyList() }
+        edgePaint.strokeCap = Paint.Cap.BUTT
+        edgePaint.strokeWidth = 4f * density
+        for ((from, end, stretchFlow) in stretches) {
+            if (from >= TrafficAhead.FAR_METERS) break
+            val top = up(end.coerceAtMost(TrafficAhead.FAR_METERS))
+            val bottom = up(from)
+            if (bottom - top < 1f) continue
+            edgePaint.color = stretchFlow.color
+            val parts = 8
+            for (side in SIDES) for (i in 0 until parts) {
+                val y0 = bottom - (bottom - top) * i / parts
+                val y1 = bottom - (bottom - top) * (i + 1) / parts
+                canvas.drawLine(mid(y0) + side * lane, y0, mid(y1) + side * lane, y1, edgePaint)
+            }
+        }
+        edgePaint.strokeCap = Paint.Cap.ROUND
+        // The centre marks, running down with the car: a car length is about 4.7 m.
+        val perMeter = length / 4.7f
+        val period = length * 1.1f
+        val dash = period * .5f
+        markPaint.color = if (dark) 0x99FFFFFF.toInt() else 0xE6FFFFFF.toInt()
+        var y = h + (rolled * perMeter) % period - period
+        while (y > -period) {
+            val y0 = y.coerceIn(0f, h)
+            val y1 = (y - dash).coerceIn(0f, h)
+            if (y0 > y1) {
+                val half = 1.3f * density
+                path.reset()
+                path.moveTo(mid(y0) - half, y0)
+                path.lineTo(mid(y1) - half, y1)
+                path.lineTo(mid(y1) + half, y1)
+                path.lineTo(mid(y0) + half, y0)
+                path.close()
+                canvas.drawPath(path, markPaint)
+            }
+            y -= period
+        }
     }
 
     /**
