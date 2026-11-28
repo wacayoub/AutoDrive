@@ -151,6 +151,8 @@ class HomeActivity : Activity() {
      */
     /** « Cabine »: the vehicle card, the map with its search bar, the large player and a thin dock. */
     internal val cabin by lazy { prefs.getString(LOOK, null) == CABIN }
+    /** Cabine over the driver's Android wallpaper rather than its own soft gradient. */
+    private val cabinWallpaper by lazy { cabin && prefs.getString(CABIN_BACK, null) == WALLPAPER }
     // Cabine shares the Studio's frame (opaque cards, thin top bar); what differs asks for [cabin].
     internal val studio by lazy { prefs.getString(LOOK, null) == STUDIO || cabin }
     /** The Studio's one accent, a clear blue like the reference cabin's. */
@@ -296,7 +298,7 @@ class HomeActivity : Activity() {
         }
         info = LocalInfoFeed(RadioCity.restore(prefs.getString(CITY, null)))
         window.setDecorFitsSystemWindows(false)
-        if (cabin) {
+        if (cabinWallpaper) {
             // Cabine: the cards float over the driver's own Android wallpaper, as a launcher may show it.
             window.addFlags(android.view.WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
             window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(Color.TRANSPARENT))
@@ -2313,7 +2315,7 @@ class HomeActivity : Activity() {
      * Cabine: the wallpaper shows through; only a light veil over it, paler by day and darker by night, so the top bar
      * and the dock stay readable on any picture.
      */
-    private fun cabinBackdrop() = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+    private fun cabinBackdrop(): Drawable = if (!cabinWallpaper) SoftBlobBackdrop(night) else GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
         if (night) intArrayOf(0x8C000000.toInt(), 0x40000000, 0x8C000000.toInt())
         else intArrayOf(0x99FFFFFF.toInt(), 0x33FFFFFF, 0x99FFFFFF.toInt()))
 
@@ -3118,6 +3120,13 @@ class HomeActivity : Activity() {
             }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
             addView(label("Studio : route à gauche, carte, média. Cabine : voiture vue de dessus, carte avec recherche, grand lecteur.",
                 12, muted).apply { maxLines = 2 }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(6) })
+            if (cabin) {
+                addView(caps("Fond de la Cabine"), wrap().apply { topMargin = dp(14) })
+                addView(choices(listOf(SOFT, WALLPAPER), if (cabinWallpaper) WALLPAPER else SOFT,
+                    { if (it == WALLPAPER) "Fond d’écran Android" else "Dégradé doux" }, { null }) {
+                    prefs.edit().putString(CABIN_BACK, it).apply()
+                }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+            }
             addView(caps("Couleur du tableau de bord"), wrap().apply { topMargin = dp(14) })
             addView(accentPicker(), LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
             addView(caps("Ville (météo et salat)"), wrap().apply { topMargin = dp(14) })
@@ -3593,6 +3602,9 @@ class HomeActivity : Activity() {
         const val CLASSIC = "classic"
         const val STUDIO = "studio"
         const val CABIN = "cabin"
+        const val CABIN_BACK = "cabin_back"
+        const val SOFT = "soft"
+        const val WALLPAPER = "wallpaper"
         // Height of the navigation foot of the driving card, in dp.
         const val DRIVE_FOOTER = 88
         const val CAR_COLOR = "car_color"
